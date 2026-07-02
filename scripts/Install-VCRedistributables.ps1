@@ -166,7 +166,7 @@ try {
   }
 }
 catch {
-  Write-Log -Message "  -> FAILED - could not install VC++ $Version: $_" -Color Red
+  Write-Log -Message "  -> FAILED - could not install VC++ ${Version}: $_" -Color Red
   Add-OperationResult -Results $_results -Target "VCRedist-$Version-$arch" -Source 'VCRedist' -Action 'Install' -Status 'Failed' -Detail $_.Exception.Message
 }
 finally {

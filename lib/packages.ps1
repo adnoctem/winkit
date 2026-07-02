@@ -576,9 +576,16 @@ function Get-UPFAppxPackage {
     }
 
     foreach ($_package in $_installed) {
-      if (-not $IncludeFramework -and $_package.IsFramework) { continue }
-      if (-not $IncludeResource -and $_package.IsResourcePackage) { continue }
-      if (-not $IncludeBundle -and $_package.IsBundle) { continue }
+      $_packageProperties = $_package.PSObject.Properties.Name
+      $_isFramework = ($_packageProperties -contains 'IsFramework') -and [bool]$_package.IsFramework
+      $_isResourcePackage = ($_packageProperties -contains 'IsResourcePackage') -and [bool]$_package.IsResourcePackage
+      $_isBundle = ($_packageProperties -contains 'IsBundle') -and [bool]$_package.IsBundle
+      $_nonRemovable = ($_packageProperties -contains 'NonRemovable') -and [bool]$_package.NonRemovable
+      $_userSecurityId = if ($_packageProperties -contains 'UserSecurityId') { $_package.UserSecurityId } else { $null }
+
+      if (-not $IncludeFramework -and $_isFramework) { continue }
+      if (-not $IncludeResource -and $_isResourcePackage) { continue }
+      if (-not $IncludeBundle -and $_isBundle) { continue }
 
       [PSCustomObject]@{
         Source = 'Installed'
@@ -590,12 +597,12 @@ function Get-UPFAppxPackage {
         Publisher = $_package.Publisher
         Version = $_package.Version
         Architecture = $_package.Architecture
-        IsFramework = [bool]$_package.IsFramework
-        IsResourcePackage = [bool]$_package.IsResourcePackage
-        IsBundle = [bool]$_package.IsBundle
-        NonRemovable = [bool]$_package.NonRemovable
+        IsFramework = $_isFramework
+        IsResourcePackage = $_isResourcePackage
+        IsBundle = $_isBundle
+        NonRemovable = $_nonRemovable
         InstallLocation = $_package.InstallLocation
-        User = $_package.UserSecurityId
+        User = $_userSecurityId
       }
     }
   }

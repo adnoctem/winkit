@@ -32,9 +32,25 @@ $publicFunctions = @(
   'Convert-Quote',
   'Merge-ObjectArrays',
 
+  # devices.ps1
+  'Get-PrintDevice',
+  'Get-DefaultPrintDevice',
+  'Set-DefaultPrintDevice',
+  'Get-ScanDevice',
+
   # log.ps1
   'Show-Color',
   'Write-Log',
+
+  # interop.ps1
+  'Remove-ComObject',
+  'Invoke-ComGarbageCollection',
+  'Get-OutlookInstallation',
+  'Find-OutlookRepairTool',
+  'Connect-Outlook',
+  'Get-OutlookStoreRoot',
+  'Add-OutlookStoreRoot',
+  'Get-OutlookSubFolder',
 
   # networking.ps1
   'Get-DefaultNetworkAdapter',
@@ -98,6 +114,9 @@ $publicFunctions = @(
   'Get-DefenderThreatDetection',
   'Get-DefenderThreat',
   'Get-DefenderThreatDescriptionURL',
+  'Add-DefenderExclusion',
+  'Enable-WSLFirewallRule',
+  'Disable-JetBrainsFirewallRule',
   'Find-NewlyWrittenObject',
   'Invoke-SafeProcess',
   'Export-EventLog',

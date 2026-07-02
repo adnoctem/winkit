@@ -85,7 +85,7 @@ function Get-OSBuildNumber {
       PS> Get-OSBuildNumber
       22621
     .LINK
-      https://github.com/adnoctem/winkit/lib/sysinfo.ps1
+      https://github.com/adnoctem/winkit/lib/system.ps1
     .NOTES
       Author: Maximilian Gindorfer <info@mvprowess.com>
       License: MIT
@@ -110,7 +110,7 @@ function Get-OSDisplayVersion {
       PS> Get-OSDisplayVersion
       23H2
     .LINK
-      https://github.com/adnoctem/winkit/lib/sysinfo.ps1
+      https://github.com/adnoctem/winkit/lib/system.ps1
     .NOTES
       Author: Maximilian Gindorfer <info@mvprowess.com>
       License: MIT
@@ -142,7 +142,7 @@ function Get-OSEdition {
       PS> Get-OSEdition
       Professional
     .LINK
-      https://github.com/adnoctem/winkit/lib/sysinfo.ps1
+      https://github.com/adnoctem/winkit/lib/system.ps1
     .NOTES
       Author: Maximilian Gindorfer <info@mvprowess.com>
       License: MIT
@@ -166,7 +166,7 @@ function Get-OSProductName {
       PS> Get-OSProductName
       Windows 11 Pro
     .LINK
-      https://github.com/adnoctem/winkit/lib/sysinfo.ps1
+      https://github.com/adnoctem/winkit/lib/system.ps1
     .NOTES
       Author: Maximilian Gindorfer <info@mvprowess.com>
       License: MIT
@@ -195,7 +195,7 @@ function Get-OSVersionInfo {
     .EXAMPLE
       PS> Get-OSVersionInfo | Format-List
     .LINK
-      https://github.com/adnoctem/winkit/lib/sysinfo.ps1
+      https://github.com/adnoctem/winkit/lib/system.ps1
     .NOTES
       Author: Maximilian Gindorfer <info@mvprowess.com>
       License: MIT
@@ -247,7 +247,7 @@ function Get-SystemMemory {
     .EXAMPLE
       PS> Get-SystemMemory | Format-List
     .LINK
-      https://github.com/adnoctem/winkit/lib/sysinfo.ps1
+      https://github.com/adnoctem/winkit/lib/system.ps1
     .NOTES
       Author: Maximilian Gindorfer <info@mvprowess.com>
       License: MIT
@@ -298,7 +298,7 @@ function Get-SystemDisk {
     .EXAMPLE
       PS> Get-SystemDisk | Format-Table -AutoSize
     .LINK
-      https://github.com/adnoctem/winkit/lib/sysinfo.ps1
+      https://github.com/adnoctem/winkit/lib/system.ps1
     .NOTES
       Author: Maximilian Gindorfer <info@mvprowess.com>
       License: MIT
@@ -313,17 +313,29 @@ function Get-SystemDisk {
   )
 
   $logicalDisksByDeviceId = @{}
-  $physicalDisks = Get-CimInstance -ClassName Win32_DiskDrive -ErrorAction Stop
 
-  foreach ($physicalDisk in $physicalDisks) {
-    $partitions = Get-CimAssociatedInstance -InputObject $physicalDisk -Association Win32_DiskDriveToDiskPartition -ErrorAction Stop
-    foreach ($partition in $partitions) {
-      $logicalDisks = Get-CimAssociatedInstance -InputObject $partition -Association Win32_LogicalDiskToPartition -ErrorAction Stop
-      foreach ($logicalDisk in $logicalDisks) {
-        if (-not $All -and [int]$logicalDisk.DriveType -ne 3) { continue }
-        if ([string]::IsNullOrWhiteSpace($logicalDisk.DeviceID)) { continue }
-        $logicalDisksByDeviceId[$logicalDisk.DeviceID] = $logicalDisk
+  try {
+    $physicalDisks = Get-CimInstance -ClassName Win32_DiskDrive -ErrorAction Stop
+
+    foreach ($physicalDisk in $physicalDisks) {
+      $partitions = Get-CimAssociatedInstance -InputObject $physicalDisk -Association Win32_DiskDriveToDiskPartition -ErrorAction Stop
+      foreach ($partition in $partitions) {
+        $logicalDisks = Get-CimAssociatedInstance -InputObject $partition -Association Win32_LogicalDiskToPartition -ErrorAction Stop
+        foreach ($logicalDisk in $logicalDisks) {
+          if (-not $All -and [int]$logicalDisk.DriveType -ne 3) { continue }
+          if ([string]::IsNullOrWhiteSpace($logicalDisk.DeviceID)) { continue }
+          $logicalDisksByDeviceId[$logicalDisk.DeviceID] = $logicalDisk
+        }
       }
+    }
+  }
+  catch {
+    Write-Verbose "Physical disk association inventory failed: $($_.Exception.Message)"
+    $logicalDisks = Get-CimInstance -ClassName Win32_LogicalDisk -ErrorAction SilentlyContinue
+    foreach ($logicalDisk in $logicalDisks) {
+      if (-not $All -and [int]$logicalDisk.DriveType -ne 3) { continue }
+      if ([string]::IsNullOrWhiteSpace($logicalDisk.DeviceID)) { continue }
+      $logicalDisksByDeviceId[$logicalDisk.DeviceID] = $logicalDisk
     }
   }
 
@@ -371,7 +383,7 @@ function Get-Hostname {
     .EXAMPLE
       PS> Get-Hostname
     .LINK
-      https://github.com/adnoctem/winkit/lib/sysinfo.ps1
+      https://github.com/adnoctem/winkit/lib/system.ps1
     .NOTES
       Author: Maximilian Gindorfer <info@mvprowess.com>
       License: MIT
@@ -412,7 +424,7 @@ function Get-SystemUptime {
     .EXAMPLE
       PS> Get-SystemUptime | Format-List
     .LINK
-      https://github.com/adnoctem/winkit/lib/sysinfo.ps1
+      https://github.com/adnoctem/winkit/lib/system.ps1
     .NOTES
       Author: Maximilian Gindorfer <info@mvprowess.com>
       License: MIT
@@ -451,7 +463,7 @@ function Get-SystemInfo {
     .EXAMPLE
       PS> Get-SystemInfo
     .LINK
-      https://github.com/adnoctem/winkit/lib/sysinfo.ps1
+      https://github.com/adnoctem/winkit/lib/system.ps1
     .NOTES
       Author: Maximilian Gindorfer <info@mvprowess.com>
       License: MIT

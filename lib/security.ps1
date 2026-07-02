@@ -180,6 +180,187 @@ function Get-DefenderThreatDescriptionURL {
   }
 }
 
+function Add-DefenderExclusion {
+  <#
+    .SYNOPSIS
+      Adds a Microsoft Defender exclusion.
+    .DESCRIPTION
+      Wraps Add-MpPreference for path, extension, and process exclusions and
+      returns a structured operation result instead of writing ad hoc console
+      output. The helper supports ShouldProcess so scripts can use -WhatIf and
+      -DryRun consistently.
+    .PARAMETER Type
+      Exclusion kind: Path, Extension, or Process.
+    .PARAMETER Value
+      Exclusion value to add.
+    .EXAMPLE
+      PS> Add-DefenderExclusion -Type Process -Value 'wsl.exe'
+    .LINK
+      https://github.com/adnoctem/winkit/lib/security.ps1
+    .NOTES
+      Author: Maximilian Gindorfer <info@mvprowess.com>
+      License: MIT
+  #>
+
+  [OutputType([PSCustomObject])]
+  [CmdletBinding(SupportsShouldProcess = $true)]
+  param (
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('Path', 'Extension', 'Process')]
+    [string]
+    $Type,
+
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]
+    $Value
+  )
+
+  $_target = "$Type`: $Value"
+  if (-not $PSCmdlet.ShouldProcess($_target, 'Add Microsoft Defender exclusion')) {
+    return New-OperationResult -Target $_target -Source 'Defender' -Action 'AddExclusion' -Status 'Skipped' -Detail 'WhatIf'
+  }
+
+  try {
+    $_parameters = @{
+      ErrorAction = 'Stop'
+    }
+
+    switch ($Type) {
+      'Path' { $_parameters.ExclusionPath = $Value }
+      'Extension' { $_parameters.ExclusionExtension = $Value }
+      'Process' { $_parameters.ExclusionProcess = $Value }
+    }
+
+    Add-MpPreference @_parameters
+    New-OperationResult -Target $_target -Source 'Defender' -Action 'AddExclusion' -Status 'Completed' -Detail $Value
+  }
+  catch {
+    New-OperationResult -Target $_target -Source 'Defender' -Action 'AddExclusion' -Status 'Failed' -Detail $_.Exception.Message
+  }
+}
+
+function Enable-WSLFirewallRule {
+  <#
+    .SYNOPSIS
+      Ensures the inbound WSL firewall allow rule exists.
+    .DESCRIPTION
+      Adds a Windows Firewall rule allowing inbound traffic on the WSL virtual
+      Ethernet adapter. Existing rules with the same display name are treated as
+      already configured to avoid creating duplicates.
+    .PARAMETER DisplayName
+      Firewall display name. Defaults to WSL.
+    .PARAMETER InterfaceAlias
+      Network interface alias for the WSL virtual switch.
+    .EXAMPLE
+      PS> Enable-WSLFirewallRule
+    .LINK
+      https://github.com/adnoctem/winkit/lib/security.ps1
+    .NOTES
+      Author: Maximilian Gindorfer <info@mvprowess.com>
+      License: MIT
+  #>
+
+  [OutputType([PSCustomObject])]
+  [CmdletBinding(SupportsShouldProcess = $true)]
+  param (
+    [string]
+    $DisplayName = 'WSL',
+
+    [string]
+    $InterfaceAlias = 'vEthernet (WSL)'
+  )
+
+  try {
+    $_existing = @(Get-NetFirewallRule -DisplayName $DisplayName -ErrorAction SilentlyContinue)
+    if ($_existing.Count -gt 0) {
+      return New-OperationResult -Target $DisplayName -Source 'Firewall' -Action 'AllowInbound' -Status 'Skipped' -Detail 'AlreadyExists'
+    }
+
+    if (-not $PSCmdlet.ShouldProcess($DisplayName, "Allow inbound traffic on $InterfaceAlias")) {
+      return New-OperationResult -Target $DisplayName -Source 'Firewall' -Action 'AllowInbound' -Status 'Skipped' -Detail 'WhatIf'
+    }
+
+    $null = New-NetFirewallRule -DisplayName $DisplayName -Direction Inbound -InterfaceAlias $InterfaceAlias -Action Allow -ErrorAction Stop
+    New-OperationResult -Target $DisplayName -Source 'Firewall' -Action 'AllowInbound' -Status 'Completed' -Detail $InterfaceAlias
+  }
+  catch {
+    New-OperationResult -Target $DisplayName -Source 'Firewall' -Action 'AllowInbound' -Status 'Failed' -Detail $_.Exception.Message
+  }
+}
+
+function Disable-JetBrainsFirewallRule {
+  <#
+    .SYNOPSIS
+      Disables public-profile JetBrains IDE firewall rules.
+    .DESCRIPTION
+      Finds firewall rules attached to the Public profile whose display names
+      begin with known JetBrains IDE names and disables them. This supports the
+      JetBrains WSL debugging workaround while returning structured operation
+      results for every matching rule.
+    .PARAMETER Prefix
+      Display-name prefixes to match. Defaults to known JetBrains IDE product
+      names.
+    .EXAMPLE
+      PS> Disable-JetBrainsFirewallRule
+    .LINK
+      https://github.com/adnoctem/winkit/lib/security.ps1
+    .NOTES
+      Author: Maximilian Gindorfer <info@mvprowess.com>
+      License: MIT
+  #>
+
+  [OutputType([PSCustomObject[]])]
+  [CmdletBinding(SupportsShouldProcess = $true)]
+  param (
+    [string[]]
+    $Prefix = @('PhpStorm', 'IntelliJ', 'PyCharm', 'RubyMine', 'WebStorm', 'DataGrip', 'GoLand', 'Rider')
+  )
+
+  $_results = New-Object System.Collections.ArrayList
+
+  if ($WhatIfPreference) {
+    foreach ($_prefix in $Prefix) {
+      Add-OperationResult -Results $_results -Target "$_prefix*" -Source 'Firewall' -Action 'Disable' -Status 'Skipped' -Detail 'WhatIf'
+    }
+
+    return $_results
+  }
+
+  try {
+    $_publicProfile = Get-NetFirewallProfile -Name Public -ErrorAction Stop
+    $_rules = @($_publicProfile | Get-NetFirewallRule -ErrorAction Stop | Where-Object {
+        $_rule = $_
+        @($Prefix | Where-Object { $_rule.DisplayName -like "$_*" }).Count -gt 0
+      })
+
+    if ($_rules.Count -eq 0) {
+      Add-OperationResult -Results $_results -Target 'JetBrainsPublicFirewallRules' -Source 'Firewall' -Action 'Disable' -Status 'Skipped' -Detail 'NoMatch'
+      return $_results
+    }
+
+    foreach ($_rule in $_rules) {
+      if (-not $PSCmdlet.ShouldProcess($_rule.DisplayName, 'Disable public firewall rule')) {
+        Add-OperationResult -Results $_results -Target $_rule.DisplayName -Source 'Firewall' -Action 'Disable' -Status 'Skipped' -Detail 'WhatIf'
+        continue
+      }
+
+      try {
+        $null = $_rule | Disable-NetFirewallRule -ErrorAction Stop
+        Add-OperationResult -Results $_results -Target $_rule.DisplayName -Source 'Firewall' -Action 'Disable' -Status 'Completed' -Detail 'Public profile rule disabled.'
+      }
+      catch {
+        Add-OperationResult -Results $_results -Target $_rule.DisplayName -Source 'Firewall' -Action 'Disable' -Status 'Failed' -Detail $_.Exception.Message
+      }
+    }
+  }
+  catch {
+    Add-OperationResult -Results $_results -Target 'JetBrainsPublicFirewallRules' -Source 'Firewall' -Action 'Disable' -Status 'Failed' -Detail $_.Exception.Message
+  }
+
+  $_results
+}
+
 function Find-NewlyWrittenObject {
   <#
     .SYNOPSIS
@@ -248,19 +429,19 @@ function Find-NewlyWrittenObject {
   Write-Log -Message "  Root path: $Path" -Color Gray
 
   $items = Get-ChildItem -LiteralPath $Path -Recurse -ErrorAction SilentlyContinue |
-    Where-Object { -not $_.PSIsContainer -and $_.LastWriteTime -gt $windowStart -and $_.LastWriteTime -lt $windowEnd } |
-    Sort-Object LastWriteTime |
-    Select-Object LastWriteTime,
-    LastWriteTimeUtc,
-    LastAccessTime,
-    LastAccessTimeUtc,
-    CreationTime,
-    CreationTimeUtc,
-    Mode,
-    IsReadOnly,
-    Length,
-    Extension,
-    FullName
+  Where-Object { -not $_.PSIsContainer -and $_.LastWriteTime -gt $windowStart -and $_.LastWriteTime -lt $windowEnd } |
+  Sort-Object LastWriteTime |
+  Select-Object LastWriteTime,
+  LastWriteTimeUtc,
+  LastAccessTime,
+  LastAccessTimeUtc,
+  CreationTime,
+  CreationTimeUtc,
+  Mode,
+  IsReadOnly,
+  Length,
+  Extension,
+  FullName
 
   Write-Log -Message "  -> $($items.Count) file(s) found" -Color Gray
 
@@ -481,24 +662,24 @@ function Get-ScheduledTaskAction {
   $suspiciousHosts = 'powershell|pwsh|cmd|wscript|cscript|mshta|rundll32|regsvr32|InstallUtil'
 
   $rows = Get-ScheduledTask -ErrorAction SilentlyContinue |
-    ForEach-Object {
-      $task = $_
-      foreach ($action in $task.Actions) {
-        $obj = [PSCustomObject]@{
-          TaskName = $task.TaskName
-          TaskPath = $task.TaskPath
-          State = $task.State
-          Execute = $action.Execute
-          Arguments = $action.Arguments
-        }
-        if ($SuspiciousOnly) {
-          if ($obj.Execute -match $suspiciousHosts) { $obj }
-        }
-        else {
-          $obj
-        }
+  ForEach-Object {
+    $task = $_
+    foreach ($action in $task.Actions) {
+      $obj = [PSCustomObject]@{
+        TaskName  = $task.TaskName
+        TaskPath  = $task.TaskPath
+        State     = $task.State
+        Execute   = $action.Execute
+        Arguments = $action.Arguments
+      }
+      if ($SuspiciousOnly) {
+        if ($obj.Execute -match $suspiciousHosts) { $obj }
+      }
+      else {
+        $obj
       }
     }
+  }
 
   $rows | Sort-Object TaskPath, TaskName
 }
@@ -528,8 +709,8 @@ function Get-WMIPersistence {
   param()
 
   [PSCustomObject]@{
-    EventFilters = @(Get-CimInstance -Namespace root\subscription -ClassName __EventFilter -ErrorAction SilentlyContinue)
+    EventFilters         = @(Get-CimInstance -Namespace root\subscription -ClassName __EventFilter -ErrorAction SilentlyContinue)
     CommandLineConsumers = @(Get-CimInstance -Namespace root\subscription -ClassName CommandLineEventConsumer -ErrorAction SilentlyContinue)
-    Bindings = @(Get-CimInstance -Namespace root\subscription -ClassName __FilterToConsumerBinding -ErrorAction SilentlyContinue)
+    Bindings             = @(Get-CimInstance -Namespace root\subscription -ClassName __FilterToConsumerBinding -ErrorAction SilentlyContinue)
   }
 }

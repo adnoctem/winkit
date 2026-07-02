@@ -1,41 +1,102 @@
+#Requires -Version 5.0
+
 <#
 .SYNOPSIS
-  Move files to a specified destination based on a custom regular expression.
+  Moves files whose names match a regular expression.
 .DESCRIPTION
-	This PowerShell script takes a source path, a regular expression and a destination path as parameters. The source path
-  is searched for files matching the RegEx, which are subsequently moved to the destination path.
+  Searches a source directory for files whose file names match the supplied
+  regular expression and moves those files into the destination directory.
+  Existing destination files are skipped unless -Force is supplied.
+.PARAMETER Source
+  Directory to search for matching files.
+.PARAMETER RegEx
+  Regular expression matched against each file name.
+.PARAMETER Destination
+  Directory that receives matching files. It is created when missing.
+.PARAMETER Recurse
+  Search child directories below Source.
+.PARAMETER Force
+  Overwrite existing destination files.
+.PARAMETER PassThru
+  Return operation result objects for moved and skipped files.
 .EXAMPLE
-  PS> ./move-regex.ps1 C:\Users\Markus\Images ^IMG_([0-9]{4})_([0-9]{2}).(jpg|jpeg|png|gif|svg|webp)$ D:\Storage\Images
+  PS> .\Move-FilesRegex.ps1 -Source C:\Users\Markus\Images -RegEx '^IMG_\d{4}_\d{2}\.(jpg|jpeg|png)$' -Destination D:\Storage\Images
 .LINK
-  https://github.com/adnoctem/pwshlib
+  https://github.com/adnoctem/winkit/scripts/Move-FilesRegex.ps1
 .NOTES
-  Author: Maximilian Gindorfer <info@mvprowess.dev>
+  Author: Maximilian Gindorfer <info@mvprowess.com>
   License: MIT
 #>
 
-# Parameter help description
+[CmdletBinding(SupportsShouldProcess = $true)]
 param (
-  [string] $Source = ""
+  [Parameter(Mandatory = $true)]
+  [ValidateScript({ Test-Path -LiteralPath $_ -PathType Container })]
+  [string]
+  $Source,
 
-  # [Parameter(Mandatory = $true)]
-  # [regex] $RegEx,
+  [Parameter(Mandatory = $true)]
+  [regex]
+  $RegEx,
 
-  # [Parameter(Mandatory = $true)]
-  # [string] $Destination
+  [Parameter(Mandatory = $true)]
+  [string]
+  $Destination,
+
+  [switch]
+  $Recurse,
+
+  [switch]
+  $Force,
+
+  [switch]
+  $PassThru
 )
 
-Import-Module "$PSScriptRoot\..\lib\log.psm1" -Verbose
+# ---- Module import -----------------------------------------------------------
+$root = Split-Path $PSScriptRoot -Parent
+$module = Join-Path $root 'lib/winkit.psm1'
+Import-Module $module -Force
+# -----------------------------------------------------------------------------
 
-try {
-  $path = Resolve-Path $Source
+$_results = New-Object System.Collections.ArrayList
+$_sourcePath = (Resolve-Path -LiteralPath $Source).ProviderPath
 
-  if (-not (Test-Path -Path $path)) {
-    Write-Log "Source path $Source was not found on the machine. Exiting" -Timestamps
-  }
-  else {
-    Write-Log "Found source path $Source" -Timestamps
+if (-not (Test-Path -LiteralPath $Destination -PathType Container)) {
+  if ($PSCmdlet.ShouldProcess($Destination, 'Create destination directory')) {
+    $null = New-Item -Path $Destination -ItemType Directory -Force
   }
 }
-catch {
-  Write-Log "WTF, had to catch it..."
+
+$_destinationPath = if (Test-Path -LiteralPath $Destination -PathType Container) {
+  (Resolve-Path -LiteralPath $Destination).ProviderPath
+}
+else {
+  $Destination
+}
+
+$_files = @(Get-ChildItem -LiteralPath $_sourcePath -File -Recurse:$Recurse | Where-Object { $_.Name -match $RegEx })
+
+if ($_files.Count -eq 0) {
+  Write-Log -Message "No files in '$_sourcePath' matched '$RegEx'." -Color Yellow
+}
+
+foreach ($_file in $_files) {
+  $_targetPath = Join-Path -Path $_destinationPath -ChildPath $_file.Name
+
+  if ((Test-Path -LiteralPath $_targetPath) -and -not $Force) {
+    Write-Log -Message "Skipping '$($_file.FullName)' because '$($_targetPath)' already exists." -Color Yellow
+    Add-OperationResult -Results $_results -Target $_file.FullName -Source 'FileSystem' -Action 'Move' -Status 'Skipped' -Detail 'DestinationExists'
+    continue
+  }
+
+  if ($PSCmdlet.ShouldProcess($_file.FullName, "Move to $_targetPath")) {
+    Move-Item -LiteralPath $_file.FullName -Destination $_targetPath -Force:$Force
+    Write-Log -Message "Moved '$($_file.FullName)' -> '$_targetPath'." -Color Green
+    Add-OperationResult -Results $_results -Target $_file.FullName -Source 'FileSystem' -Action 'Move' -Status 'Moved' -Detail $_targetPath
+  }
+}
+
+if ($PassThru) {
+  $_results
 }
