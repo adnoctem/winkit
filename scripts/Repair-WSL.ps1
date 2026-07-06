@@ -123,39 +123,39 @@ if ($DryRun) {
 $_results = New-Object System.Collections.ArrayList
 $_repairSteps = @(
   [PSCustomObject]@{
-    Target       = 'WSL'
-    Action       = 'Shutdown'
-    FilePath     = 'wsl.exe'
+    Target = 'WSL'
+    Action = 'Shutdown'
+    FilePath = 'wsl.exe'
     ArgumentList = @('--shutdown')
-    Detail       = 'wsl --shutdown'
+    Detail = 'wsl --shutdown'
   }
   [PSCustomObject]@{
-    Target       = 'Winsock'
-    Action       = 'Reset'
-    FilePath     = 'netsh.exe'
+    Target = 'Winsock'
+    Action = 'Reset'
+    FilePath = 'netsh.exe'
     ArgumentList = @('winsock', 'reset')
-    Detail       = 'netsh winsock reset'
+    Detail = 'netsh winsock reset'
   }
   [PSCustomObject]@{
-    Target       = 'TCPIP'
-    Action       = 'Reset'
-    FilePath     = 'netsh.exe'
+    Target = 'TCPIP'
+    Action = 'Reset'
+    FilePath = 'netsh.exe'
     ArgumentList = @('int', 'ip', 'reset', 'all')
-    Detail       = 'netsh int ip reset all'
+    Detail = 'netsh int ip reset all'
   }
   [PSCustomObject]@{
-    Target       = 'WinHTTPProxy'
-    Action       = 'Reset'
-    FilePath     = 'netsh.exe'
+    Target = 'WinHTTPProxy'
+    Action = 'Reset'
+    FilePath = 'netsh.exe'
     ArgumentList = @('winhttp', 'reset', 'proxy')
-    Detail       = 'netsh winhttp reset proxy'
+    Detail = 'netsh winhttp reset proxy'
   }
   [PSCustomObject]@{
-    Target       = 'DNSResolverCache'
-    Action       = 'Flush'
-    FilePath     = 'ipconfig.exe'
+    Target = 'DNSResolverCache'
+    Action = 'Flush'
+    FilePath = 'ipconfig.exe'
     ArgumentList = @('/flushdns')
-    Detail       = 'ipconfig /flushdns'
+    Detail = 'ipconfig /flushdns'
   }
 )
 

@@ -429,19 +429,19 @@ function Find-NewlyWrittenObject {
   Write-Log -Message "  Root path: $Path" -Color Gray
 
   $items = Get-ChildItem -LiteralPath $Path -Recurse -ErrorAction SilentlyContinue |
-  Where-Object { -not $_.PSIsContainer -and $_.LastWriteTime -gt $windowStart -and $_.LastWriteTime -lt $windowEnd } |
-  Sort-Object LastWriteTime |
-  Select-Object LastWriteTime,
-  LastWriteTimeUtc,
-  LastAccessTime,
-  LastAccessTimeUtc,
-  CreationTime,
-  CreationTimeUtc,
-  Mode,
-  IsReadOnly,
-  Length,
-  Extension,
-  FullName
+    Where-Object { -not $_.PSIsContainer -and $_.LastWriteTime -gt $windowStart -and $_.LastWriteTime -lt $windowEnd } |
+    Sort-Object LastWriteTime |
+    Select-Object LastWriteTime,
+    LastWriteTimeUtc,
+    LastAccessTime,
+    LastAccessTimeUtc,
+    CreationTime,
+    CreationTimeUtc,
+    Mode,
+    IsReadOnly,
+    Length,
+    Extension,
+    FullName
 
   Write-Log -Message "  -> $($items.Count) file(s) found" -Color Gray
 
@@ -662,24 +662,24 @@ function Get-ScheduledTaskAction {
   $suspiciousHosts = 'powershell|pwsh|cmd|wscript|cscript|mshta|rundll32|regsvr32|InstallUtil'
 
   $rows = Get-ScheduledTask -ErrorAction SilentlyContinue |
-  ForEach-Object {
-    $task = $_
-    foreach ($action in $task.Actions) {
-      $obj = [PSCustomObject]@{
-        TaskName  = $task.TaskName
-        TaskPath  = $task.TaskPath
-        State     = $task.State
-        Execute   = $action.Execute
-        Arguments = $action.Arguments
-      }
-      if ($SuspiciousOnly) {
-        if ($obj.Execute -match $suspiciousHosts) { $obj }
-      }
-      else {
-        $obj
+    ForEach-Object {
+      $task = $_
+      foreach ($action in $task.Actions) {
+        $obj = [PSCustomObject]@{
+          TaskName = $task.TaskName
+          TaskPath = $task.TaskPath
+          State = $task.State
+          Execute = $action.Execute
+          Arguments = $action.Arguments
+        }
+        if ($SuspiciousOnly) {
+          if ($obj.Execute -match $suspiciousHosts) { $obj }
+        }
+        else {
+          $obj
+        }
       }
     }
-  }
 
   $rows | Sort-Object TaskPath, TaskName
 }
@@ -709,8 +709,8 @@ function Get-WMIPersistence {
   param()
 
   [PSCustomObject]@{
-    EventFilters         = @(Get-CimInstance -Namespace root\subscription -ClassName __EventFilter -ErrorAction SilentlyContinue)
+    EventFilters = @(Get-CimInstance -Namespace root\subscription -ClassName __EventFilter -ErrorAction SilentlyContinue)
     CommandLineConsumers = @(Get-CimInstance -Namespace root\subscription -ClassName CommandLineEventConsumer -ErrorAction SilentlyContinue)
-    Bindings             = @(Get-CimInstance -Namespace root\subscription -ClassName __FilterToConsumerBinding -ErrorAction SilentlyContinue)
+    Bindings = @(Get-CimInstance -Namespace root\subscription -ClassName __FilterToConsumerBinding -ErrorAction SilentlyContinue)
   }
 }

@@ -145,6 +145,16 @@ $systemSettings = @(
     Description = 'Disable Modern Standby networking on battery.'
   }
   @{
+    Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling'
+    Name = 'PowerThrottlingOff'
+    Preferred = 1
+    Default = $null
+    Type = 'DWord'
+    MinBuild = 14393
+    Group = 'Power'
+    Description = 'Disable CPU PowerThrottling.'
+  }
+  @{
     Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\BitLocker'
     Name = 'PreventDeviceEncryption'
     Preferred = 1
@@ -220,6 +230,15 @@ $systemSettings = @(
     Type = 'String'
     Group = 'Pointer'
     Description = 'Disable pointer acceleration: threshold 2.'
+  }
+  @{
+    Path = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DriverSearching'
+    Name = 'SearchOrderConfig'
+    Preferred = 0
+    Default = $null
+    Type = 'DWord'
+    Group = 'Drivers'
+    Description = 'Disable automatic driver installation from Windows Update.'
   }
 )
 

@@ -534,3 +534,87 @@ function Get-SystemPaths {
     Logs = Join-Path -Path $env:LOCALAPPDATA -ChildPath "$Name\logs"
   }
 }
+
+function Test-HostApplicability {
+  <#
+    .SYNOPSIS
+      Returns $true if the current host meets all supplied applicability constraints.
+    .DESCRIPTION
+      Gates a setting or operation by build number, OS edition, and processor
+      bitness.  Any constraint that is not supplied is treated as "no
+      restriction."  All supplied constraints must pass — the check is a
+      logical AND across them.
+
+      Builds on the existing Get-OSBuildNumber and Get-OSEdition helpers in
+      this file so it shares the same cheap registry-read path.
+    .PARAMETER MinBuild
+      Minimum Windows build number required (inclusive).  Example: 22000 for
+      Windows 11+.
+    .PARAMETER MaxBuild
+      Maximum Windows build number allowed (inclusive).  Example: 22621 for
+      Windows 11 22H2 and below.
+    .PARAMETER Edition
+      OS edition(s) that qualify.  Accepts an array of strings such as
+      @('Enterprise', 'Professional').
+    .PARAMETER Bitness
+      Required processor architecture: x64 or x86.
+    .OUTPUTS
+      [bool]
+    .EXAMPLE
+      PS> if (-not (Test-HostApplicability -MinBuild 22000)) { Write-Log -Message 'Requires Windows 11+'; exit 0 }
+    .EXAMPLE
+      PS> Test-HostApplicability -Edition @('ServerStandard', 'ServerDatacenter') -Bitness x64
+    .LINK
+      https://github.com/adnoctem/winkit/lib/system.ps1
+    .NOTES
+      Author: Maximilian Gindorfer <info@mvprowess.com>
+      License: MIT
+  #>
+
+  [OutputType([bool])]
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory = $false)]
+    [int]
+    $MinBuild,
+
+    [Parameter(Mandatory = $false)]
+    [int]
+    $MaxBuild,
+
+    [Parameter(Mandatory = $false)]
+    [string[]]
+    $Edition,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('x64', 'x86')]
+    [string]
+    $Bitness
+  )
+
+  $build = Get-OSBuildNumber
+
+  if ($PSBoundParameters.ContainsKey('MinBuild') -and $build -lt $MinBuild) {
+    return $false
+  }
+
+  if ($PSBoundParameters.ContainsKey('MaxBuild') -and $build -gt $MaxBuild) {
+    return $false
+  }
+
+  if ($PSBoundParameters.ContainsKey('Edition') -and $Edition.Count -gt 0) {
+    $currentEdition = Get-OSEdition
+    if ($currentEdition -notin $Edition) {
+      return $false
+    }
+  }
+
+  if ($PSBoundParameters.ContainsKey('Bitness')) {
+    $is64Bit = [Environment]::Is64BitOperatingSystem
+    if (($Bitness -eq 'x64' -and -not $is64Bit) -or ($Bitness -eq 'x86' -and $is64Bit)) {
+      return $false
+    }
+  }
+
+  return $true
+}

@@ -3,9 +3,9 @@
 ## ➕ Additions
 
 - [x] Add [PSScriptAnalyzer](https://github.com/PowerShell/PSScriptAnalyzer)
-- [X] Add [Pester](https://pester.dev/)
+- [x] Add [Pester](https://pester.dev/)
 - [ ] Add scripts to mitigate [Public Firewall Profile Bug in Defender 2025](https://jans.cloud/2025/03/unidentified-network-public-firewall-profile-bei-windows-server-2025-domain-controller/)
-- [X] ~~Add scripts for [Terminal Server configuration](https://www.server-world.info/en/note?os=Windows_Server_2025&p=remotedesktop&f=1) and the associated [Defender rules](https://gist.github.com/asheroto/530748b3bf0528cc4805d652b612f81f)~~ -> out of scope - do this with Ansible
+- [x] ~~Add scripts for [Terminal Server configuration](https://www.server-world.info/en/note?os=Windows_Server_2025&p=remotedesktop&f=1) and the associated [Defender rules](https://gist.github.com/asheroto/530748b3bf0528cc4805d652b612f81f)~~ -> out of scope - do this with Ansible
 - [x] Create [WOL-tooling](https://www.pdq.com/blog/wake-on-lan-wol-magic-packet-powershell/)
 - [x] Create a dowloader for [VC++ Redistributables](https://learn.microsoft.com/de-de/cpp/windows/latest-supported-vc-redist?view=msvc-170)
 - [x] [How to set return type in PowerShell](https://stackoverflow.com/questions/64891846/specify-function-return-type)
@@ -33,11 +33,11 @@
 - [ ] [GitHub: ab14jain/PowerShell](https://github.com/ab14jain/PowerShell)
 - [ ] [msxfaq.de](https://www.msxfaq.de/code/powershell/psparam.htm)
 - [ ] [PowerShell special characters](https://www.neolisk.blog/posts/2009-07-23-powershell-special-characters/)
-- [X] [PowerShell: What is @{}](https://stackoverflow.com/questions/56965510/what-is-meaning-in-powershell)
-- [X] [PowerShell: What is %{}](https://stackoverflow.com/questions/22846596/what-does-percent-do-in-powershell)
-- [X] [PSScriptAnalyzer](https://learn.microsoft.com/de-de/powershell/utility-modules/psscriptanalyzer/overview?view=ps-modules)
+- [x] [PowerShell: What is @{}](https://stackoverflow.com/questions/56965510/what-is-meaning-in-powershell)
+- [x] [PowerShell: What is %{}](https://stackoverflow.com/questions/22846596/what-does-percent-do-in-powershell)
+- [x] [PSScriptAnalyzer](https://learn.microsoft.com/de-de/powershell/utility-modules/psscriptanalyzer/overview?view=ps-modules)
 - [ ] [Copy/Move files based on RegEx](https://stackoverflow.com/questions/7893919/powershell-copy-move-files-based-on-a-regex-value-retaining-the-folder-structu)
-- [X] [PowerShell: What is CmdLetBinding](https://blog.ironmansoftware.com/powershell-cmdlet-binding/)
+- [x] [PowerShell: What is CmdLetBinding](https://blog.ironmansoftware.com/powershell-cmdlet-binding/)
 - [ ] [Explore self-elevating PowerShell scripts](https://www.reddit.com/r/PowerShell/comments/d7y0zp/self_elevating_powershell_script/)
 
 ### Infrastructure

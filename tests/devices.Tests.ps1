@@ -31,8 +31,16 @@ Describe 'Get-PrintDevice' {
     }
     Mock Get-CimInstance {
       @(
-        [PSCustomObject]@{ Name = 'Office'; DeviceID = 'Office'; Default = $true }
-        [PSCustomObject]@{ Name = 'PDF'; DeviceID = 'PDF'; Default = $false }
+        [PSCustomObject]@{
+          Name = 'Office'
+          DeviceID = 'Office'
+          Default = $true
+        }
+        [PSCustomObject]@{
+          Name = 'PDF'
+          DeviceID = 'PDF'
+          Default = $false
+        }
       )
     } -ParameterFilter { $ClassName -eq 'Win32_Printer' }
 
@@ -73,8 +81,18 @@ Describe 'Get-DefaultPrintDevice' {
   It 'returns the printer marked as default by CIM' {
     Mock Get-CimInstance {
       @(
-        [PSCustomObject]@{ Name = 'Office'; DeviceID = 'Office'; Default = $true; DriverName = 'Office Driver' }
-        [PSCustomObject]@{ Name = 'PDF'; DeviceID = 'PDF'; Default = $false; DriverName = 'PDF Driver' }
+        [PSCustomObject]@{
+          Name = 'Office'
+          DeviceID = 'Office'
+          Default = $true
+          DriverName = 'Office Driver'
+        }
+        [PSCustomObject]@{
+          Name = 'PDF'
+          DeviceID = 'PDF'
+          Default = $false
+          DriverName = 'PDF Driver'
+        }
       )
     } -ParameterFilter { $ClassName -eq 'Win32_Printer' }
 
@@ -90,7 +108,11 @@ Describe 'Get-DefaultPrintDevice' {
 Describe 'Set-DefaultPrintDevice' {
   It 'sets the default printer by exact name' {
     Mock Get-CimInstance {
-      @([PSCustomObject]@{ Name = 'Office'; DeviceID = 'Office'; Default = $false })
+      @([PSCustomObject]@{
+          Name = 'Office'
+          DeviceID = 'Office'
+          Default = $false
+        })
     } -ParameterFilter { $ClassName -eq 'Win32_Printer' }
     Mock Invoke-CimMethod { [PSCustomObject]@{ ReturnValue = 0 } } -ParameterFilter { $MethodName -eq 'SetDefaultPrinter' }
 
@@ -104,7 +126,11 @@ Describe 'Set-DefaultPrintDevice' {
 
   It 'honors WhatIf' {
     Mock Get-CimInstance {
-      @([PSCustomObject]@{ Name = 'Office'; DeviceID = 'Office'; Default = $false })
+      @([PSCustomObject]@{
+          Name = 'Office'
+          DeviceID = 'Office'
+          Default = $false
+        })
     } -ParameterFilter { $ClassName -eq 'Win32_Printer' }
     Mock Invoke-CimMethod { [PSCustomObject]@{ ReturnValue = 0 } }
 
@@ -117,7 +143,11 @@ Describe 'Set-DefaultPrintDevice' {
 
   It 'skips when the requested printer is already default' {
     Mock Get-CimInstance {
-      @([PSCustomObject]@{ Name = 'Office'; DeviceID = 'Office'; Default = $true })
+      @([PSCustomObject]@{
+          Name = 'Office'
+          DeviceID = 'Office'
+          Default = $true
+        })
     } -ParameterFilter { $ClassName -eq 'Win32_Printer' }
     Mock Invoke-CimMethod { [PSCustomObject]@{ ReturnValue = 0 } }
 
@@ -137,8 +167,16 @@ Describe 'Set-DefaultPrintDevice' {
   It 'fails when exact name resolution returns more than one printer' {
     Mock Get-CimInstance {
       @(
-        [PSCustomObject]@{ Name = 'Office'; DeviceID = 'Office1'; Default = $false }
-        [PSCustomObject]@{ Name = 'Office'; DeviceID = 'Office2'; Default = $false }
+        [PSCustomObject]@{
+          Name = 'Office'
+          DeviceID = 'Office1'
+          Default = $false
+        }
+        [PSCustomObject]@{
+          Name = 'Office'
+          DeviceID = 'Office2'
+          Default = $false
+        }
       )
     } -ParameterFilter { $ClassName -eq 'Win32_Printer' }
 
@@ -150,15 +188,42 @@ Describe 'Get-ScanDevice' {
   It 'normalizes WIA device info objects' {
     $deviceInfo = [PSCustomObject]@{
       Properties = @(
-        [PSCustomObject]@{ Name = 'Name'; Value = 'Brother MFC' }
-        [PSCustomObject]@{ Name = 'Unique Device ID'; Value = 'wia-device-1' }
-        [PSCustomObject]@{ Name = 'Manufacturer'; Value = 'Brother' }
-        [PSCustomObject]@{ Name = 'Type'; Value = 65537 }
-        [PSCustomObject]@{ Name = 'Port'; Value = 'AUTO' }
-        [PSCustomObject]@{ Name = 'Server'; Value = 'local' }
-        [PSCustomObject]@{ Name = 'Driver Version'; Value = '1.2.3' }
-        [PSCustomObject]@{ Name = 'WIA Version'; Value = '2.0' }
-        [PSCustomObject]@{ Name = 'PnP ID String'; Value = 'root#image#0000' }
+        [PSCustomObject]@{
+          Name = 'Name'
+          Value = 'Brother MFC'
+        }
+        [PSCustomObject]@{
+          Name = 'Unique Device ID'
+          Value = 'wia-device-1'
+        }
+        [PSCustomObject]@{
+          Name = 'Manufacturer'
+          Value = 'Brother'
+        }
+        [PSCustomObject]@{
+          Name = 'Type'
+          Value = 65537
+        }
+        [PSCustomObject]@{
+          Name = 'Port'
+          Value = 'AUTO'
+        }
+        [PSCustomObject]@{
+          Name = 'Server'
+          Value = 'local'
+        }
+        [PSCustomObject]@{
+          Name = 'Driver Version'
+          Value = '1.2.3'
+        }
+        [PSCustomObject]@{
+          Name = 'WIA Version'
+          Value = '2.0'
+        }
+        [PSCustomObject]@{
+          Name = 'PnP ID String'
+          Value = 'root#image#0000'
+        }
       )
     }
 
