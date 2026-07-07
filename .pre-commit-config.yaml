@@ -14,17 +14,17 @@ repos:
   # Local hooks
   - repo: local
     hooks:
-      # - id: prettier-format
-      #   name: Prettier format
-      #   entry: bunx prettier --write "**/*.md"
-      #   language: system
-      #   pass_filenames: false
-
-      - id: powershell-format
-        name: PowerShell format check
-        entry: pwsh -NoProfile -ExecutionPolicy Bypass -File ./tools/format.ps1 -Check
+      - id: prettier-format
+        name: Prettier format
+        entry: bun x prettier --write "**/*.md"
         language: system
         pass_filenames: false
+
+      # - id: powershell-format
+      #   name: PowerShell format check
+      #   entry: pwsh -NoProfile -ExecutionPolicy Bypass -File ./tools/format.ps1 -Check
+      #   language: system
+      #   pass_filenames: false
 
       - id: psscriptanalyzer
         name: PSScriptAnalyzer

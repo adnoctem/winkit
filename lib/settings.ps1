@@ -1,4 +1,4 @@
-function Get-DefaultApp {
+﻿function Get-DefaultApp {
   <#
     .SYNOPSIS
       Get-DefaultApp - Retrieves the default application associated with a given file extension.

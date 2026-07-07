@@ -1,4 +1,4 @@
-#Requires -Version 5.0
+﻿#Requires -Version 5.0
 
 # Shared native methods - compiled once and reused by Get-SystemMemory / Get-SystemUptime
 if ($null -eq ('SysInfoNative' -as [type])) {

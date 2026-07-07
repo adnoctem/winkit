@@ -1,4 +1,4 @@
-function Convert-Quote {
+﻿function Convert-Quote {
   <#
   .SYNOPSIS
     Converts single quotes to double quotes or vice versa in a specified file.

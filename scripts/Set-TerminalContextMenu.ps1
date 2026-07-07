@@ -1,4 +1,4 @@
-#Requires -Version 5.0
+﻿#Requires -Version 5.0
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', 'Read-JsonFileWithComments', Justification = 'The helper intentionally strips multiple JSON comment lines.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', 'Get-TerminalProfileEntries', Justification = 'The helper returns context-menu entries, not a single Terminal profile object.')]

@@ -1,4 +1,4 @@
-# Map of short and long hive names to canonical PowerShell provider paths.
+﻿# Map of short and long hive names to canonical PowerShell provider paths.
 # HKLM: and HKCU: are default PowerShell drives; the remaining hives use the
 # Registry:: provider path because their short PS drives are not guaranteed to
 # exist in Windows PowerShell 5.1.

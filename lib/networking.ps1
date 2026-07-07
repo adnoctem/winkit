@@ -1,4 +1,4 @@
-# --- Internal ----------------------------------------------------------------
+﻿# --- Internal ----------------------------------------------------------------
 
 function Resolve-IPv6PrefixData {
   [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', '', Justification = 'Data is a singular mass noun; there is no other option here.')]

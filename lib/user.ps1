@@ -1,4 +1,4 @@
-function Get-UserInfo {
+﻿function Get-UserInfo {
   <#
     .SYNOPSIS
       Get-UserInfo - Retrieves information about the current user, including their username, administrator status, and SID.

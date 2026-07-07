@@ -1,4 +1,4 @@
-@{
+﻿@{
   SourceFile = '01-telemetry.lgpo'
   Title = 'Telemetry and diagnostic data restraint'
   Owner = '<role-or-name>'

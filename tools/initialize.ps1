@@ -1,4 +1,4 @@
-<#
+﻿<#
   Initial setup script used to download PowerShell module dependencies
   defined in the project manifest and set up the project for local use.
 

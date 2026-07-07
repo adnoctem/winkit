@@ -1,4 +1,4 @@
-function Get-DefenderThreatDetection {
+﻿function Get-DefenderThreatDetection {
   <#
     .SYNOPSIS
       Retrieves Microsoft Defender threat detections, optionally filtered by date.
