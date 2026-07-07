@@ -1,12 +1,15 @@
 ﻿#Requires -Version 5.1
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
+
 BeforeAll {
   . $PSScriptRoot/../lib/data.ps1
 }
 
 Describe 'Convert-Quote' {
   BeforeAll {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '', Justification = 'This is a test file and the variable is used in multiple It blocks.')]
+
     $testFile = [System.IO.Path]::GetTempFileName()
   }
 

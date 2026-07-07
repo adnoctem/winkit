@@ -5,17 +5,22 @@
   Runs PSScriptAnalyzer checks for repository PowerShell sources.
 
 .DESCRIPTION
-  Invokes PSScriptAnalyzer once per configured path because PSScriptAnalyzer
-  1.25.0 expects a single string for -Path and rejects an array such as
-  `-Path ./lib,./scripts`. Results from each invocation are collected and
+  By default, scans the entire repository root for .ps1, .psm1, and .psd1 files
+  and invokes PSScriptAnalyzer once per file. The .git, .idea, dist, build, and
+  secrets directories are excluded by default so generated, vendored, or
+  sensitive content is never analyzed.
+
+  PSScriptAnalyzer 1.25.0 expects a single string for -Path and rejects an
+  array such as `-Path ./lib,./scripts`, so results are collected per file and
   printed together.
 
   The script exits with code 1 when any analyzer findings remain, making it
   suitable for pre-commit and CI usage.
 
 .PARAMETER Path
-  Files or directories to analyze. Defaults to lib, scripts, tools/build.ps1,
-  and tools/format.ps1 when they exist.
+  Files or directories to analyze. Defaults to the repository root, which is
+  scanned recursively for PowerShell sources with the standard exclusions
+  applied.
 
 .PARAMETER Settings
   PSScriptAnalyzer settings file. Defaults to PSScriptAnalyzerSettings.psd1 in
@@ -23,7 +28,7 @@
 
 .EXAMPLE
   PS> ./lint.ps1
-  Runs analyzer checks over the default repository PowerShell paths.
+  Runs analyzer checks over all repository PowerShell sources.
 
 .EXAMPLE
   PS> ./lint.ps1 -Path ./lib,./scripts/Windows
@@ -39,12 +44,7 @@
 
 [CmdletBinding()]
 param (
-  [string[]]$Path = @(
-    (Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'lib'),
-    (Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'scripts'),
-    (Join-Path -Path $PSScriptRoot -ChildPath 'build.ps1'),
-    (Join-Path -Path $PSScriptRoot -ChildPath 'format.ps1')
-  ),
+  [string[]]$Path = @(Split-Path -Path $PSScriptRoot -Parent),
 
   [string]$Settings = (Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'PSScriptAnalyzerSettings.psd1')
 )
@@ -62,16 +62,57 @@ if (-not (Test-Path -LiteralPath $settingsPath -PathType Leaf)) {
   exit 1
 }
 
-$results = New-Object System.Collections.Generic.List[object]
+$extensions = @('.ps1', '.psm1', '.psd1')
+$excludedDirectories = @('.git', '.idea', 'dist', 'build', 'secrets')
+$rootFullPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath((Split-Path -Path $PSScriptRoot -Parent))
 
-foreach ($entry in $Path) {
-  $resolvedPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($entry)
-  if (-not (Test-Path -LiteralPath $resolvedPath)) {
-    Write-Warning "Skipping missing analyzer path: $entry"
-    continue
+function Test-LintExcludedPath {
+  param (
+    [Parameter(Mandatory = $true)]
+    [string]$FilePath
+  )
+
+  $relative = $FilePath
+  if ($FilePath.StartsWith($rootFullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+    $relative = $FilePath.Substring($rootFullPath.Length).TrimStart('\', '/')
   }
 
-  $_analysis = @(Invoke-ScriptAnalyzer -Path $resolvedPath -Recurse -Settings $settingsPath)
+  foreach ($directory in $excludedDirectories) {
+    if ($relative -eq $directory -or $relative.StartsWith("$directory\", [System.StringComparison]::OrdinalIgnoreCase) -or $relative.StartsWith("$directory/", [System.StringComparison]::OrdinalIgnoreCase)) {
+      return $true
+    }
+  }
+
+  return $false
+}
+
+$files = foreach ($entry in $Path) {
+  $resolvedPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($entry)
+  if (Test-Path -LiteralPath $resolvedPath -PathType Leaf) {
+    Get-Item -LiteralPath $resolvedPath
+  }
+  elseif (Test-Path -LiteralPath $resolvedPath -PathType Container) {
+    Get-ChildItem -LiteralPath $resolvedPath -Recurse -File
+  }
+  else {
+    Write-Warning "Skipping missing analyzer path: $entry"
+  }
+}
+
+$files = @($files |
+    Where-Object { $extensions -contains $_.Extension.ToLowerInvariant() } |
+    Where-Object { -not (Test-LintExcludedPath -FilePath $_.FullName) } |
+    Sort-Object -Property FullName -Unique)
+
+if ($files.Count -eq 0) {
+  Write-Output 'PSScriptAnalyzer passed: no PowerShell files to analyze.'
+  exit 0
+}
+
+$results = New-Object System.Collections.Generic.List[object]
+
+foreach ($file in $files) {
+  $_analysis = @(Invoke-ScriptAnalyzer -Path $file.FullName -Settings $settingsPath)
   foreach ($_result in $_analysis) {
     [void]$results.Add($_result)
   }
@@ -84,5 +125,5 @@ if ($results.Count -gt 0) {
   exit 1
 }
 
-Write-Output "PSScriptAnalyzer passed for $($Path.Count) path(s)."
+Write-Output "PSScriptAnalyzer passed for $($files.Count) file(s)."
 exit 0

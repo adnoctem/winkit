@@ -6,6 +6,8 @@
     Reinstall all modules even if the required version is already present.
 #>
 
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'This script is intended for interactive use and Write-Host is appropriate for user feedback.')]
+
 [CmdletBinding()]
 param(
   [switch]$Force

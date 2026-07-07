@@ -60,5 +60,9 @@
         'Policies'
       )
     }
+
+    PSUseBOMForUnicodeEncodedFiles = @{
+      Enable = $true
+    }
   }
 }

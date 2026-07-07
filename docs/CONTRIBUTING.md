@@ -40,16 +40,16 @@ To check formatting without modifying files, suitable for CI jobs and pre-commit
 .\winkit.ps1 format -Check
 ```
 
-The formatter delegates whitespace, brace, indentation, and casing rules to PSScriptAnalyzer via
-[`PSScriptAnalyzerSettings.psd1`](../PSScriptAnalyzerSettings.psd1). Its only repository-specific post-processing step is
-expanding single-line hashtable literals that contain multiple key/value pairs into a readable block form.
+The formatter delegates whitespace, brace, indentation, and casing rules entirely to PSScriptAnalyzer via
+[`PSScriptAnalyzerSettings.psd1`](../PSScriptAnalyzerSettings.psd1) and performs no repository-specific
+post-processing beyond encoding and line-ending normalization on write.
 
 Output defaults to:
 
-- **Encoding**: UTF-8 without BOM
+- **Encoding**: UTF-8 with BOM (required for reliable parsing under Windows PowerShell 5.1)
 - **Line endings**: CRLF
 - **Indentation**: 2 spaces
-- **Excluded directories**: `.git`, `.idea`, `secrets` (unless `-IncludeSecrets` is supplied)
+- **Excluded directories**: `.git`, `.idea`, `dist`, `build`, `secrets` (unless `-IncludeSecrets` is supplied)
 
 To limit the scope, pass explicit paths:
 
@@ -57,16 +57,11 @@ To limit the scope, pass explicit paths:
 .\winkit.ps1 format -Path ./lib,./scripts
 ```
 
-Disable the hashtable-expansion post-pass when only the raw PSScriptAnalyzer output is desired:
-
-```pwsh
-.\winkit.ps1 format -Check -NoExpandHashtables
-```
-
 ### Linting
 
-Run PSScriptAnalyzer against the default repository paths (the `lib` and `scripts` directories plus the tool scripts
-themselves):
+Run PSScriptAnalyzer against all PowerShell sources under the repository root (the `lib` and `scripts`
+directories, the `tools/` scripts, and `winkit.ps1`). The `.git`, `.idea`, `dist`, `build`, and `secrets`
+directories are excluded by default:
 
 ```pwsh
 .\winkit.ps1 lint

@@ -20,11 +20,17 @@ repos:
         language: system
         pass_filenames: false
 
-      # - id: powershell-format
-      #   name: PowerShell format check
-      #   entry: pwsh -NoProfile -ExecutionPolicy Bypass -File ./tools/format.ps1 -Check
-      #   language: system
-      #   pass_filenames: false
+      - id: powershell-format-check
+        name: PowerShell format check
+        entry: pwsh -NoProfile -ExecutionPolicy Bypass -File ./tools/format.ps1 -Check
+        language: system
+        pass_filenames: false
+
+      - id: powershell-format
+        name: PowerShell format
+        entry: pwsh -NoProfile -ExecutionPolicy Bypass -File ./tools/format.ps1
+        language: system
+        pass_filenames: false
 
       - id: psscriptanalyzer
         name: PSScriptAnalyzer
