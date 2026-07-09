@@ -714,3 +714,1084 @@ function Get-WMIPersistence {
     Bindings = @(Get-CimInstance -Namespace root\subscription -ClassName __FilterToConsumerBinding -ErrorAction SilentlyContinue)
   }
 }
+
+# ==============================================================================
+# Windows Security Event API
+# ==============================================================================
+
+function Import-SecurityEventConfiguration {
+  <#
+    .SYNOPSIS
+      Loads and caches the security event configuration from security.psd1.
+    .DESCRIPTION
+      Imports the security event definition data file and caches it in script
+      scope. Subsequent calls return the cached configuration unless -Force is
+      supplied, avoiding repeated file reads.
+    .PARAMETER Path
+      Path to the security.psd1 configuration file. Defaults to the file
+      alongside this script.
+    .PARAMETER Force
+      Reload the configuration even if it is already cached.
+    .EXAMPLE
+      PS> $config = Import-SecurityEventConfiguration
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $false)]
+    [string] $Path = (Join-Path -Path $PSScriptRoot -ChildPath 'security.psd1'),
+
+    [Parameter(Mandatory = $false)]
+    [switch] $Force
+  )
+
+  if ($script:SecurityEventConfiguration -and -not $Force) {
+    return $script:SecurityEventConfiguration
+  }
+
+  if (-not (Test-Path -LiteralPath $Path)) {
+    throw "Security event configuration file not found: $Path"
+  }
+
+  $script:SecurityEventConfiguration = Import-PowerShellDataFile -Path $Path
+  return $script:SecurityEventConfiguration
+}
+
+function Get-SecurityEventGroup {
+  <#
+    .SYNOPSIS
+      Retrieves a single semantic event group from the configuration.
+    .DESCRIPTION
+      Looks up a named group (e.g. Logon, Service, PowerShell) from the
+      cached configuration. Throws if the group is unknown.
+    .PARAMETER Name
+      Case-sensitive group name to retrieve.
+    .PARAMETER Configuration
+      Configuration hashtable. Defaults to the cached configuration from
+      Import-SecurityEventConfiguration.
+    .EXAMPLE
+      PS> $group = Get-SecurityEventGroup -Name 'Logon'
+      PS> $group.EventIds
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)]
+    [string] $Name,
+
+    [Parameter(Mandatory = $false)]
+    [hashtable] $Configuration = (Import-SecurityEventConfiguration)
+  )
+
+  if (-not $Configuration.Groups.ContainsKey($Name)) {
+    throw "Unknown security event group: $Name"
+  }
+
+  return $Configuration.Groups[$Name]
+}
+
+function Get-SecurityEventDefinition {
+  <#
+    .SYNOPSIS
+      Retrieves event definition objects from the configuration.
+    .DESCRIPTION
+      Flattens the nested Events structure into a list of event definition
+      hashtables, optionally filtered by Group, LogName, ProviderName, Id,
+      or Name.
+    .PARAMETER Group
+      Limit results to events belonging to this semantic group.
+    .PARAMETER LogName
+      Limit results to events from this event log channel.
+    .PARAMETER ProviderName
+      Limit results to events from this provider.
+    .PARAMETER Id
+      Limit results to events with these event IDs.
+    .PARAMETER Name
+      Limit results to events with this logical name.
+    .PARAMETER Configuration
+      Configuration hashtable. Defaults to cached.
+    .EXAMPLE
+      PS> Get-SecurityEventDefinition -Id 4624, 4625
+    .EXAMPLE
+      PS> Get-SecurityEventDefinition -Group 'Logon' -LogName 'Security'
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $false)]
+    [string] $Group,
+
+    [Parameter(Mandatory = $false)]
+    [string] $LogName,
+
+    [Parameter(Mandatory = $false)]
+    [string] $ProviderName,
+
+    [Parameter(Mandatory = $false)]
+    [int[]] $Id,
+
+    [Parameter(Mandatory = $false)]
+    [string] $Name,
+
+    [Parameter(Mandatory = $false)]
+    [hashtable] $Configuration = (Import-SecurityEventConfiguration)
+  )
+
+  $results = New-Object System.Collections.ArrayList
+
+  foreach ($logKey in $Configuration.Events.Keys) {
+    foreach ($subKey in $Configuration.Events[$logKey].Keys) {
+      foreach ($def in $Configuration.Events[$logKey][$subKey]) {
+        if ($Group -and $def.UtilityGroup -ne $Group) { continue }
+        if ($LogName -and $def.LogName -ne $LogName) { continue }
+        if ($ProviderName -and $def.ProviderName -ne $ProviderName) { continue }
+        if ($Id -and $def.Id -notin $Id) { continue }
+        if ($Name -and $def.Name -ne $Name) { continue }
+        [void]$results.Add($def)
+      }
+    }
+  }
+
+  return $results
+}
+
+function Test-WindowsEventLogChannel {
+  <#
+    .SYNOPSIS
+      Tests whether an event log channel exists on the local machine.
+    .DESCRIPTION
+      Uses Get-WinEvent -ListLog to verify channel existence. Returns $true
+      if the channel is available, $false otherwise. No errors are thrown
+      for missing channels.
+    .PARAMETER LogName
+      Full event log channel name, e.g. 'Security' or
+      'Microsoft-Windows-Sysmon/Operational'.
+    .EXAMPLE
+      PS> if (Test-WindowsEventLogChannel -LogName 'Microsoft-Windows-Sysmon/Operational') { ... }
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)]
+    [string] $LogName
+  )
+
+  try {
+    $null = Get-WinEvent -ListLog $LogName -ErrorAction Stop
+    return $true
+  }
+  catch {
+    return $false
+  }
+}
+
+function Get-WindowsEventByDefinition {
+  <#
+    .SYNOPSIS
+      Generic event query helper wrapping Get-WinEvent -FilterHashtable.
+    .DESCRIPTION
+      Queries Windows event logs using filter-hashtable-based queries for
+      performance. Accepts event definitions, a group name, or ID lists.
+      Definitions are grouped by LogName to minimise individual queries.
+      Supports remote computers and optional channel skipping.
+    .PARAMETER Definition
+      Array of event definition hashtables.
+    .PARAMETER Group
+      Semantic group name resolved from the configuration.
+    .PARAMETER Id
+      Event IDs to query (bypasses definition lookup).
+    .PARAMETER LogName
+      Event log channel(s) to query.
+    .PARAMETER StartTime
+      Earliest event timestamp. Defaults to 24 hours ago.
+    .PARAMETER EndTime
+      Latest event timestamp. Defaults to now.
+    .PARAMETER ComputerName
+      Target remote computer(s).
+    .PARAMETER SkipMissingChannel
+      Skip channels that do not exist rather than throwing.
+    .PARAMETER MaxEvents
+      Maximum events to return per log/channel query.
+    .PARAMETER Configuration
+      Configuration hashtable. Defaults to cached.
+    .EXAMPLE
+      PS> Get-WindowsEventByDefinition -Group 'Logon' -StartTime (Get-Date).AddHours(-4)
+    .EXAMPLE
+      PS> Get-WindowsEventByDefinition -Id 4624, 4625 -LogName 'Security' -MaxEvents 100
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $false, ValueFromPipeline = $true)]
+    [hashtable[]] $Definition,
+
+    [Parameter(Mandatory = $false)]
+    [string] $Group,
+
+    [Parameter(Mandatory = $false)]
+    [int[]] $Id,
+
+    [Parameter(Mandatory = $false)]
+    [string[]] $LogName,
+
+    [Parameter(Mandatory = $false)]
+    [datetime] $StartTime = (Get-Date).AddDays(-1),
+
+    [Parameter(Mandatory = $false)]
+    [datetime] $EndTime = (Get-Date),
+
+    [Parameter(Mandatory = $false)]
+    [string[]] $ComputerName,
+
+    [Parameter(Mandatory = $false)]
+    [switch] $SkipMissingChannel,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, [int]::MaxValue)]
+    [int] $MaxEvents,
+
+    [Parameter(Mandatory = $false)]
+    [hashtable] $Configuration = (Import-SecurityEventConfiguration)
+  )
+
+  begin {
+    $allDefs = New-Object System.Collections.ArrayList
+  }
+
+  process {
+    if ($Definition) {
+      [void]$allDefs.AddRange($Definition)
+    }
+  }
+
+  end {
+    if ($Group) {
+      $groupDefinition = Get-SecurityEventGroup -Name $Group -Configuration $Configuration
+      $resolvedDefs = @(Get-SecurityEventDefinition -Group $Group -Configuration $Configuration)
+
+      if ($resolvedDefs.Count -eq 0 -and $groupDefinition.EventIds) {
+        foreach ($log in $groupDefinition.DefaultLogs) {
+          foreach ($eventId in $groupDefinition.EventIds) {
+            [void]$allDefs.Add(@{ LogName = $log; Id = $eventId })
+          }
+        }
+      }
+      else {
+        [void]$allDefs.AddRange($resolvedDefs)
+      }
+    }
+
+    if ($Id) {
+      if ($LogName) {
+        foreach ($log in $LogName) {
+          foreach ($eventId in $Id) {
+            [void]$allDefs.Add(@{ LogName = $log; Id = $eventId })
+          }
+        }
+      }
+      else {
+        foreach ($eventId in $Id) {
+          [void]$allDefs.Add(@{ Id = $eventId })
+        }
+      }
+    }
+
+    if ($allDefs.Count -eq 0) {
+      throw 'No event definitions supplied or resolved. Provide -Definition, -Group, or -Id.'
+    }
+
+    $allDefs |
+      Group-Object LogName |
+      ForEach-Object {
+        $log = $_.Name
+        $ids = $_.Group.Id | Sort-Object -Unique
+
+        if ($SkipMissingChannel -and -not (Test-WindowsEventLogChannel -LogName $log)) {
+          return
+        }
+
+        $filter = @{
+          LogName = $log
+          Id = $ids
+          StartTime = $StartTime
+          EndTime = $EndTime
+        }
+
+        if ($MaxEvents) {
+          $filter.MaxEvents = $MaxEvents
+        }
+
+        try {
+          if ($ComputerName) {
+            foreach ($computer in $ComputerName) {
+              Get-WinEvent -ComputerName $computer -FilterHashtable $filter -ErrorAction SilentlyContinue
+            }
+          }
+          else {
+            Get-WinEvent -FilterHashtable $filter -ErrorAction SilentlyContinue
+          }
+        }
+        catch {
+          if (-not $SkipMissingChannel) {
+            Write-Error "Failed to query log '$log': $_"
+          }
+        }
+      }
+  }
+}
+
+function Resolve-WindowsEventMappedField {
+  <#
+    .SYNOPSIS
+      Resolves a mapped field value to its semantic name.
+    .DESCRIPTION
+      Looks up a value in a named field map (e.g. LogonType, ImpersonationLevel)
+      and returns the map entry. Returns $null when the map or value is not
+      found.
+    .PARAMETER MapName
+      Name of the field map (e.g. 'LogonType').
+    .PARAMETER Value
+      Raw value to resolve. Handles both integer and string keys.
+    .PARAMETER Configuration
+      Configuration hashtable. Defaults to cached.
+    .EXAMPLE
+      PS> Resolve-WindowsEventMappedField -MapName 'LogonType' -Value 10
+      Returns a hashtable with Name = 'RemoteInteractive'.
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)]
+    [string] $MapName,
+
+    [Parameter(Mandatory = $true)]
+    [object] $Value,
+
+    [Parameter(Mandatory = $false)]
+    [hashtable] $Configuration = (Import-SecurityEventConfiguration)
+  )
+
+  if (-not $Configuration.FieldMaps.ContainsKey($MapName)) {
+    return $null
+  }
+
+  $map = $Configuration.FieldMaps[$MapName]
+
+  if ($map.ContainsKey($Value)) {
+    return $map[$Value]
+  }
+
+  $stringValue = [string] $Value
+  if ($map.ContainsKey($stringValue)) {
+    return $map[$stringValue]
+  }
+
+  return $null
+}
+
+function ConvertFrom-WinEvent {
+  <#
+    .SYNOPSIS
+      Converts a raw EventRecord into a structured enriched object.
+    .DESCRIPTION
+      Parses the XML representation of an event record, extracts named
+      EventData fields into a RawData hashtable, and produces a PSCustomObject
+      with common top-level properties plus enriched mapped fields such as
+      LogonTypeName. The original EventRecord is preserved on the object.
+    .PARAMETER Event
+      A [System.Diagnostics.Eventing.Reader.EventRecord] to convert.
+    .PARAMETER Configuration
+      Configuration hashtable. Defaults to cached.
+    .EXAMPLE
+      PS> Get-WindowsEventByDefinition -Id 4624 -MaxEvents 1 | ConvertFrom-WinEvent
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+    [object] $Event,
+
+    [Parameter(Mandatory = $false)]
+    [hashtable] $Configuration = (Import-SecurityEventConfiguration)
+  )
+
+  process {
+    $xml = [xml] $Event.ToXml()
+
+    $rawData = [ordered] @{}
+    if ($xml.Event.EventData -and $xml.Event.EventData.Data) {
+      foreach ($node in $xml.Event.EventData.Data) {
+        if (-not [string]::IsNullOrWhiteSpace($node.Name)) {
+          $rawData[$node.Name] = $node.'#text'
+        }
+      }
+    }
+
+    $logonType = $null
+    $logonTypeName = $null
+    if ($rawData.Contains('LogonType')) {
+      try {
+        $logonType = [int] $rawData['LogonType']
+        $resolved = Resolve-WindowsEventMappedField -MapName 'LogonType' -Value $logonType -Configuration $Configuration
+        if ($resolved) {
+          $logonTypeName = $resolved.Name
+        }
+      }
+      catch {
+        $logonType = $rawData['LogonType']
+      }
+    }
+
+    $impersonationLevelName = $null
+    if ($rawData.Contains('ImpersonationLevel')) {
+      $resolved = Resolve-WindowsEventMappedField -MapName 'ImpersonationLevel' -Value $rawData['ImpersonationLevel'] -Configuration $Configuration
+      if ($resolved) {
+        $impersonationLevelName = $resolved.Name
+      }
+    }
+
+    [pscustomobject] @{
+      TimeCreated = $Event.TimeCreated
+      Id = $Event.Id
+      ProviderName = $Event.ProviderName
+      LogName = $Event.LogName
+      MachineName = $Event.MachineName
+      RecordId = $Event.RecordId
+      LevelDisplayName = $Event.LevelDisplayName
+      TargetUserName = $rawData['TargetUserName']
+      TargetDomainName = $rawData['TargetDomainName']
+      SubjectUserName = $rawData['SubjectUserName']
+      SubjectDomainName = $rawData['SubjectDomainName']
+      LogonType = $logonType
+      LogonTypeName = $logonTypeName
+      ImpersonationLevel = $rawData['ImpersonationLevel']
+      ImpersonationLevelName = $impersonationLevelName
+      IpAddress = $rawData['IpAddress']
+      IpPort = $rawData['IpPort']
+      WorkstationName = $rawData['WorkstationName']
+      ProcessName = $rawData['ProcessName']
+      ProcessId = $rawData['ProcessId']
+      LogonProcessName = $rawData['LogonProcessName']
+      AuthenticationPackageName = $rawData['AuthenticationPackageName']
+      Status = $rawData['Status']
+      SubStatus = $rawData['SubStatus']
+      TargetLogonId = $rawData['TargetLogonId']
+      ServiceName = $rawData['ServiceName']
+      ImagePath = $rawData['ImagePath']
+      ServiceFileName = $rawData['ServiceFileName']
+      RawData = $rawData
+      EventRecord = $Event
+    }
+  }
+}
+
+function Get-WindowsLogonEvent {
+  <#
+    .SYNOPSIS
+      Queries and normalises logon-related security events.
+    .DESCRIPTION
+      Wraps Get-WindowsEventByDefinition for the Logon group. Supports
+      filtering by event ID and logon type. Suppresses noisy system accounts
+      by default unless -IncludeSystem is supplied.
+    .PARAMETER StartTime
+      Earliest event timestamp. Defaults to 24 hours ago.
+    .PARAMETER EndTime
+      Latest event timestamp. Defaults to now.
+    .PARAMETER Id
+      Specific event IDs to return. Defaults to all Logon group IDs.
+    .PARAMETER LogonType
+      Filter by numeric logon type(s), e.g. 10 for RDP.
+    .PARAMETER IncludeSystem
+      Include system and machine accounts normally suppressed.
+    .PARAMETER ComputerName
+      Target remote computer(s).
+    .PARAMETER MaxEvents
+      Maximum events to return.
+    .PARAMETER Configuration
+      Configuration hashtable. Defaults to cached.
+    .EXAMPLE
+      PS> Get-WindowsLogonEvent -Id 4625
+      Returns failed logon events from the past 24 hours.
+    .EXAMPLE
+      PS> Get-WindowsLogonEvent -Id 4624 -LogonType 10
+      Returns successful RDP logons.
+    .EXAMPLE
+      PS> Get-WindowsLogonEvent -Id 4624, 4800, 4801 -LogonType 2, 7
+      Returns local console and unlock activity.
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $false)]
+    [datetime] $StartTime = (Get-Date).AddDays(-1),
+
+    [Parameter(Mandatory = $false)]
+    [datetime] $EndTime = (Get-Date),
+
+    [Parameter(Mandatory = $false)]
+    [int[]] $Id,
+
+    [Parameter(Mandatory = $false)]
+    [int[]] $LogonType,
+
+    [Parameter(Mandatory = $false)]
+    [switch] $IncludeSystem,
+
+    [Parameter(Mandatory = $false)]
+    [string[]] $ComputerName,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, [int]::MaxValue)]
+    [int] $MaxEvents,
+
+    [Parameter(Mandatory = $false)]
+    [hashtable] $Configuration = (Import-SecurityEventConfiguration)
+  )
+
+  $group = Get-SecurityEventGroup -Name 'Logon' -Configuration $Configuration
+
+  if (-not $Id) {
+    $Id = $group.EventIds
+  }
+
+  $queryParams = @{
+    Group = 'Logon'
+    StartTime = $StartTime
+    EndTime = $EndTime
+    Configuration = $Configuration
+  }
+  if ($ComputerName) { $queryParams.ComputerName = $ComputerName }
+  if ($MaxEvents) { $queryParams.MaxEvents = $MaxEvents }
+
+  $events = Get-WindowsEventByDefinition @queryParams
+
+  $events |
+    ConvertFrom-WinEvent -Configuration $Configuration |
+    Where-Object {
+      if ($_.Id -notin $Id) {
+        return $false
+      }
+
+      if ($LogonType -and $_.LogonType -notin $LogonType) {
+        return $false
+      }
+
+      if (-not $IncludeSystem) {
+        if ($group.DefaultSuppressions -and
+          $group.DefaultSuppressions.TargetUserName -and
+          $_.TargetUserName -in $group.DefaultSuppressions.TargetUserName) {
+          return $false
+        }
+
+        if ($group.DefaultSuppressions -and
+          $group.DefaultSuppressions.TargetUserNameEndsWith) {
+          foreach ($suffix in $group.DefaultSuppressions.TargetUserNameEndsWith) {
+            if ($_.TargetUserName -like "*$suffix") {
+              return $false
+            }
+          }
+        }
+      }
+
+      return $true
+    }
+}
+
+function Get-WindowsAccountChangeEvent {
+  <#
+    .SYNOPSIS
+      Queries account lifecycle and group membership change events.
+    .DESCRIPTION
+      Wraps Get-WindowsEventByDefinition for the AccountChange group.
+      Supports filtering by target user, subject user, and event ID.
+    .PARAMETER StartTime
+      Earliest event timestamp. Defaults to 24 hours ago.
+    .PARAMETER EndTime
+      Latest event timestamp. Defaults to now.
+    .PARAMETER Id
+      Specific event IDs to return. Defaults to all AccountChange group IDs.
+    .PARAMETER TargetUserName
+      Filter by the target account name of the change.
+    .PARAMETER SubjectUserName
+      Filter by the account that performed the change.
+    .PARAMETER ComputerName
+      Target remote computer(s).
+    .PARAMETER MaxEvents
+      Maximum events to return.
+    .PARAMETER Configuration
+      Configuration hashtable. Defaults to cached.
+    .EXAMPLE
+      PS> Get-WindowsAccountChangeEvent -Id 4720
+      Returns user account creation events.
+    .EXAMPLE
+      PS> Get-WindowsAccountChangeEvent -Id 4728, 4732 -StartTime (Get-Date).AddDays(-7)
+      Returns group membership additions for the past 7 days.
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $false)]
+    [datetime] $StartTime = (Get-Date).AddDays(-1),
+
+    [Parameter(Mandatory = $false)]
+    [datetime] $EndTime = (Get-Date),
+
+    [Parameter(Mandatory = $false)]
+    [int[]] $Id,
+
+    [Parameter(Mandatory = $false)]
+    [string] $TargetUserName,
+
+    [Parameter(Mandatory = $false)]
+    [string] $SubjectUserName,
+
+    [Parameter(Mandatory = $false)]
+    [string[]] $ComputerName,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, [int]::MaxValue)]
+    [int] $MaxEvents,
+
+    [Parameter(Mandatory = $false)]
+    [hashtable] $Configuration = (Import-SecurityEventConfiguration)
+  )
+
+  $group = Get-SecurityEventGroup -Name 'AccountChange' -Configuration $Configuration
+
+  if (-not $Id) {
+    $Id = $group.EventIds
+  }
+
+  $queryParams = @{
+    Group = 'AccountChange'
+    StartTime = $StartTime
+    EndTime = $EndTime
+    Configuration = $Configuration
+  }
+  if ($ComputerName) { $queryParams.ComputerName = $ComputerName }
+  if ($MaxEvents) { $queryParams.MaxEvents = $MaxEvents }
+
+  $events = Get-WindowsEventByDefinition @queryParams
+
+  $events |
+    ConvertFrom-WinEvent -Configuration $Configuration |
+    Where-Object {
+      if ($_.Id -notin $Id) { return $false }
+      if ($TargetUserName -and $_.TargetUserName -ne $TargetUserName) { return $false }
+      if ($SubjectUserName -and $_.SubjectUserName -ne $SubjectUserName) { return $false }
+      return $true
+    }
+}
+
+function Get-WindowsServiceEvent {
+  <#
+    .SYNOPSIS
+      Queries service lifecycle, failure, and installation events.
+    .DESCRIPTION
+      Wraps Get-WindowsEventByDefinition for the Service group. Supports
+      filtering by service name and event ID.
+    .PARAMETER StartTime
+      Earliest event timestamp. Defaults to 24 hours ago.
+    .PARAMETER EndTime
+      Latest event timestamp. Defaults to now.
+    .PARAMETER Id
+      Specific event IDs to return. Defaults to all Service group IDs.
+    .PARAMETER ServiceName
+      Filter by the service name involved.
+    .PARAMETER ComputerName
+      Target remote computer(s).
+    .PARAMETER MaxEvents
+      Maximum events to return.
+    .PARAMETER Configuration
+      Configuration hashtable. Defaults to cached.
+    .EXAMPLE
+      PS> Get-WindowsServiceEvent -Id 7045
+      Returns new service installation events (common persistence vector).
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $false)]
+    [datetime] $StartTime = (Get-Date).AddDays(-1),
+
+    [Parameter(Mandatory = $false)]
+    [datetime] $EndTime = (Get-Date),
+
+    [Parameter(Mandatory = $false)]
+    [int[]] $Id,
+
+    [Parameter(Mandatory = $false)]
+    [string] $ServiceName,
+
+    [Parameter(Mandatory = $false)]
+    [string[]] $ComputerName,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, [int]::MaxValue)]
+    [int] $MaxEvents,
+
+    [Parameter(Mandatory = $false)]
+    [hashtable] $Configuration = (Import-SecurityEventConfiguration)
+  )
+
+  $group = Get-SecurityEventGroup -Name 'Service' -Configuration $Configuration
+
+  if (-not $Id) {
+    $Id = $group.EventIds
+  }
+
+  $queryParams = @{
+    Group = 'Service'
+    StartTime = $StartTime
+    EndTime = $EndTime
+    Configuration = $Configuration
+  }
+  if ($ComputerName) { $queryParams.ComputerName = $ComputerName }
+  if ($MaxEvents) { $queryParams.MaxEvents = $MaxEvents }
+
+  $events = Get-WindowsEventByDefinition @queryParams
+
+  $events |
+    ConvertFrom-WinEvent -Configuration $Configuration |
+    Where-Object {
+      if ($_.Id -notin $Id) { return $false }
+      if ($ServiceName -and $_.ServiceName -ne $ServiceName) { return $false }
+      return $true
+    }
+}
+
+function Get-WindowsBootEvent {
+  <#
+    .SYNOPSIS
+      Queries boot, shutdown, and crash events.
+    .DESCRIPTION
+      Wraps Get-WindowsEventByDefinition for the BootShutdown group.
+      Covers unexpected reboots, BSODs, clean shutdowns, and service
+      lifecycle transitions.
+    .PARAMETER StartTime
+      Earliest event timestamp. Defaults to 24 hours ago.
+    .PARAMETER EndTime
+      Latest event timestamp. Defaults to now.
+    .PARAMETER Id
+      Specific event IDs to return. Defaults to all BootShutdown group IDs.
+    .PARAMETER ComputerName
+      Target remote computer(s).
+    .PARAMETER MaxEvents
+      Maximum events to return.
+    .PARAMETER Configuration
+      Configuration hashtable. Defaults to cached.
+    .EXAMPLE
+      PS> Get-WindowsBootEvent -Id 41, 1001
+      Returns unexpected shutdowns and BSOD events.
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $false)]
+    [datetime] $StartTime = (Get-Date).AddDays(-1),
+
+    [Parameter(Mandatory = $false)]
+    [datetime] $EndTime = (Get-Date),
+
+    [Parameter(Mandatory = $false)]
+    [int[]] $Id,
+
+    [Parameter(Mandatory = $false)]
+    [string[]] $ComputerName,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, [int]::MaxValue)]
+    [int] $MaxEvents,
+
+    [Parameter(Mandatory = $false)]
+    [hashtable] $Configuration = (Import-SecurityEventConfiguration)
+  )
+
+  $group = Get-SecurityEventGroup -Name 'BootShutdown' -Configuration $Configuration
+
+  if (-not $Id) {
+    $Id = $group.EventIds
+  }
+
+  $queryParams = @{
+    Group = 'BootShutdown'
+    StartTime = $StartTime
+    EndTime = $EndTime
+    Configuration = $Configuration
+  }
+  if ($ComputerName) { $queryParams.ComputerName = $ComputerName }
+  if ($MaxEvents) { $queryParams.MaxEvents = $MaxEvents }
+
+  $events = Get-WindowsEventByDefinition @queryParams
+
+  $events |
+    ConvertFrom-WinEvent -Configuration $Configuration |
+    Where-Object {
+      if ($Id -and $_.Id -notin $Id) { return $false }
+      return $true
+    }
+}
+
+function Get-WindowsPowerShellEvent {
+  <#
+    .SYNOPSIS
+      Queries PowerShell operational telemetry events.
+    .DESCRIPTION
+      Wraps Get-WindowsEventByDefinition for the PowerShell group. Supports
+      filtering by event ID, executing user, and script block content pattern.
+    .PARAMETER StartTime
+      Earliest event timestamp. Defaults to 24 hours ago.
+    .PARAMETER EndTime
+      Latest event timestamp. Defaults to now.
+    .PARAMETER Id
+      Specific event IDs to return. Defaults to all PowerShell group IDs.
+    .PARAMETER UserName
+      Filter by the user account that executed the PowerShell code.
+    .PARAMETER ScriptBlockText
+      Regex pattern to search within captured script block content.
+    .PARAMETER ComputerName
+      Target remote computer(s).
+    .PARAMETER MaxEvents
+      Maximum events to return.
+    .PARAMETER Configuration
+      Configuration hashtable. Defaults to cached.
+    .EXAMPLE
+      PS> Get-WindowsPowerShellEvent -Id 4104
+      Returns script block logging events (highest-value PowerShell event).
+    .EXAMPLE
+      PS> Get-WindowsPowerShellEvent -ScriptBlockText 'DownloadString|FromBase64'
+      Returns PowerShell events matching suspicious download or encoding patterns.
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $false)]
+    [datetime] $StartTime = (Get-Date).AddDays(-1),
+
+    [Parameter(Mandatory = $false)]
+    [datetime] $EndTime = (Get-Date),
+
+    [Parameter(Mandatory = $false)]
+    [int[]] $Id,
+
+    [Parameter(Mandatory = $false)]
+    [string] $UserName,
+
+    [Parameter(Mandatory = $false)]
+    [string] $ScriptBlockText,
+
+    [Parameter(Mandatory = $false)]
+    [string[]] $ComputerName,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, [int]::MaxValue)]
+    [int] $MaxEvents,
+
+    [Parameter(Mandatory = $false)]
+    [hashtable] $Configuration = (Import-SecurityEventConfiguration)
+  )
+
+  $group = Get-SecurityEventGroup -Name 'PowerShell' -Configuration $Configuration
+
+  if (-not $Id) {
+    $Id = $group.EventIds
+  }
+
+  $queryParams = @{
+    Group = 'PowerShell'
+    StartTime = $StartTime
+    EndTime = $EndTime
+    Configuration = $Configuration
+  }
+  if ($ComputerName) { $queryParams.ComputerName = $ComputerName }
+  if ($MaxEvents) { $queryParams.MaxEvents = $MaxEvents }
+
+  $events = Get-WindowsEventByDefinition @queryParams
+
+  $events |
+    ConvertFrom-WinEvent -Configuration $Configuration |
+    Where-Object {
+      if ($_.Id -notin $Id) { return $false }
+
+      if ($UserName) {
+        $raw = $_.RawData
+        $found = $false
+        foreach ($key in @('UserName', 'UserId', 'User', 'SubjectUserName')) {
+          if ($raw.ContainsKey($key) -and $raw[$key] -match $UserName) {
+            $found = $true
+            break
+          }
+        }
+        if (-not $found) { return $false }
+      }
+
+      if ($ScriptBlockText) {
+        $raw = $_.RawData
+        $matched = $false
+        foreach ($key in @('ScriptBlockText', 'Message', 'Payload')) {
+          if ($raw.ContainsKey($key) -and $raw[$key] -match $ScriptBlockText) {
+            $matched = $true
+            break
+          }
+        }
+        if (-not $matched) { return $false }
+      }
+
+      return $true
+    }
+}
+
+function Get-WindowsScheduledTaskEvent {
+  <#
+    .SYNOPSIS
+      Queries scheduled task lifecycle telemetry.
+    .DESCRIPTION
+      Wraps Get-WindowsEventByDefinition for the ScheduledTask group.
+      Supports filtering by event ID and task name.
+    .PARAMETER StartTime
+      Earliest event timestamp. Defaults to 24 hours ago.
+    .PARAMETER EndTime
+      Latest event timestamp. Defaults to now.
+    .PARAMETER Id
+      Specific event IDs to return. Defaults to all ScheduledTask group IDs.
+    .PARAMETER TaskName
+      Filter by the name of the scheduled task.
+    .PARAMETER ComputerName
+      Target remote computer(s).
+    .PARAMETER MaxEvents
+      Maximum events to return.
+    .PARAMETER Configuration
+      Configuration hashtable. Defaults to cached.
+    .EXAMPLE
+      PS> Get-WindowsScheduledTaskEvent -Id 106, 140, 141
+      Returns task registration, update, and deletion events.
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $false)]
+    [datetime] $StartTime = (Get-Date).AddDays(-1),
+
+    [Parameter(Mandatory = $false)]
+    [datetime] $EndTime = (Get-Date),
+
+    [Parameter(Mandatory = $false)]
+    [int[]] $Id,
+
+    [Parameter(Mandatory = $false)]
+    [string] $TaskName,
+
+    [Parameter(Mandatory = $false)]
+    [string[]] $ComputerName,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, [int]::MaxValue)]
+    [int] $MaxEvents,
+
+    [Parameter(Mandatory = $false)]
+    [hashtable] $Configuration = (Import-SecurityEventConfiguration)
+  )
+
+  $group = Get-SecurityEventGroup -Name 'ScheduledTask' -Configuration $Configuration
+
+  if (-not $Id) {
+    $Id = $group.EventIds
+  }
+
+  $queryParams = @{
+    Group = 'ScheduledTask'
+    StartTime = $StartTime
+    EndTime = $EndTime
+    Configuration = $Configuration
+  }
+  if ($ComputerName) { $queryParams.ComputerName = $ComputerName }
+  if ($MaxEvents) { $queryParams.MaxEvents = $MaxEvents }
+
+  $events = Get-WindowsEventByDefinition @queryParams
+
+  $events |
+    ConvertFrom-WinEvent -Configuration $Configuration |
+    Where-Object {
+      if ($_.Id -notin $Id) { return $false }
+
+      if ($TaskName) {
+        $raw = $_.RawData
+        $found = $false
+        foreach ($key in @('TaskName', 'Name')) {
+          if ($raw.ContainsKey($key) -and $raw[$key] -match $TaskName) {
+            $found = $true
+            break
+          }
+        }
+        if (-not $found) { return $false }
+      }
+
+      return $true
+    }
+}
+
+function Get-WindowsSysmonEvent {
+  <#
+    .SYNOPSIS
+      Queries Sysmon telemetry if the channel is available.
+    .DESCRIPTION
+      Wraps Get-WindowsEventByDefinition for the Sysmon group with
+      -SkipMissingChannel enabled by default (Sysmon is optional).
+    .PARAMETER StartTime
+      Earliest event timestamp. Defaults to 24 hours ago.
+    .PARAMETER EndTime
+      Latest event timestamp. Defaults to now.
+    .PARAMETER Id
+      Specific event IDs to return. Defaults to all Sysmon group IDs.
+    .PARAMETER ComputerName
+      Target remote computer(s).
+    .PARAMETER MaxEvents
+      Maximum events to return.
+    .PARAMETER Configuration
+      Configuration hashtable. Defaults to cached.
+    .EXAMPLE
+      PS> Get-WindowsSysmonEvent -Id 1
+      Returns Sysmon process creation events.
+    .EXAMPLE
+      PS> Get-WindowsSysmonEvent -Id 3, 22
+      Returns Sysmon network connection and DNS query events.
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $false)]
+    [datetime] $StartTime = (Get-Date).AddDays(-1),
+
+    [Parameter(Mandatory = $false)]
+    [datetime] $EndTime = (Get-Date),
+
+    [Parameter(Mandatory = $false)]
+    [int[]] $Id,
+
+    [Parameter(Mandatory = $false)]
+    [string[]] $ComputerName,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, [int]::MaxValue)]
+    [int] $MaxEvents,
+
+    [Parameter(Mandatory = $false)]
+    [hashtable] $Configuration = (Import-SecurityEventConfiguration)
+  )
+
+  if (-not (Test-WindowsEventLogChannel -LogName 'Microsoft-Windows-Sysmon/Operational')) {
+    Write-Verbose 'Sysmon operational channel not found. Sysmon may not be installed or configured.'
+    return
+  }
+
+  $group = Get-SecurityEventGroup -Name 'Sysmon' -Configuration $Configuration
+
+  if (-not $Id) {
+    $Id = $group.EventIds
+  }
+
+  $queryParams = @{
+    Group = 'Sysmon'
+    StartTime = $StartTime
+    EndTime = $EndTime
+    SkipMissingChannel = $true
+    Configuration = $Configuration
+  }
+  if ($ComputerName) { $queryParams.ComputerName = $ComputerName }
+  if ($MaxEvents) { $queryParams.MaxEvents = $MaxEvents }
+
+  $events = Get-WindowsEventByDefinition @queryParams
+
+  $events |
+    ConvertFrom-WinEvent -Configuration $Configuration |
+    Where-Object {
+      if ($_.Id -notin $Id) { return $false }
+      return $true
+    }
+}

@@ -183,6 +183,50 @@ Profile: Quick
       Export-RegistryKey -Key 'HKLM\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run' -OutputPath (Join-Path $_registryDir 'HKLM-WOW6432-Run.reg')
     }
   }
+  @{
+    Name = 'Semantic logon events - failed logons'
+    Script = {
+      $failed = Get-WindowsLogonEvent -Id 4625 -StartTime (Get-Date).AddDays(-7) -ErrorAction SilentlyContinue
+      if ($failed) {
+        $failed | Sort-Object TimeCreated -Descending | Format-Table TimeCreated, TargetUserName, TargetDomainName, LogonTypeName, IpAddress, WorkstationName -AutoSize |
+          Out-String -Width 4096 | Out-File -LiteralPath (Join-Path $_textDir 'SemanticLogon-Failed.txt') -Encoding UTF8
+        Write-Log -Message "  -> $($failed.Count) failed logon(s) in the past 7 days" -Color Gray
+      }
+      else {
+        Write-Log -Message '  -> No failed logon events found' -Color Gray
+      }
+    }
+  }
+  @{
+    Name = 'Semantic service events - new installations'
+    Script = {
+      $newServices = Get-WindowsServiceEvent -Id 7045, 4697 -StartTime (Get-Date).AddDays(-30) -ErrorAction SilentlyContinue
+      if ($newServices) {
+        $newServices | Sort-Object TimeCreated -Descending |
+          Format-Table TimeCreated, ServiceName, ImagePath, ServiceFileName -AutoSize -Wrap |
+          Out-String -Width 4096 | Out-File -LiteralPath (Join-Path $_textDir 'SemanticServices-New.txt') -Encoding UTF8
+        Write-Log -Message "  -> $($newServices.Count) new service(s) in the past 30 days" -Color Gray
+      }
+      else {
+        Write-Log -Message '  -> No new service events found' -Color Gray
+      }
+    }
+  }
+  @{
+    Name = 'Semantic logon events - RDP'
+    Script = {
+      $rdpLogons = Get-WindowsLogonEvent -Id 4624 -LogonType 10 -StartTime (Get-Date).AddDays(-7) -ErrorAction SilentlyContinue
+      if ($rdpLogons) {
+        $rdpLogons | Sort-Object TimeCreated -Descending |
+          Format-Table TimeCreated, TargetUserName, TargetDomainName, IpAddress, WorkstationName -AutoSize |
+          Out-String -Width 4096 | Out-File -LiteralPath (Join-Path $_textDir 'SemanticLogon-RDP.txt') -Encoding UTF8
+        Write-Log -Message "  -> $($rdpLogons.Count) RDP logon(s) in the past 7 days" -Color Gray
+      }
+      else {
+        Write-Log -Message '  -> No RDP logon events found' -Color Gray
+      }
+    }
+  }
 )
 
 $Quick = $Common + @(
@@ -210,6 +254,36 @@ $Quick = $Common + @(
         Select-Object Name, DisplayName, State, StartMode, PathName, StartName |
         Sort-Object Name |
         Export-Csv -LiteralPath (Join-Path $_textDir 'Services-Detailed.csv') -NoTypeInformation -Encoding UTF8
+    }
+  }
+  @{
+    Name = 'Semantic account change events'
+    Script = {
+      $accountChanges = Get-WindowsAccountChangeEvent -StartTime (Get-Date).AddDays(-7) -ErrorAction SilentlyContinue
+      if ($accountChanges) {
+        $accountChanges | Sort-Object TimeCreated -Descending |
+          Format-Table TimeCreated, Id, TargetUserName, TargetDomainName, SubjectUserName -AutoSize |
+          Out-String -Width 4096 | Out-File -LiteralPath (Join-Path $_textDir 'SemanticAccount-Changes.txt') -Encoding UTF8
+        Write-Log -Message "  -> $($accountChanges.Count) account change(s) in the past 7 days" -Color Gray
+      }
+      else {
+        Write-Log -Message '  -> No account change events found' -Color Gray
+      }
+    }
+  }
+  @{
+    Name = 'Semantic boot/crash events'
+    Script = {
+      $bootEvents = Get-WindowsBootEvent -StartTime (Get-Date).AddDays(-30) -ErrorAction SilentlyContinue
+      if ($bootEvents) {
+        $bootEvents | Sort-Object TimeCreated -Descending |
+          Format-Table TimeCreated, Id, ProviderName, LevelDisplayName -AutoSize |
+          Out-String -Width 4096 | Out-File -LiteralPath (Join-Path $_textDir 'SemanticBoot-Events.txt') -Encoding UTF8
+        Write-Log -Message "  -> $($bootEvents.Count) boot/crash event(s) in the past 30 days" -Color Gray
+      }
+      else {
+        Write-Log -Message '  -> No boot/crash events found' -Color Gray
+      }
     }
   }
 )
@@ -257,6 +331,56 @@ $Full = $Quick + @(
       if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
       Compress-Archive -Path $_caseDir -DestinationPath $zip -Force
       Write-Log -Message "  -> Created ZIP: $zip" -Color Green
+    }
+  }
+  @{
+    Name = 'Semantic PowerShell events'
+    Script = {
+      $psEvents = Get-WindowsPowerShellEvent -Id 4104 -StartTime (Get-Date).AddDays(-7) -MaxEvents 500 -ErrorAction SilentlyContinue
+      if ($psEvents) {
+        $psEvents | Sort-Object TimeCreated -Descending |
+          Format-Table TimeCreated, Id, @{Label = 'ScriptBlockText'; Expression = { if ($_.RawData['ScriptBlockText'].Length -gt 500) { $_.RawData['ScriptBlockText'].Substring(0, 497) + '...' } else { $_.RawData['ScriptBlockText'] } } } -AutoSize -Wrap |
+          Out-String -Width 4096 | Out-File -LiteralPath (Join-Path $_textDir 'SemanticPowerShell-ScriptBlocks.txt') -Encoding UTF8
+        Write-Log -Message "  -> $($psEvents.Count) PowerShell script block(s) in the past 7 days" -Color Gray
+      }
+      else {
+        Write-Log -Message '  -> No PowerShell script block events found (script block logging may not be enabled)' -Color Gray
+      }
+    }
+  }
+  @{
+    Name = 'Semantic scheduled task events'
+    Script = {
+      $taskEvents = Get-WindowsScheduledTaskEvent -Id 106, 140, 141 -StartTime (Get-Date).AddDays(-30) -MaxEvents 500 -ErrorAction SilentlyContinue
+      if ($taskEvents) {
+        $taskEvents | Sort-Object TimeCreated -Descending |
+          Format-Table TimeCreated, Id, MachineName -AutoSize |
+          Out-String -Width 4096 | Out-File -LiteralPath (Join-Path $_textDir 'SemanticScheduledTasks.txt') -Encoding UTF8
+        Write-Log -Message "  -> $($taskEvents.Count) scheduled task event(s) in the past 30 days" -Color Gray
+      }
+      else {
+        Write-Log -Message '  -> No scheduled task events found' -Color Gray
+      }
+    }
+  }
+  @{
+    Name = 'Semantic Sysmon telemetry'
+    Script = {
+      if (Test-WindowsEventLogChannel -LogName 'Microsoft-Windows-Sysmon/Operational') {
+        $sysmonEvents = Get-WindowsSysmonEvent -Id 1, 3, 10, 11, 22 -StartTime (Get-Date).AddDays(-7) -MaxEvents 500 -ErrorAction SilentlyContinue
+        if ($sysmonEvents) {
+          $sysmonEvents | Sort-Object TimeCreated -Descending |
+            Format-Table TimeCreated, Id, ProcessName -AutoSize |
+            Out-String -Width 4096 | Out-File -LiteralPath (Join-Path $_textDir 'SemanticSysmon-Telemetry.txt') -Encoding UTF8
+          Write-Log -Message "  -> $($sysmonEvents.Count) Sysmon event(s) in the past 7 days" -Color Gray
+        }
+        else {
+          Write-Log -Message '  -> No Sysmon events found' -Color Gray
+        }
+      }
+      else {
+        Write-Log -Message '  -> Sysmon operational channel not available' -Color Gray
+      }
     }
   }
 )
