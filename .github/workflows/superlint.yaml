@@ -43,4 +43,3 @@ jobs:
           # PowerShell
           VALIDATE_POWERSHELL: true
           FIX_POWERSHELL: false
-          POWERSHELL_CONFIG_FILE: /PSScriptAnalyzerSettings.psd1
