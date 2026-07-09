@@ -133,7 +133,13 @@ foreach ($file in $files) {
   $normalizedSource = $source -replace "`r`n|`r|`n", "`n"
   $formatted = Invoke-Formatter -ScriptDefinition $normalizedSource -Settings $settingsPath
 
-  if ($formatted -ne $normalizedSource -or $source -ne $normalizedSource) {
+  $_formattedTrimmed = $formatted -replace '\s+$', ''
+  $_normalizedTrimmed = $normalizedSource -replace '\s+$', ''
+
+  $_needsFormat = ($_formattedTrimmed -ne $_normalizedTrimmed)
+  $_needsLineEndingFix = ($source -match '(?<!\r)\n|\r(?!\n)')
+
+  if ($_needsFormat -or $_needsLineEndingFix) {
     [void]$changed.Add($file.FullName)
     if (-not $Check) {
       $formattedCrlf = $formatted -replace "`r`n", "`n" -replace "`n", "`r`n"

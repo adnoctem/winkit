@@ -42,7 +42,7 @@ param (
 )
 
 # ---- Module import -----------------------------------------------------------
-$root = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
+$root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $module = Join-Path $root 'lib/winkit.psm1'
 Import-Module $module -Force
 # -----------------------------------------------------------------------------

@@ -69,7 +69,7 @@ $tarGzPath = Join-Path -Path $outputPath -ChildPath "$Name.tar.gz"
 
 # The two source directories that make up a bundle. Validated up front so a
 # missing directory fails before any archive work begins.
-$sourceDirs = 'lib', 'scripts'
+$sourceDirs = 'lib', 'scripts', 'bin', 'resources'
 $sourcePaths = foreach ($dir in $sourceDirs) {
   $path = Join-Path -Path $repositoryRoot -ChildPath $dir
   if (-not (Test-Path -LiteralPath $path -PathType Container)) {

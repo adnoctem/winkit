@@ -410,24 +410,15 @@ function Get-RegistryValue {
   }
 
   try {
-    # Get-ItemProperty exposes all values as note properties.
-    # The default (unnamed) value is surfaced as '(default)'.
     $_resolvedName = if ($Name -eq '') { '(default)' } else { $Name }
-    $_props = Get-ItemProperty -Path $_providerPath -ErrorAction Stop
-
-    if ($_props.PSObject.Properties.Name -notcontains $_resolvedName) {
-      Write-Verbose "Value '$Name' not found in registry key '$Path'"
-      return $null
-    }
-
-    return $_props.$_resolvedName
+    return Get-ItemPropertyValue -Path $_providerPath -Name $_resolvedName -ErrorAction Stop
   }
   catch [System.UnauthorizedAccessException] {
     Write-Error "Access denied reading registry key: '$Path'"
     return $null
   }
   catch {
-    Write-Error "Failed to read registry value '$Name' from '$Path': $_"
+    Write-Verbose "Value '$Name' not found in registry key '$Path'"
     return $null
   }
 }
@@ -516,14 +507,16 @@ function Set-RegistryValue {
     # The provider surfaces the default (unnamed) value as '(default)'.
     $_resolvedName = if ($Name -eq '') { '(default)' } else { $Name }
 
-    # Use Get-ItemProperty to fetch all values in one call.
-    # Get-ItemProperty is deliberately chosen over Get-ItemPropertyValue here
-    # because it also lets us detect *absence* of the value gracefully.
-    $_props = Get-ItemProperty -Path $_providerPath -ErrorAction Stop
-    $_valueExists = ($_props.PSObject.Properties.Name -contains $_resolvedName)
+    try {
+      $_currentValue = Get-ItemPropertyValue -Path $_providerPath -Name $_resolvedName -ErrorAction Stop
+      $_valueExists = $true
+    }
+    catch {
+      $_valueExists = $false
+      $_currentValue = $null
+    }
 
     if ($_valueExists) {
-      $_currentValue = $_props.$_resolvedName
 
       # Infer the RegistryValueKind from the .NET type Get-ItemProperty returned.
       # This is reliable for all kinds except String vs ExpandString (both
@@ -662,12 +655,12 @@ function Remove-RegistryValue {
   }
 
   try {
-    # The default value is reported as '(default)' by the provider
     $_resolvedName = if ($Name -eq '') { '(default)' } else { $Name }
 
-    # Check whether the value actually exists on the key
-    $_props = Get-ItemProperty -Path $_providerPath -ErrorAction Stop
-    if ($_props.PSObject.Properties.Name -notcontains $_resolvedName) {
+    try {
+      $null = Get-ItemPropertyValue -Path $_providerPath -Name $_resolvedName -ErrorAction Stop
+    }
+    catch {
       Write-Verbose "Registry value '$Name' does not exist in '$Path' (nothing to remove)"
       return [PSCustomObject]@{
         Path = $Path
@@ -767,8 +760,8 @@ function Test-RegistryValue {
 
   try {
     $_resolvedName = if ($Name -eq '') { '(default)' } else { $Name }
-    $_props = Get-ItemProperty -Path $_providerPath -ErrorAction Stop
-    return ($_props.PSObject.Properties.Name -contains $_resolvedName)
+    $null = Get-ItemPropertyValue -Path $_providerPath -Name $_resolvedName -ErrorAction Stop
+    return $true
   }
   catch {
     return $false
