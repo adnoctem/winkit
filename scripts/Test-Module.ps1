@@ -1,4 +1,8 @@
-﻿<#
+﻿#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+
+Import-Module PSFoundation -Force
+
+<#
 .SYNOPSIS
   TBA..
 .DESCRIPTION
@@ -14,10 +18,6 @@
   License: MIT
 #>
 
-# ---- Module import ------------------------------------
-$root = Split-Path $PSScriptRoot -Parent
-$module = Join-Path $root 'lib/winkit.psm1'
-Import-Module $module -Force
 # -------------------------------------------------------
 
 # Write-Log -Message "This is a test!" -Color Cyan -Timestamps

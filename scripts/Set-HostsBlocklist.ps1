@@ -1,5 +1,8 @@
-﻿#Requires -Version 5.0
+﻿Import-Module PSFoundation -Force
+
+#Requires -Version 5.0
 #Requires -RunAsAdministrator
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
 
 <#
 .SYNOPSIS
@@ -69,10 +72,6 @@ param (
   $PassThru
 )
 
-# ---- Module import -----------------------------------------------------------
-$root = Split-Path $PSScriptRoot -Parent
-$module = Join-Path $root 'lib/winkit.psm1'
-Import-Module $module -Force
 # -----------------------------------------------------------------------------
 
 if ($DryRun) {

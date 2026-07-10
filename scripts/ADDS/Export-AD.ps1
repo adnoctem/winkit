@@ -60,12 +60,7 @@ param (
   [string]$Encoding = "UTF8"
 )
 
-# ---- Module import ------------------------------------
-# $root = Split-Path $PSScriptRoot -Parent
-# $module = Join-Path -Path $root 'lib/winkit.psm1'
-
 Import-Module ActiveDirectory -Force
-# -------------------------------------------------------
 
 $properties = [PSCustomObject]@{
   Users = @(

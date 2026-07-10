@@ -103,10 +103,8 @@ param (
   [switch]$PassThru
 )
 
-# ---- Module import -----------------------------------------------------------
-$scriptRoot = Split-Path $PSScriptRoot -Parent
-$module = Join-Path $scriptRoot 'lib/winkit.psm1'
-Import-Module $module -Force
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+Import-Module PSFoundation -Force
 # -----------------------------------------------------------------------------
 
 $baseUrl = 'https://api.autodns.com/v1'

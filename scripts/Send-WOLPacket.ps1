@@ -1,4 +1,7 @@
-﻿#Requires -Version 5.0
+﻿Import-Module PSFoundation -Force
+
+#Requires -Version 5.0
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
 
 <#
 .SYNOPSIS
@@ -50,10 +53,6 @@ param (
   [switch]$DryRun
 )
 
-# ---- Module import -----------------------------------------------------------
-$root = Split-Path $PSScriptRoot -Parent
-$module = Join-Path $root 'lib/winkit.psm1'
-Import-Module $module -Force
 # -----------------------------------------------------------------------------
 
 $Host.UI.RawUI.WindowTitle = 'winkit - Send-WOLPacket'

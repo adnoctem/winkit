@@ -1,4 +1,7 @@
-﻿#Requires -Version 5.0
+﻿Import-Module PSFoundation -Force
+
+#Requires -Version 5.0
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', 'Read-JsonFileWithComments', Justification = 'The helper intentionally strips multiple JSON comment lines.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', 'Get-TerminalProfileEntries', Justification = 'The helper returns context-menu entries, not a single Terminal profile object.')]
@@ -148,10 +151,6 @@ param (
   $Elevated
 )
 
-# ---- Module import -----------------------------------------------------------
-$root = Split-Path $PSScriptRoot -Parent
-$module = Join-Path $root 'lib/winkit.psm1'
-Import-Module $module -Force
 # -----------------------------------------------------------------------------
 
 function Resolve-TerminalCommand {

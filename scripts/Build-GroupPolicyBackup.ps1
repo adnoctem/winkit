@@ -1,4 +1,7 @@
-﻿#Requires -Version 5.0
+﻿Import-Module PSFoundation -Force
+
+#Requires -Version 5.0
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', '', Justification = 'Metadata is a singular mass noun; there is no other option here.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', '', Justification = 'Build-GroupPolicyBackup is the intended entry verb for this build pipeline.')]
@@ -95,10 +98,6 @@ param (
   $SkeletonPath = (Join-Path $PSScriptRoot '..\resources\policies\skeleton')
 )
 
-# ---- Module import -----------------------------------------------------------
-$root = Split-Path $PSScriptRoot -Parent
-$module = Join-Path $root 'lib/winkit.psm1'
-Import-Module $module -Force
 # -----------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------

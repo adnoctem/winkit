@@ -105,12 +105,9 @@ param (
   [switch]$SkipCertificateCheck
 )
 
-# ---- Module import ------------------------------------
-$root = Split-Path $PSScriptRoot -Parent
-$module = Join-Path -Path $root 'lib/winkit.psm1'
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
 
-Import-Module $module -Force
-# -------------------------------------------------------
+Import-Module PSFoundation -Force
 
 $builtInTemplate = @"
 [Interface]

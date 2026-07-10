@@ -1,4 +1,7 @@
-﻿#Requires -Version 5.1
+﻿Import-Module PSFoundation -Force
+
+#Requires -Version 5.1
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
 
 <#
 .SYNOPSIS
@@ -76,10 +79,6 @@ param (
   $QuitOutlook
 )
 
-# ---- Module import -----------------------------------------------------------
-$root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-$module = Join-Path $root 'lib/winkit.psm1'
-Import-Module $module -Force
 # -----------------------------------------------------------------------------
 
 if ($DryRun) {
