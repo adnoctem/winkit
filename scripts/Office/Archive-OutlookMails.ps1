@@ -1,7 +1,5 @@
-﻿Import-Module PSFoundation -Force
-
-#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+﻿#Requires -Version 5.0
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '0.1.0' }
 
 <#
 .SYNOPSIS
@@ -44,6 +42,8 @@ param (
   [string]$End
 )
 
+Import-Module PSFoundation -Force
+
 # -----------------------------------------------------------------------------
 
 # ---- Assembly import ------------------------------------
@@ -56,7 +56,6 @@ $_assembly = Get-ChildItem -LiteralPath $_searchPath `
 
 Add-Type -AssemblyName $_assembly -ErrorAction Stop
 # -------------------------------------------------------
-
 
 $destination = Get-NewPath -Path 'OutlookArchive'
 Write-Output "Archiving Outlook mail received from $Start through $End."

@@ -1,4 +1,5 @@
-﻿#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+﻿#Requires -Version 5.0
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '0.1.0' }
 
 Import-Module PSFoundation -Force
 
@@ -29,7 +30,6 @@ Import-Module PSFoundation -Force
 
 # ConvertFrom-HTMLtoWord -FileHTML "C:\Users\Admin\tmp\Pressemitteilung\test.html" -OutputFile "C:\Users\Admin\tmp\Pressemitteilung\test.docx" -Show | Out-Null
 # Convert-HTMLToPDF -FilePath '/tmp/test.html' -OutputFilePath '/tmp/test-out.pdf'
-
 
 # ---------- Networking function tests --------------------
 

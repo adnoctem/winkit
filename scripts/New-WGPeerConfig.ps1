@@ -105,9 +105,9 @@ param (
   [switch]$SkipCertificateCheck
 )
 
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
-
 Import-Module PSFoundation -Force
+
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '0.1.0' }
 
 $builtInTemplate = @"
 [Interface]

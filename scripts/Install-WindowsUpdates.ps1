@@ -1,7 +1,5 @@
-﻿Import-Module PSFoundation -Force
-
-#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+﻿#Requires -Version 5.0
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '0.1.0' }
 
 <#
 .SYNOPSIS
@@ -102,6 +100,8 @@ param (
   [switch]
   $PassThru
 )
+
+Import-Module PSFoundation -Force
 
 # -----------------------------------------------------------------------------
 

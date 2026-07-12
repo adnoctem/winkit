@@ -1,7 +1,5 @@
-﻿Import-Module PSFoundation -Force
-
-#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+﻿#Requires -Version 5.0
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '0.1.0' }
 
 <#
 .SYNOPSIS
@@ -85,6 +83,9 @@ param (
   $PassThru
 )
 
+Import-Module PSFoundation -Force
+
+# ---------------------------- Logging and module import ----------------------------
 # -----------------------------------------------------------------------------
 
 # When -DryRun is active, enable WhatIf for downstream lib calls and log intent.

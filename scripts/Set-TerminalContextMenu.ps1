@@ -1,7 +1,5 @@
-﻿Import-Module PSFoundation -Force
-
-#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+﻿#Requires -Version 5.0
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '0.1.0' }
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', 'Read-JsonFileWithComments', Justification = 'The helper intentionally strips multiple JSON comment lines.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', 'Get-TerminalProfileEntries', Justification = 'The helper returns context-menu entries, not a single Terminal profile object.')]
@@ -150,6 +148,8 @@ param (
   [switch]
   $Elevated
 )
+
+Import-Module PSFoundation -Force
 
 # -----------------------------------------------------------------------------
 
