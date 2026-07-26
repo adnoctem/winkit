@@ -238,13 +238,25 @@ function Compare-ZoneState {
 
   $changes = @()
 
+  $mainSpecified = if ($Desired -is [hashtable]) { $Desired.Contains('main') } else { $Desired.PSObject.Properties.Name -contains 'main' }
   $currentMain = if ($Current.main) { $Current.main.address } else { $null }
   $desiredMain = if ($Desired.main) { $Desired.main.address } else { $null }
-  if ($desiredMain -and $currentMain -ne $desiredMain) {
-    $changes += @{
-      Field = 'main'
-      Current = $currentMain
-      Desired = $desiredMain
+  if ($mainSpecified) {
+    if ([string]::IsNullOrEmpty($desiredMain)) {
+      if (-not [string]::IsNullOrEmpty($currentMain)) {
+        $changes += @{
+          Field = 'main'
+          Current = $currentMain
+          Desired = '(cleared)'
+        }
+      }
+    }
+    elseif ($currentMain -ne $desiredMain) {
+      $changes += @{
+        Field = 'main'
+        Current = if ([string]::IsNullOrEmpty($currentMain)) { '(none)' } else { $currentMain }
+        Desired = $desiredMain
+      }
     }
   }
 
@@ -375,14 +387,14 @@ function Compare-RecordArrays {
 
   if ($Current.Count -ne $Desired.Count) { return $false }
 
-  foreach ($desired in $Desired) {
+  foreach ($d in $Desired) {
     $match = $false
-    foreach ($current in $Current) {
-      $nameMatch = $current.name -eq $desired.name
-      $typeMatch = $current.type -eq $desired.type
-      $valueMatch = $current.value -eq $desired.value
-      $ttlMatch = (-not $desired.PSObject.Properties.Name.Contains('ttl')) -or ($null -eq $desired.ttl) -or ($current.ttl -eq $desired.ttl)
-      $prefMatch = (-not $desired.PSObject.Properties.Name.Contains('pref')) -or ($null -eq $desired.pref) -or ($current.pref -eq $desired.pref)
+    foreach ($c in $Current) {
+      $nameMatch = $c.name -eq $d.name
+      $typeMatch = $c.type -eq $d.type
+      $valueMatch = $c.value -eq $d.value
+      $ttlMatch = (-not $d.PSObject.Properties.Name.Contains('ttl')) -or ($null -eq $d.ttl) -or ($c.ttl -eq $d.ttl)
+      $prefMatch = (-not $d.PSObject.Properties.Name.Contains('pref')) -or ($null -eq $d.pref) -or ($c.pref -eq $d.pref)
       if ($nameMatch -and $typeMatch -and $valueMatch -and $ttlMatch -and $prefMatch) {
         $match = $true
         break
@@ -402,10 +414,10 @@ function Compare-NameServerArrays {
 
   if ($Current.Count -ne $Desired.Count) { return $false }
 
-  foreach ($desired in $Desired) {
+  foreach ($d in $Desired) {
     $match = $false
-    foreach ($current in $Current) {
-      if ($current.name -eq $desired.name) {
+    foreach ($c in $Current) {
+      if ($c.name -eq $d.name) {
         $match = $true
         break
       }
@@ -436,6 +448,18 @@ function Confirm-DestructiveOperation {
 
   $response = Read-Host "$Message`nType 'yes' to confirm"
   return $response -eq 'yes'
+}
+
+function Format-ChangeSummary {
+  [CmdletBinding()]
+  param([object[]]$Changes)
+
+  if (-not $Changes -or $Changes.Count -eq 0) { return '' }
+  $parts = foreach ($c in $Changes) {
+    if ("$($c.Current)" -eq "$($c.Desired)") { continue }
+    "$($c.Field): $($c.Current) -> $($c.Desired)"
+  }
+  return ($parts -join '; ')
 }
 
 # ---- Example config for -ExportConfig ---------------------------------------
@@ -682,21 +706,26 @@ if ($DryRun) {
 
 # ---- Phase 1: Collect all changes across entries ----------------------------
 $changePlan = @()
+$_total = $configEntries.Count
+$_index = 0
 
 foreach ($entry in $configEntries) {
+  $_index++
   $origin = $entry.origin
   if ([string]::IsNullOrWhiteSpace($origin)) {
     Write-Log -Message 'Skipping config entry with empty or missing origin.' -Color Yellow
     continue
   }
 
-  Write-Log -Message "`nInspecting: $origin" -Color Cyan
+  $_pct = if ($_total -gt 0) { [int](($_index / $_total) * 100) } else { 100 }
+  Write-Progress -Activity 'Inspecting domains' -Status "$origin ($_index/$_total)" -PercentComplete $_pct
+  Write-Host ("`rInspecting ({0}/{1}): {2,-40}" -f $_index, $_total, $origin) -NoNewline -ForegroundColor Cyan
 
   $hasDomainBlock = $entry.PSObject.Properties.Name -contains 'domain'
   $hasZoneFields = ($entry.PSObject.Properties.Name -contains 'main') -or ($entry.PSObject.Properties.Name -contains 'records') -or ($entry.PSObject.Properties.Name -contains 'wwwInclude') -or ($entry.PSObject.Properties.Name -contains 'dnssec') -or ($entry.PSObject.Properties.Name -contains 'resourceRecords')
 
   if (-not $hasDomainBlock -and -not $hasZoneFields) {
-    Write-Log -Message "  -> No domain or zone fields specified. Skipping." -Color Yellow
+    Write-Verbose "No domain or zone fields specified for '$origin'. Skipping."
     continue
   }
 
@@ -705,7 +734,7 @@ foreach ($entry in $configEntries) {
     $currentDomain = Get-AutoDNSDomain -Name $origin
   }
   catch {
-    Write-Log -Message "  -> Failed to fetch domain '$origin': $_" -Color Red
+    Write-Log -Message "`n  -> Failed to fetch domain '$origin': $_" -Color Red
     continue
   }
 
@@ -716,7 +745,7 @@ foreach ($entry in $configEntries) {
       $currentZone = Get-AutoDNSZone -Origin $origin
     }
     catch {
-      Write-Log -Message "  -> Zone not found for '$origin'. Zone fields will be skipped." -Color Yellow
+      Write-Log -Message "`n  -> Zone not found for '$origin'. Zone fields will be skipped." -Color Yellow
       $hasZoneFields = $false
     }
   }
@@ -727,7 +756,7 @@ foreach ($entry in $configEntries) {
   $domainChanges = @()
   if ($hasDomainBlock) {
     $domainDesired = $entry.domain
-    $domainChanges = Compare-DomainState -Current $currentDomain -Desired $domainDesired
+    $domainChanges = @(Compare-DomainState -Current $currentDomain -Desired $domainDesired)
   }
 
   # -- Compute zone-level changes --
@@ -748,7 +777,7 @@ foreach ($entry in $configEntries) {
       $desiredPayload.resourceRecords = $entry.records
     }
 
-    $zoneChanges = Compare-ZoneState -Current $currentZone -Desired $desiredPayload
+    $zoneChanges = @(Compare-ZoneState -Current $currentZone -Desired $desiredPayload)
 
     # Check TTL warnings on existing zone records
     $currentRecords = if ($currentZone.resourceRecords) { $currentZone.resourceRecords } else { @() }
@@ -758,9 +787,9 @@ foreach ($entry in $configEntries) {
     $highTtlRecords = @()
   }
 
-  $totalChanges = $domainChanges + $zoneChanges
+  $totalChanges = @($domainChanges) + @($zoneChanges)
   if ($totalChanges.Count -eq 0) {
-    Write-Log -Message "  -> No changes detected." -Color Green
+    Write-Verbose "No changes detected for '$origin'."
     continue
   }
 
@@ -772,8 +801,8 @@ foreach ($entry in $configEntries) {
     CurrentDomain = $currentDomain
     CurrentZone = $currentZone
     DesiredPayload = $desiredPayload
-    DomainChanges = $domainChanges
-    ZoneChanges = $zoneChanges
+    DomainChanges = @($domainChanges)
+    ZoneChanges = @($zoneChanges)
     HasRecordReplace = $hasRecordReplace
     HighTtlRecords = $highTtlRecords
     HasDomainBlock = $hasDomainBlock
@@ -781,6 +810,9 @@ foreach ($entry in $configEntries) {
     DomainConfig = if ($hasDomainBlock) { $entry.domain } else { $null }
   }
 }
+
+Write-Progress -Activity 'Inspecting domains' -Completed
+Write-Host ("`rInspected {0} domain(s).{1}" -f $_total, (' ' * 40)) -ForegroundColor Cyan
 
 # ---- Phase 2: Display summary table -----------------------------------------
 if ($changePlan.Count -eq 0) {
@@ -794,9 +826,11 @@ foreach ($plan in $changePlan) {
   Write-Log -Message "Entry: $($plan.Origin)" -Color Yellow
 
   foreach ($c in $plan.DomainChanges) {
+    if ("$($c.Current)" -eq "$($c.Desired)") { continue }
     Write-Log -Message "  [domain] $($c.Field): $($c.Current) -> $($c.Desired)" -Color Yellow
   }
   foreach ($c in $plan.ZoneChanges) {
+    if ("$($c.Current)" -eq "$($c.Desired)") { continue }
     Write-Log -Message "  [zone] $($c.Field): $($c.Current) -> $($c.Desired)" -Color Yellow
   }
 
@@ -817,7 +851,7 @@ if ($DryRun) {
 }
 else {
   foreach ($plan in $changePlan) {
-    Write-Log -Message "Processing entry: $($plan.Origin)" -Color Cyan
+    Write-Verbose "Processing entry: $($plan.Origin)"
     $skip = $false
 
     # TTL warning prompt (zone-level)
@@ -879,6 +913,9 @@ $appliedCount = 0
 
 foreach ($plan in $confirmedPlans) {
   $origin = $plan.Origin
+  $entryFailed = $false
+  $entryError = $null
+  $entryChanges = @($plan.DomainChanges) + @($plan.ZoneChanges)
 
   # -- Apply domain-level changes --
   if ($plan.DomainChanges.Count -gt 0) {
@@ -893,22 +930,24 @@ foreach ($plan in $confirmedPlans) {
     if ($nsChange) {
       $domainBody = @{ nameServers = $domainEntry.nameServers }
 
-      Write-Log -Message "  Updating nameservers for: $origin ..." -Color Yellow
+      Write-Verbose "Updating nameservers for: $origin ..."
       if ($DryRun) {
-        Write-Log -Message "    [DRY RUN] Would update nameservers for '$origin'" -Color Yellow
+        Write-Verbose "[DRY RUN] Would update nameservers for '$origin'"
       }
       else {
         try {
           $jobInfo = Update-AutoDNSDomain -Name $origin -Body $domainBody
           if ($jobInfo) {
-            Write-Log -Message "    -> Nameserver update submitted (Job ID: $($jobInfo.JobId))." -Color Green
+            Write-Log -Message "  -> [$origin] Nameserver update submitted (Job ID: $($jobInfo.JobId))." -Color Green
           }
           else {
-            Write-Log -Message "    -> Nameservers updated successfully." -Color Green
+            Write-Log -Message "  -> [$origin] Nameservers updated successfully." -Color Green
           }
         }
         catch {
-          Write-Log -Message "    -> Nameserver update failed: $_" -Color Red
+          Write-Log -Message "  -> [$origin] Nameserver update failed: $_" -Color Red
+          $entryFailed = $true
+          $entryError = "$_"
         }
       }
     }
@@ -927,47 +966,45 @@ foreach ($plan in $confirmedPlans) {
         $dnssecBody.dnssecData = $domainEntry.dnssec.keys
       }
 
-      Write-Log -Message "  Updating DNSSEC configuration for: $origin ..." -Color Yellow
+      Write-Verbose "Updating DNSSEC configuration for: $origin ..."
       if ($DryRun) {
-        Write-Log -Message "    [DRY RUN] Would update DNSSEC for '$origin'" -Color Yellow
+        Write-Verbose "[DRY RUN] Would update DNSSEC for '$origin'"
       }
       else {
         try {
           $jobInfo = Invoke-AutoDNSRequest -Path "/domain/$origin/_dnssec" -Method PUT -Body $dnssecBody
           if ($jobInfo.data -and $jobInfo.data.Count -gt 0 -and $jobInfo.data[0].id) {
-            Write-Log -Message "    -> DNSSEC update submitted (Job ID: $($jobInfo.data[0].id))." -Color Green
+            Write-Log -Message "  -> [$origin] DNSSEC update submitted (Job ID: $($jobInfo.data[0].id))." -Color Green
           }
           else {
-            Write-Log -Message "    -> DNSSEC updated successfully." -Color Green
+            Write-Log -Message "  -> [$origin] DNSSEC updated successfully." -Color Green
           }
         }
         catch {
-          Write-Log -Message "    -> DNSSEC update failed: $_" -Color Red
+          Write-Log -Message "  -> [$origin] DNSSEC update failed: $_" -Color Red
+          $entryFailed = $true
+          $entryError = "$_"
         }
       }
     }
 
     # --- DNSSEC key rollover: PUT /domain/{name}/_autoDnssecKeyRollover ---
     if ($dnssecRolloverChange) {
-      Write-Log -Message "  Triggering DNSSEC key rollover for: $origin ..." -Color Yellow
-      $dnssecRolloverNote = @'
-
-NOTE: Key rollover is an asynchronous process. Monitor the AutoDNS Web UI
-      or check Job status to verify completion.
-
-'@
-      Write-Log -Message $dnssecRolloverNote -Color Cyan
+      Write-Verbose "Triggering DNSSEC key rollover for: $origin ..."
+      Write-Verbose 'NOTE: Key rollover is asynchronous. Monitor the AutoDNS Web UI or check Job status to verify completion.'
 
       if ($DryRun) {
-        Write-Log -Message "    [DRY RUN] Would trigger key rollover for '$origin'" -Color Yellow
+        Write-Verbose "[DRY RUN] Would trigger key rollover for '$origin'"
       }
       else {
         try {
           Invoke-AutoDNSRequest -Path "/domain/$origin/_autoDnssecKeyRollover" -Method PUT | Out-Null
-          Write-Log -Message "    -> Key rollover triggered for '$origin'." -Color Green
+          Write-Log -Message "  -> [$origin] Key rollover triggered." -Color Green
         }
         catch {
-          Write-Log -Message "    -> Key rollover failed: $_" -Color Red
+          Write-Log -Message "  -> [$origin] Key rollover failed: $_" -Color Red
+          $entryFailed = $true
+          $entryError = "$_"
         }
       }
     }
@@ -989,69 +1026,64 @@ NOTE: Key rollover is an asynchronous process. Monitor the AutoDNS Web UI
     }
 
     if ($DryRun) {
-      Write-Log -Message "  [DRY RUN] Would update zone '$origin' on $vns" -Color Yellow
-      $results += @{
-        Origin = $origin
-        Status = 'DryRun'
-        Changes = $plan.ZoneChanges
-      }
-      continue
+      Write-Verbose "[DRY RUN] Would update zone '$origin' on $vns"
     }
-
-    try {
-      Invoke-AutoDNSRequest -Path "/zone/$origin/$vns" -Method PUT -Body $putBody
-      Write-Log -Message "  -> Zone '$origin' updated successfully." -Color Green
-      $appliedCount++
-      $results += @{
-        Origin = $origin
-        Status = 'Updated'
-        Changes = $plan.ZoneChanges
-      }
-    }
-    catch {
-      Write-Log -Message "  -> Failed to update zone '$origin': $_" -Color Red
-      $results += @{
-        Origin = $origin
-        Status = 'Failed'
-        Error = $_
-      }
-      continue
-    }
-
-    # DNSSEC domain-level update if zone DNSSEC toggled
-    if ($plan.DesiredPayload.Contains('dnssec') -and $plan.DesiredPayload.dnssec -ne [bool]$plan.CurrentZone.dnssec) {
-      Write-Log -Message '  -> Updating DNSSEC configuration at domain level ...' -Color Yellow
+    else {
       try {
-        $dnssecBody = @{ dnssec = $plan.DesiredPayload.dnssec }
-        Invoke-AutoDNSRequest -Path "/domain/$origin/_dnssec" -Method PUT -Body $dnssecBody | Out-Null
-        Write-Log -Message '  -> DNSSEC updated at domain level.' -Color Green
+        Invoke-AutoDNSRequest -Path "/zone/$origin/$vns" -Method PUT -Body $putBody
+        Write-Log -Message "  -> [$origin] Zone updated successfully." -Color Green
+        $appliedCount++
       }
       catch {
-        Write-Log -Message "  -> Warning: DNSSEC domain update failed: $_" -Color Yellow
+        Write-Log -Message "  -> [$origin] Failed to update zone: $_" -Color Red
+        $entryFailed = $true
+        $entryError = "$_"
+      }
+
+      # DNSSEC domain-level update if zone DNSSEC toggled
+      if (-not $entryFailed -and $plan.DesiredPayload.Contains('dnssec') -and $plan.DesiredPayload.dnssec -ne [bool]$plan.CurrentZone.dnssec) {
+        Write-Verbose "Updating DNSSEC configuration at domain level for '$origin' ..."
+        try {
+          $dnssecBody = @{ dnssec = $plan.DesiredPayload.dnssec }
+          Invoke-AutoDNSRequest -Path "/domain/$origin/_dnssec" -Method PUT -Body $dnssecBody | Out-Null
+          Write-Verbose "DNSSEC updated at domain level for '$origin'."
+        }
+        catch {
+          Write-Log -Message "  -> [$origin] Warning: DNSSEC domain update failed: $_" -Color Yellow
+        }
       }
     }
   }
+
+  # -- Record consolidated result for this entry --
+  $entryStatus = if ($entryFailed) { 'Failed' } elseif ($DryRun) { 'DryRun' } else { 'Updated' }
+  $results += [PSCustomObject]@{
+    Origin = $origin
+    Status = $entryStatus
+    Changes = Format-ChangeSummary $entryChanges
+    Error = $entryError
+  }
 }
 
-# ---- Summary table ----------------------------------------------------------
-Write-Log -Message "`n========== RESULTS ==========" -Color Cyan
-foreach ($r in $results) {
-  $statusColor = switch ($r.Status) {
-    'Updated' { 'Green' }
-    'DryRun' { 'Yellow' }
-    'Failed' { 'Red' }
-    default { 'Gray' }
+# ---- Final tally ------------------------------------------------------------
+$failed = @($results | Where-Object { $_.Status -eq 'Failed' })
+$updated = @($results | Where-Object { $_.Status -eq 'Updated' })
+$skipped = $changePlan.Count - $results.Count
+
+if ($failed.Count -gt 0) {
+  Write-Log -Message "`nFailures:" -Color Red
+  foreach ($f in $failed) {
+    Write-Log -Message "  $($f.Origin): $($f.Error)" -Color Red
   }
-  $changeFields = ($r.Changes | ForEach-Object { $_.Field }) -join ', '
-  Write-Log -Message "  $($r.Origin) [$($r.Status)] $changeFields" -Color $statusColor
 }
-Write-Log -Message "==============================" -Color Cyan
 
 if ($DryRun) {
-  Write-Log -Message "`nDRY RUN COMPLETE - no changes were made." -Color Yellow
+  Write-Log -Message "`nDRY RUN COMPLETE - $($changePlan.Count) entry(ies) would change. No changes were made." -Color Yellow
 }
 else {
-  Write-Log -Message "`nDone. $appliedCount zone(s) updated." -Color Cyan
+  $tally = "Done. $($updated.Count) updated, $($failed.Count) failed"
+  if ($skipped -gt 0) { $tally += ", $skipped skipped" }
+  Write-Log -Message "`n$tally." -Color Cyan
 }
 
 if ($PassThru -or $DryRun) {
