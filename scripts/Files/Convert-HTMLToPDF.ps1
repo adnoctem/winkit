@@ -319,7 +319,7 @@ function Invoke-EuroPdfAsync {
 
       switch ($_statusResponse.status) {
         'completed' {
-          [Console]::WriteLine("`r  Status: completed.                        ")
+          Write-Log -Message "  Status: completed." -Color Green
           Write-Log -Message '  Downloading ...' -Color Cyan
 
           $_downloadId = $_statusResponse.download_id
@@ -340,7 +340,7 @@ function Invoke-EuroPdfAsync {
           throw 'Document was deleted (incinerated) before download could complete.'
         }
         default {
-          [Console]::Write("`r  Status: $($_statusResponse.status) - waiting ...   ")
+          Write-Log -Message "  Status: $($_statusResponse.status) - waiting ..." -Color Gray
         }
       }
     }
@@ -478,7 +478,7 @@ function Invoke-DocRaptorAsync {
 
       switch ($_statusResponse.status) {
         'completed' {
-          [Console]::WriteLine("`r  Status: completed.                        ")
+          Write-Log -Message "  Status: completed." -Color Green
           Write-Log -Message '  Downloading ...' -Color Cyan
 
           $_downloadUrl = $_statusResponse.download_url
@@ -502,7 +502,7 @@ function Invoke-DocRaptorAsync {
           throw "DocRaptor conversion failed: $_errorMsg"
         }
         default {
-          [Console]::Write("`r  Status: $($_statusResponse.status) - waiting ...   ")
+          Write-Log -Message "  Status: $($_statusResponse.status) - waiting ..." -Color Gray
         }
       }
     }

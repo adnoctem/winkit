@@ -61,12 +61,12 @@ Get-MACAddress
 # Network / prefix addresses
 Get-NetworkPrefix
 Get-NetworkPrefix -AddressFamily IPv6
-Get-Network                # alias
-Get-Prefix -AddressFamily IPv6
+Get-NetworkPrefix          # canonical name (alias: Get-Network)
+Get-NetworkPrefix -AddressFamily IPv6
 Get-NetworkPrefixCIDR
 Get-NetworkPrefixCIDR -AddressFamily IPv6
-Get-NetworkCIDR            # alias
-Get-PrefixCIDR -AddressFamily IPv6
+Get-NetworkPrefixCIDR      # canonical name (alias: Get-NetworkCIDR)
+Get-NetworkPrefixCIDR -AddressFamily IPv6
 
 # Broadcast / multicast
 # Get-BroadcastAddress

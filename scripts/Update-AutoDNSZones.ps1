@@ -719,7 +719,7 @@ foreach ($entry in $configEntries) {
 
   $_pct = if ($_total -gt 0) { [int](($_index / $_total) * 100) } else { 100 }
   Write-Progress -Activity 'Inspecting domains' -Status "$origin ($_index/$_total)" -PercentComplete $_pct
-  Write-Host ("`rInspecting ({0}/{1}): {2,-40}" -f $_index, $_total, $origin) -NoNewline -ForegroundColor Cyan
+  Write-Log -Message ("Inspecting ({0}/{1}): {2}" -f $_index, $_total, $origin) -Color Cyan
 
   $hasDomainBlock = $entry.PSObject.Properties.Name -contains 'domain'
   $hasZoneFields = ($entry.PSObject.Properties.Name -contains 'main') -or ($entry.PSObject.Properties.Name -contains 'records') -or ($entry.PSObject.Properties.Name -contains 'wwwInclude') -or ($entry.PSObject.Properties.Name -contains 'dnssec') -or ($entry.PSObject.Properties.Name -contains 'resourceRecords')
@@ -812,7 +812,7 @@ foreach ($entry in $configEntries) {
 }
 
 Write-Progress -Activity 'Inspecting domains' -Completed
-Write-Host ("`rInspected {0} domain(s).{1}" -f $_total, (' ' * 40)) -ForegroundColor Cyan
+Write-Log -Message "Inspected $_total domain(s)." -Color Cyan
 
 # ---- Phase 2: Display summary table -----------------------------------------
 if ($changePlan.Count -eq 0) {

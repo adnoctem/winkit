@@ -178,7 +178,7 @@ if ($Profile -ne 'StoreOnly') {
     elseif ($AcceptAll -or $PSCmdlet.ShouldProcess("$($_updates.Count) update(s)", 'Install')) {
       Write-Log -Message "`nInstalling $($_updates.Count) update(s)..." -Color Yellow
       try {
-        $_installResult = $_updates | Install-WindowsUpdate -AutoReboot:$AutoReboot -IgnoreReboot:( -not $AutoReboot)
+        $_installResult = $_updates | PSFoundation\Install-WindowsUpdate -AutoReboot:$AutoReboot -IgnoreReboot:( -not $AutoReboot)
         $_installedCount = @($_installResult | Where-Object { $_.HResult -eq 0 }).Count
         $_failedCount = @($_installResult | Where-Object { $_.HResult -ne 0 }).Count
         Write-Log -Message "Installed: $_installedCount | Failed: $_failedCount" -Color $(if ($_failedCount -gt 0) { 'Yellow' } else { 'Green' })
