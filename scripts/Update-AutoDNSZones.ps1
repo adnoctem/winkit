@@ -105,7 +105,7 @@ param (
 
 Import-Module PSFoundation -Force
 
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '0.1.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
 
 # -----------------------------------------------------------------------------
 

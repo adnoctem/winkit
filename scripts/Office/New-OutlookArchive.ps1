@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '0.1.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
 
 <#
 .SYNOPSIS
@@ -38,7 +38,7 @@
 .LINK
   https://github.com/adnoctem/winkit
 .NOTES
-  Author: Maximilian Gindorfer <info@mvprowess.com>
+  Author: MVProwess <info@mvprowess.com>
   License: MIT
 #>
 

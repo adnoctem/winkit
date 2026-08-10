@@ -83,7 +83,7 @@
   Shows which files would be converted without writing changes.
 
 .NOTES
-  Author: Maximilian Gindorfer <info@mvprowess.com>
+  Author: MVProwess <info@mvprowess.com>
   License: MIT
 #>
 

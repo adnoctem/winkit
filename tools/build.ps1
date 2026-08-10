@@ -5,20 +5,23 @@
   Builds deployable winkit source archives.
 
 .DESCRIPTION
-  Creates a clean bundle containing only the repository's lib and scripts
-  directories, preserving their relative layout so the scripts can continue to
-  import winkit through their local path assumptions.
+  Creates a clean bundle containing the repository's scripts, bin, and
+  resources directories, preserving their relative layout so scripts and
+  launchers can be distributed and unpacked as a unit.
 
   Archives are written to the dist directory, which is created when it does not
   already exist. By default, the script builds both:
 
     dist/winkit.zip
     dist/winkit.tar.gz
+    dist/CHECKSUMS_SHA256.txt
 
   Existing archives with the same names are overwritten. Archives are produced
   directly from the source directories — no staging copy is made, which avoids
   the file-handle contention that can occur when cleaning up a staging folder
-  immediately after an archiver has read from it.
+  immediately after an archiver has read from it. The checksum file lists the
+  SHA-256 hash of every archive produced in the same run; it is written after
+  the archives so only existing files are referenced.
 
 .PARAMETER OutputDirectory
   Directory where archives are written. Defaults to the repository dist folder.
@@ -31,7 +34,7 @@
 
 .EXAMPLE
   PS> ./build.ps1
-  Creates dist/winkit.zip and dist/winkit.tar.gz.
+  Creates dist/winkit.zip, dist/winkit.tar.gz, and dist/CHECKSUMS_SHA256.txt.
 
 .EXAMPLE
   PS> ./build.ps1 -Format Zip
@@ -45,7 +48,7 @@
   https://github.com/adnoctem/winkit
 
 .NOTES
-  Author: Maximilian Gindorfer <info@mvprowess.com>
+  Author: MVProwess <info@mvprowess.com>
   License: MIT
 #>
 
@@ -66,10 +69,11 @@ $repositoryRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathF
 $outputPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
 $zipPath = Join-Path -Path $outputPath -ChildPath "$Name.zip"
 $tarGzPath = Join-Path -Path $outputPath -ChildPath "$Name.tar.gz"
+$checksumPath = Join-Path -Path $outputPath -ChildPath 'CHECKSUMS_SHA256.txt'
 
-# The two source directories that make up a bundle. Validated up front so a
+# The source directories that make up a bundle. Validated up front so a
 # missing directory fails before any archive work begins.
-$sourceDirs = 'lib', 'scripts', 'bin', 'resources'
+$sourceDirs = 'scripts', 'bin', 'resources'
 $sourcePaths = foreach ($dir in $sourceDirs) {
   $path = Join-Path -Path $repositoryRoot -ChildPath $dir
   if (-not (Test-Path -LiteralPath $path -PathType Container)) {
@@ -113,12 +117,29 @@ if ($Format -eq 'Both' -or $Format -eq 'TarGz') {
   if ($PSCmdlet.ShouldProcess($tarGzPath, 'Create tar.gz archive')) {
     Clear-BuildPath -Path $tarGzPath
     # -C changes tar's working directory to the repo root before archiving, so
-    # the stored paths are 'lib/...' and 'scripts/...' rather than absolute or
+    # the stored paths are 'scripts/...' and 'bin/...' rather than absolute or
     # deeply-nested. No staging copy and no Push-Location needed.
     & $tarCommand.Source -C $repositoryRoot -czf $tarGzPath $sourceDirs
     if ($LASTEXITCODE -ne 0) {
       throw "tar exited with code $LASTEXITCODE while creating $tarGzPath."
     }
     Write-Output "Built: $tarGzPath"
+  }
+}
+
+# Write SHA-256 checksums for every archive produced in this run.
+if ($PSCmdlet.ShouldProcess($checksumPath, 'Write SHA-256 checksums')) {
+  $_archives = @()
+  if (Test-Path -LiteralPath $zipPath -PathType Leaf) { $_archives += $zipPath }
+  if (Test-Path -LiteralPath $tarGzPath -PathType Leaf) { $_archives += $tarGzPath }
+
+  if ($_archives.Count -gt 0) {
+    $_lines = foreach ($_archive in $_archives) {
+      $_hash = (Get-FileHash -LiteralPath $_archive -Algorithm SHA256).Hash
+      "{0}  {1}" -f $_hash, (Split-Path -Path $_archive -Leaf)
+    }
+    # UTF-8 without BOM so the file is script-friendly on any platform.
+    [System.IO.File]::WriteAllLines($checksumPath, [string[]]$_lines, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Output "Built: $checksumPath"
   }
 }

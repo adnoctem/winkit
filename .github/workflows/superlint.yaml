@@ -9,19 +9,19 @@ jobs:
     name: Super-Lint
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: read
       statuses: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # super-linter needs the full git history to get the
           # list of files that changed across commits
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 20
 
@@ -30,16 +30,48 @@ jobs:
           npx prettier --write "**/*.md"
 
       - name: Commit Prettier changes
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "style(docs): format documentation with Prettier"
           branch: ${{ github.head_ref }}
 
       - name: Superlinter
-        uses: super-linter/super-linter@v7.1.0
+        uses: super-linter/super-linter@v8.7.0
         env:
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # PowerShell
           VALIDATE_POWERSHELL: true
           FIX_POWERSHELL: false
+
+  dispatch:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    needs: [lint]
+    steps:
+      - name: Dispatch a release workflow run
+        # Only branch pushes to release branches may trigger releases; PR lint
+        # runs must not. actions:write on this job is what permits the dispatch.
+        if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next') && always() && contains(join(needs.*.result, ','), 'success') }}
+        uses: actions/github-script@v9
+        with:
+          github-token: "${{ env.GITHUB_TOKEN }}"
+          script: |
+            const payload = {
+              run_id: "${{ github.run_id }}",
+              sha: "${{ github.sha }}"
+            }
+
+            console.log("Sending event payload", JSON.stringify(payload, null, 2));
+
+            const { owner, repo } = context.repo;
+            await github.rest.repos.createDispatchEvent({
+              owner,
+              repo,
+              event_type: 'release',
+              client_payload: payload
+            });
