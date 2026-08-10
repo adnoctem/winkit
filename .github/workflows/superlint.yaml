@@ -47,15 +47,17 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     permissions:
-      actions: write
-      contents: read
+      # createDispatchEvent is enforced against the classic `repo` scope,
+      # which maps to contents: write for the GITHUB_TOKEN (actions: write
+      # is NOT sufficient and returns 403 "Resource not accessible").
+      contents: write
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     needs: [lint]
     steps:
       - name: Dispatch a release workflow run
         # Only branch pushes to release branches may trigger releases; PR lint
-        # runs must not. actions:write on this job is what permits the dispatch.
+        # runs must not.
         if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next') && always() && contains(join(needs.*.result, ','), 'success') }}
         uses: actions/github-script@v9
         with:

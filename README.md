@@ -2,11 +2,13 @@
     <!-- PowerShell -->
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/PowerShell/PowerShell/master/assets/Powershell_256.png">
-      <img src="https://raw.githubusercontent.com/PowerShell/PowerShell/master/assets/Powershell_256.png" width="225">
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/adnoctem/artwork/6da215b35cd1482db4e6b5c19e40e22105576785/projects/winkit/icon/color/winkit-icon-color.png">
-      <img src="https://raw.githubusercontent.com/adnoctem/artwork/6da215b35cd1482db4e6b5c19e40e22105576785/projects/winkit/icon/color/winkit-icon-color.png" width="225">
+      <img src="https://raw.githubusercontent.com/PowerShell/PowerShell/master/assets/Powershell_256.png" width="225" alt="PowerShell">
     </picture>
-    <h1 align="center">winkit</h1>
+    <!-- winkit -->
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/adnoctem/artwork/6da215b35cd1482db4e6b5c19e40e22105576785/projects/winkit/icon/color/winkit-icon-color.png">
+      <img src="https://raw.githubusercontent.com/adnoctem/artwork/6da215b35cd1482db4e6b5c19e40e22105576785/projects/winkit/icon/color/winkit-icon-color.png" width="225" alt="winkit">
+    </picture>
 </p>
 
 [![License](https://img.shields.io/github/license/adnoctem/winkit?label=License)][license]
