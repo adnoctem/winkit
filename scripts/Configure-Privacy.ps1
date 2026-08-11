@@ -21,12 +21,16 @@
 .PARAMETER Config
   JSON file containing setting overrides. Entries match built-in settings by
   Name and can override Preferred or Default values.
-.PARAMETER ExportConfig
-  Export the default privacy settings JSON and exit.
-.PARAMETER ExportCurrentState
-  Export current registry values as reusable JSON config and exit.
+.PARAMETER ExportTemplate
+  Export the default privacy settings as a JSON config template and exit. Use
+  -ExportPath to write it to a file instead of printing to the console.
+.PARAMETER ExportState
+  Export the current privacy settings as reusable JSON config and exit.
 .PARAMETER ExportPath
-  File path used with -ExportConfig.
+  File path for -ExportTemplate or -ExportState. When omitted, the JSON is
+  written to the console.
+.PARAMETER PassThru
+  Return structured operation results.
 .EXAMPLE
   PS> ./Configure-Privacy.ps1
   Applies the default privacy profile.
@@ -40,8 +44,11 @@
   PS> ./Configure-Privacy.ps1 -SysPrep
   Writes HKCU-backed privacy defaults to the default user profile hive for new users.
 .EXAMPLE
-  PS> ./Configure-Privacy.ps1 -ExportConfig -ExportPath '.\privacy.json'
+  PS> ./Configure-Privacy.ps1 -ExportTemplate -ExportPath '.\privacy.json'
   Exports the default privacy settings template to JSON.
+.EXAMPLE
+  PS> ./Configure-Privacy.ps1 -ExportState -ExportPath '.\privacy-current.json'
+  Exports the current privacy settings to a JSON file.
 .LINK
   https://github.com/adnoctem/winkit
 .NOTES
@@ -83,21 +90,21 @@ param (
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'Export the default privacy settings JSON and exit.'
+    HelpMessage = 'Export the default privacy settings as a JSON config template and exit.'
   )]
   [switch]
-  $ExportConfig,
+  $ExportTemplate,
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'Export current registry values as reusable JSON config and exit.'
+    HelpMessage = 'Export the current privacy settings as reusable JSON config and exit.'
   )]
   [switch]
-  $ExportCurrentState,
+  $ExportState,
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'File path used with -ExportConfig.'
+    HelpMessage = 'File path for -ExportTemplate or -ExportState. When omitted, the JSON is written to the console.'
   )]
   [string]
   $ExportPath,
@@ -462,10 +469,10 @@ $privacySettings = @(
   }
 )
 
-if ($ExportCurrentState) {
-  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportCurrentState.' -Color Red; exit 1 }
-  if ($ExportConfig) { Write-Log -Message '-ExportConfig cannot be combined with -ExportCurrentState.' -Color Red; exit 1 }
-  if ($Undo) { Write-Log -Message '-Undo cannot be combined with -ExportCurrentState.' -Color Red; exit 1 }
+if ($ExportState) {
+  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportState.' -Color Red; exit 1 }
+  if ($ExportTemplate) { Write-Log -Message '-ExportTemplate cannot be combined with -ExportState.' -Color Red; exit 1 }
+  if ($Undo) { Write-Log -Message '-Undo cannot be combined with -ExportState.' -Color Red; exit 1 }
   $_currentState = Export-RegistrySettingState -Settings $privacySettings
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
@@ -476,11 +483,8 @@ if ($ExportCurrentState) {
   exit 0
 }
 
-if ($ExportConfig) {
-  if ($DryRun) {
-    Write-Log -Message '-DryRun cannot be combined with -ExportConfig.' -Color Red
-    exit 1
-  }
+if ($ExportTemplate) {
+  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportTemplate.' -Color Red; exit 1 }
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
     $privacySettings | ConvertTo-Json -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8

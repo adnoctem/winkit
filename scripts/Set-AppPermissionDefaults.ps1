@@ -21,12 +21,16 @@
 .PARAMETER Config
   JSON file containing setting overrides. Entries match built-in settings by
   Name and Path and can override Preferred or Default values.
-.PARAMETER ExportConfig
-  Export the default permission settings JSON and exit.
-.PARAMETER ExportCurrentState
-  Export current registry values as reusable JSON config and exit.
+.PARAMETER ExportTemplate
+  Export the default app permission settings as a JSON config template and exit. Use
+  -ExportPath to write it to a file instead of printing to the console.
+.PARAMETER ExportState
+  Export the current app permission settings as reusable JSON config and exit.
 .PARAMETER ExportPath
-  File path used with -ExportConfig.
+  File path for -ExportTemplate or -ExportState. When omitted, the JSON is
+  written to the console.
+.PARAMETER PassThru
+  Return structured operation results.
 .EXAMPLE
   PS> ./Set-AppPermissionDefaults.ps1
   Applies the default app permission-deny profile.
@@ -40,8 +44,11 @@
   PS> ./Set-AppPermissionDefaults.ps1 -SysPrep
   Writes HKCU-backed permission defaults into the default user profile hive.
 .EXAMPLE
-  PS> ./Set-AppPermissionDefaults.ps1 -ExportConfig -ExportPath '.\app-permissions.json'
+  PS> ./Set-AppPermissionDefaults.ps1 -ExportTemplate -ExportPath '.\app-permissions.json'
   Exports the default permission profile to JSON.
+.EXAMPLE
+  PS> ./Set-AppPermissionDefaults.ps1 -ExportState -ExportPath '.\app-permissions-current.json'
+  Exports the current app permission settings to a JSON file.
 .LINK
   https://github.com/adnoctem/winkit
 .NOTES
@@ -83,21 +90,21 @@ param (
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'Export the default permission settings JSON and exit.'
+    HelpMessage = 'Export the default app permission settings as a JSON config template and exit.'
   )]
   [switch]
-  $ExportConfig,
+  $ExportTemplate,
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'Export current registry values as reusable JSON config and exit.'
+    HelpMessage = 'Export the current app permission settings as reusable JSON config and exit.'
   )]
   [switch]
-  $ExportCurrentState,
+  $ExportState,
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'File path used with -ExportConfig.'
+    HelpMessage = 'File path for -ExportTemplate or -ExportState. When omitted, the JSON is written to the console.'
   )]
   [string]
   $ExportPath,
@@ -204,10 +211,10 @@ $permissionSettings = foreach ($capability in $capabilities) {
   }
 }
 
-if ($ExportCurrentState) {
-  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportCurrentState.' -Color Red; exit 1 }
-  if ($ExportConfig) { Write-Log -Message '-ExportConfig cannot be combined with -ExportCurrentState.' -Color Red; exit 1 }
-  if ($Undo) { Write-Log -Message '-Undo cannot be combined with -ExportCurrentState.' -Color Red; exit 1 }
+if ($ExportState) {
+  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportState.' -Color Red; exit 1 }
+  if ($ExportTemplate) { Write-Log -Message '-ExportTemplate cannot be combined with -ExportState.' -Color Red; exit 1 }
+  if ($Undo) { Write-Log -Message '-Undo cannot be combined with -ExportState.' -Color Red; exit 1 }
   $_currentState = Export-RegistrySettingState -Settings $permissionSettings
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
@@ -218,11 +225,8 @@ if ($ExportCurrentState) {
   exit 0
 }
 
-if ($ExportConfig) {
-  if ($DryRun) {
-    Write-Log -Message '-DryRun cannot be combined with -ExportConfig.' -Color Red
-    exit 1
-  }
+if ($ExportTemplate) {
+  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportTemplate.' -Color Red; exit 1 }
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
     $permissionSettings | ConvertTo-Json -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8

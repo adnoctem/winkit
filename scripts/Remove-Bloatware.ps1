@@ -39,10 +39,12 @@
   Required together with -IncludeProtected to actually remove protected matches.
 .PARAMETER DryRun
   Preview matching packages and removals without changing the system.
-.PARAMETER ExportConfig
-  Export the default package pattern groups as JSON and exit.
+.PARAMETER ExportTemplate
+  Export the default package pattern groups as a JSON config template and exit.
+  Use -ExportPath to write it to a file instead of printing to the console.
 .PARAMETER ExportPath
-  Output path used with -ExportConfig.
+  File path for -ExportTemplate. When omitted, the JSON is written to the
+  console.
 .PARAMETER PassThru
   Return structured lifecycle and follow-up results.
 .EXAMPLE
@@ -146,14 +148,14 @@ param (
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'Export the default package pattern groups as JSON and exit.'
+    HelpMessage = 'Export the default package pattern groups as a JSON config template and exit.'
   )]
   [switch]
-  $ExportConfig,
+  $ExportTemplate,
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'Output path used with -ExportConfig.'
+    HelpMessage = 'File path for -ExportTemplate. When omitted, the JSON is written to the console.'
   )]
   [string]
   $ExportPath,
@@ -696,11 +698,8 @@ if ($PSBoundParameters.ContainsKey('Config')) {
   }
 }
 
-if ($ExportConfig) {
-  if ($DryRun) {
-    Write-Log -Message '-DryRun cannot be combined with -ExportConfig.' -Color Red
-    exit 1
-  }
+if ($ExportTemplate) {
+  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportTemplate.' -Color Red; exit 1 }
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
     $_packageGroups | ConvertTo-Json -Depth 4 | Out-File -FilePath $_exportPath -Encoding utf8

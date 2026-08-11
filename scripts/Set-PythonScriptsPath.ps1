@@ -6,11 +6,14 @@
   Adds the active Python Scripts directory to the user or machine PATH.
 
 .DESCRIPTION
-  Resolves the active Python installation's Scripts directory using
-  `python -c "import sysconfig; ..."` and appends that directory to the user or
-  machine PATH if it is not already present. This is useful for Store / Python
-  Install Manager layouts where `python -m pip install pre-commit` succeeds but
-  console scripts such as pre-commit.exe are not discoverable in new shells.
+  Resolves the active Python installation's Scripts directory and appends it to
+  the user or machine PATH if it is not already present. The default scheme
+  (sysconfig 'scripts') covers python.org installs; Microsoft Store Pythons
+  report a virtualized, read-only prefix, so the user scheme (nt_user) is used
+  instead - that is where pip actually writes console scripts. This is useful
+  for Store / Python Install Manager layouts where `python -m pip install
+  pre-commit` succeeds but console scripts such as pre-commit.exe are not
+  discoverable in new shells.
 
 .PARAMETER Scope
   PATH scope to update. Defaults to User. Machine requires elevation.
@@ -80,12 +83,47 @@ catch {
 }
 
 try {
-  $scriptsPath = & $pythonCommand.Source -c "import sysconfig; print(sysconfig.get_path('scripts'))" 2>$null
-  $scriptsPath = $scriptsPath | Select-Object -First 1
+  $scriptsPaths = @(& $pythonCommand.Source -c "import sysconfig; print(sysconfig.get_path('scripts')); print(sysconfig.get_path('scripts', 'nt_user'))" 2>$null | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 }
 catch {
   Write-Log -Message "Failed to resolve Python Scripts path from '$($pythonCommand.Source)': $_" -Color Red
   exit 1
+}
+
+if ($scriptsPaths.Count -eq 0) {
+  Write-Log -Message "Python did not report a Scripts path." -Color Red
+  exit 1
+}
+
+# Scripts directories differ per Python layout: python.org installs put console
+# scripts in the default scheme, while Microsoft Store Pythons report a
+# virtualized, read-only prefix and pip writes scripts into the user scheme.
+$installScripts = $scriptsPaths[0]
+$userScripts = if ($scriptsPaths.Count -gt 1) { $scriptsPaths[1] } else { $null }
+Write-Verbose "Default scheme Scripts path: $installScripts"
+Write-Verbose "User scheme Scripts path: $userScripts"
+
+# Prefer a Scripts directory that already exists (matches where pip installs)
+$scriptsPath = $null
+foreach ($candidate in @($installScripts, $userScripts)) {
+  if ([string]::IsNullOrWhiteSpace($candidate)) { continue }
+  $resolved = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($candidate)
+  if (Test-Path -LiteralPath $resolved -PathType Container) {
+    $scriptsPath = $resolved
+    break
+  }
+}
+
+# Nothing exists yet: Store Pythons install to the user scheme, so prefer it
+# even before pip has created it.
+$storeUserFallback = $false
+if (-not $scriptsPath) {
+  $isStorePython = ([string]$installScripts -match 'WindowsApps') -or ([string]$userScripts -match 'PythonSoftwareFoundation')
+  $preferred = if ($isStorePython) { $userScripts } else { $installScripts }
+  if (-not [string]::IsNullOrWhiteSpace($preferred)) {
+    $scriptsPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($preferred)
+    $storeUserFallback = $isStorePython -and ($preferred -ieq $userScripts)
+  }
 }
 
 if ([string]::IsNullOrWhiteSpace($scriptsPath)) {
@@ -93,10 +131,14 @@ if ([string]::IsNullOrWhiteSpace($scriptsPath)) {
   exit 1
 }
 
-$scriptsPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($scriptsPath)
 if (-not (Test-Path -LiteralPath $scriptsPath -PathType Container)) {
-  Write-Log -Message "Python Scripts path does not exist: $scriptsPath" -Color Red
-  exit 1
+  if ($storeUserFallback) {
+    Write-Log -Message "Python Scripts path does not exist yet (pip will create it on first install): $scriptsPath" -Color Yellow
+  }
+  else {
+    Write-Log -Message "Python Scripts path does not exist: $scriptsPath" -Color Red
+    exit 1
+  }
 }
 
 $currentPath = [Environment]::GetEnvironmentVariable('Path', $Scope)

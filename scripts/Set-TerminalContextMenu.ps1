@@ -40,12 +40,12 @@
   Optional JSON config containing an array of profile menu overrides. Each
   entry may set Guid, Name, Label, Icon, and Hidden. Relative Icon paths are
   resolved relative to the config file.
-.PARAMETER ExportConfig
+.PARAMETER ExportTemplate
   Export a profile menu config template generated from Windows Terminal
   settings. Cannot be combined with -DryRun.
 .PARAMETER ExportPath
-  When used with -ExportConfig, writes the JSON template to this path instead
-  of printing it to the console.
+  File path for -ExportTemplate. When omitted, the JSON is written to the
+  console.
 .PARAMETER Extended
   Show entries only when Shift is held.
 .PARAMETER TerminalSettingsPath
@@ -61,7 +61,7 @@
   PS> .\Set-TerminalContextMenu.ps1
   Adds "Open in Windows Terminal" for folders and folder backgrounds.
 .EXAMPLE
-  PS> .\Set-TerminalContextMenu.ps1 -ExportConfig -ExportPath .\terminal-context-menu.json
+  PS> .\Set-TerminalContextMenu.ps1 -ExportTemplate -ExportPath .\terminal-context-menu.json
   Exports a profile submenu config template with empty Icon fields.
 .EXAMPLE
   PS> .\Set-TerminalContextMenu.ps1 -IncludeProfiles -Config .\terminal-context-menu.json
@@ -120,7 +120,7 @@ param (
   $Config,
 
   [switch]
-  $ExportConfig,
+  $ExportTemplate,
 
   [string]
   $ExportPath,
@@ -547,11 +547,8 @@ $_settingsPath = Resolve-TerminalSettingsPath -ExplicitPath $TerminalSettingsPat
 $_terminalProfiles = @(Get-TerminalProfileList -SettingsPath $_settingsPath)
 $_profileSettings = @(ConvertTo-TerminalProfileConfig -Profiles $_terminalProfiles)
 
-if ($ExportConfig) {
-  if ($DryRun) {
-    Write-Log -Message '-DryRun cannot be combined with -ExportConfig.' -Color Red
-    exit 1
-  }
+if ($ExportTemplate) {
+  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportTemplate.' -Color Red; exit 1 }
 
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
@@ -562,7 +559,7 @@ if ($ExportConfig) {
     $_profileSettings | ConvertTo-Json -Depth 4
   }
 
-  return
+  exit 0
 }
 
 $_configRoot = $null

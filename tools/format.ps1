@@ -131,6 +131,9 @@ foreach ($file in $files) {
   $processed++
   $source = [System.IO.File]::ReadAllText($file.FullName)
   $normalizedSource = $source -replace "`r`n|`r|`n", "`n"
+  if ([string]::IsNullOrWhiteSpace($normalizedSource)) {
+    continue
+  }
   $formatted = Invoke-Formatter -ScriptDefinition $normalizedSource -Settings $settingsPath
 
   $_formattedTrimmed = $formatted -replace '\s+$', ''

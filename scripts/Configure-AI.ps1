@@ -32,15 +32,19 @@
   "Preferred" and/or "Default" fields replace the corresponding built-in
   values. Entries that do not match any known setting are skipped.
 
-.PARAMETER ExportConfig
-  Export the default AI settings as JSON to the console. Use -ExportPath to
-  write to a file instead. Cannot be combined with -DryRun.
+.PARAMETER ExportTemplate
+  Export the default AI settings as a JSON config template and exit. Use
+  -ExportPath to write it to a file instead of printing to the console.
 
-.PARAMETER ExportCurrentState
-  Export current registry values as reusable JSON config and exit.
+.PARAMETER ExportState
+  Export the current AI settings as reusable JSON config and exit.
+
 .PARAMETER ExportPath
-  When used together with -ExportConfig, writes the JSON to this file path
-  instead of printing to the console.
+  File path for -ExportTemplate or -ExportState. When omitted, the JSON is
+  written to the console.
+
+.PARAMETER PassThru
+  Return structured operation results.
 
 .EXAMPLE
   PS> ./Configure-AI.ps1
@@ -55,8 +59,12 @@
   Shows which registry values would be modified without making any changes.
 
 .EXAMPLE
-  PS> ./Configure-AI.ps1 -ExportConfig -ExportPath '.\ai-settings.json'
+  PS> ./Configure-AI.ps1 -ExportTemplate -ExportPath '.\ai-settings.json'
   Exports the default AI settings template to .\ai-settings.json and exits.
+
+.EXAMPLE
+  PS> ./Configure-AI.ps1 -ExportState -ExportPath '.\ai-settings-current.json'
+  Exports the current AI settings to a JSON file.
 
 .EXAMPLE
   PS> ./Configure-AI.ps1 -SysPrep
@@ -105,21 +113,21 @@ param (
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'Export the default AI settings to the console or to a file with -ExportPath.'
+    HelpMessage = 'Export the default AI settings as a JSON config template and exit.'
   )]
   [switch]
-  $ExportConfig,
+  $ExportTemplate,
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'Export current AI registry values to reusable JSON config.'
+    HelpMessage = 'Export the current AI settings as reusable JSON config and exit.'
   )]
   [switch]
-  $ExportCurrentState,
+  $ExportState,
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'File path for -ExportConfig. When omitted the settings are printed to the console.'
+    HelpMessage = 'File path for -ExportTemplate or -ExportState. When omitted, the JSON is written to the console.'
   )]
   [string]
   $ExportPath,
@@ -377,10 +385,10 @@ $aiSettings = @(
   }
 )
 
-if ($ExportCurrentState) {
-  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportCurrentState.' -Color Red; exit 1 }
-  if ($ExportConfig) { Write-Log -Message '-ExportConfig cannot be combined with -ExportCurrentState.' -Color Red; exit 1 }
-  if ($Undo) { Write-Log -Message '-Undo cannot be combined with -ExportCurrentState.' -Color Red; exit 1 }
+if ($ExportState) {
+  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportState.' -Color Red; exit 1 }
+  if ($ExportTemplate) { Write-Log -Message '-ExportTemplate cannot be combined with -ExportState.' -Color Red; exit 1 }
+  if ($Undo) { Write-Log -Message '-Undo cannot be combined with -ExportState.' -Color Red; exit 1 }
   $_currentState = Export-RegistrySettingState -Settings $aiSettings
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
@@ -391,11 +399,8 @@ if ($ExportCurrentState) {
   exit 0
 }
 
-if ($ExportConfig) {
-  if ($DryRun) {
-    Write-Log -Message '-DryRun cannot be combined with -ExportConfig.' -Color Red
-    exit 1
-  }
+if ($ExportTemplate) {
+  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportTemplate.' -Color Red; exit 1 }
 
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)

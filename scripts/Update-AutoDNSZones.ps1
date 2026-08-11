@@ -1,4 +1,5 @@
 ﻿#Requires -Version 5.1
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
 
 <#
 .SYNOPSIS
@@ -19,8 +20,8 @@
   Obtain via Get-Credential or pass a credential object.
 
 .PARAMETER Config
-  Path to a JSON configuration file describing the desired states.  See -ExportConfig
-  for the template format, or use -ExportCurrentState to generate one from live data.
+  Path to a JSON configuration file describing the desired states.  See -ExportTemplate
+  for the template format, or use -ExportState to generate one from live data.
 
 .PARAMETER Context
   The AutoDNS context number (default: 4 for live system; 1 for demo).
@@ -31,18 +32,18 @@
 .PARAMETER Force
   Skip confirmation prompts for destructive operations.
 
-.PARAMETER ExportConfig
+.PARAMETER ExportTemplate
   Prints an example JSON configuration template to the console (or to a file with -ExportPath)
-  and exits.  Use -ExportCurrentState to generate a config from your live AutoDNS data.
+  and exits.  Use -ExportState to generate a config from your live AutoDNS data.
 
-.PARAMETER ExportCurrentState
+.PARAMETER ExportState
   Exports the current state of one or more domains and zones from AutoDNS as a JSON
   configuration file.  When combined with -Config, exports only the entries listed in that
   file.  Without -Config, exports all domains (and their zones where applicable) on the
   account.  Requires -Credential.
 
 .PARAMETER ExportPath
-  When used together with -ExportConfig or -ExportCurrentState, writes the JSON to this
+  When used together with -ExportTemplate or -ExportState, writes the JSON to this
   file path instead of printing to the console.
 
 .PARAMETER PassThru
@@ -58,21 +59,22 @@
   Previews the changes that would be made without applying them.
 
 .EXAMPLE
-  PS> ./Update-AutoDNSZones.ps1 -ExportConfig
+  PS> ./Update-AutoDNSZones.ps1 -ExportTemplate
   Prints an example configuration template to the console.
 
 .EXAMPLE
-  PS> ./Update-AutoDNSZones.ps1 -ExportCurrentState -Credential $cred
+  PS> ./Update-AutoDNSZones.ps1 -ExportState -Credential $cred
   Fetches all domains from AutoDNS and prints their current state as JSON.
 
 .EXAMPLE
-  PS> ./Update-AutoDNSZones.ps1 -ExportCurrentState -Config .\config.json -Credential $cred -ExportPath .\current.json
+  PS> ./Update-AutoDNSZones.ps1 -ExportState -Config .\config.json -Credential $cred -ExportPath .\current.json
   Fetches only the entries listed in config.json and saves their current state.
 
 .LINK
   https://github.com/adnoctem/winkit
 #>
 
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'Carriage-return progress lines require Write-Host for in-place console updates.')]
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (
   [Parameter(Mandatory = $false, HelpMessage = 'PSCredential for HTTP Basic authentication against the AutoDNS API.')]
@@ -91,12 +93,12 @@ param (
   [switch]$Force,
 
   [Parameter(Mandatory = $false, HelpMessage = 'Print an example configuration template.')]
-  [switch]$ExportConfig,
+  [switch]$ExportTemplate,
 
   [Parameter(Mandatory = $false, HelpMessage = 'Export current state from AutoDNS as JSON.')]
-  [switch]$ExportCurrentState,
+  [switch]$ExportState,
 
-  [Parameter(Mandatory = $false, HelpMessage = 'File path for -ExportConfig or -ExportCurrentState.')]
+  [Parameter(Mandatory = $false, HelpMessage = 'File path for -ExportTemplate or -ExportState.')]
   [string]$ExportPath,
 
   [Parameter(Mandatory = $false)]
@@ -104,8 +106,6 @@ param (
 )
 
 Import-Module PSFoundation -Force
-
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
 
 # -----------------------------------------------------------------------------
 
@@ -123,7 +123,9 @@ function Invoke-AutoDNSRequest {
     [Parameter(Mandatory = $false)]
     [string]$Method = 'GET',
     [Parameter(Mandatory = $false)]
-    [object]$Body
+    [object]$Body,
+    [Parameter(Mandatory = $false)]
+    [int]$MaxRetries = 3
   )
 
   $pair = "$($Credential.UserName):$($Credential.GetNetworkCredential().Password)"
@@ -142,15 +144,57 @@ function Invoke-AutoDNSRequest {
 
   if ($Body) {
     $params['Body'] = ($Body | ConvertTo-Json -Depth 10)
+    Write-Verbose "AutoDNS API $Method $Path body: $($params['Body'])"
   }
 
-  try {
-    $response = Invoke-RestMethod @params
-  }
-  catch {
-    $statusCode = $_.Exception.Response.StatusCode.value__
-    $statusText = $_.Exception.Response.StatusDescription
-    throw "AutoDNS API error ($statusCode $statusText) for $Method $Path`: $_"
+  $attempt = 0
+  while ($true) {
+    $attempt++
+    try {
+      $response = Invoke-RestMethod @params
+      break
+    }
+    catch {
+      $statusCode = $null
+      $statusText = $null
+      if ($_.Exception.Response) {
+        $statusCode = $_.Exception.Response.StatusCode.value__
+        $statusText = $_.Exception.Response.StatusDescription
+        if ([string]::IsNullOrEmpty($statusText)) {
+          # PS7: HttpResponseMessage uses ReasonPhrase instead of StatusDescription
+          $statusText = $_.Exception.Response.ReasonPhrase
+        }
+      }
+
+      # Retry transient failures (rate limiting, server errors, connection issues) with backoff
+      $isTransient = (-not $statusCode) -or ($statusCode -in @(429, 500, 502, 503, 504))
+      if ($isTransient -and $attempt -le $MaxRetries) {
+        $retryAfterSeconds = 0
+        $responseHeaders = $_.Exception.Response.Headers
+        $retryAfterValue = $null
+        if ($responseHeaders -is [System.Net.WebHeaderCollection]) {
+          # PS 5.1: HttpWebResponse exposes an indexable WebHeaderCollection
+          $retryAfterValue = $responseHeaders['Retry-After']
+        }
+        elseif ($responseHeaders -and $responseHeaders.RetryAfter -and $responseHeaders.RetryAfter.Delta) {
+          # PS 7: HttpResponseMessage exposes a typed RetryConditionHeaderValue
+          $retryAfterValue = $responseHeaders.RetryAfter.Delta.TotalSeconds
+        }
+        $parsedRetryAfter = 0.0
+        if ($retryAfterValue -and [double]::TryParse([string]$retryAfterValue, [ref]$parsedRetryAfter)) {
+          $retryAfterSeconds = $parsedRetryAfter
+        }
+        $waitMs = if ($retryAfterSeconds -gt 0) { [int]($retryAfterSeconds * 1000) } else { [int]([math]::Pow(2, $attempt) * 1000) }
+        Write-Verbose "AutoDNS API $Method $Path failed (HTTP $statusCode). Retrying in $([math]::Round($waitMs / 1000, 1))s (attempt $attempt of $MaxRetries) ..."
+        Start-Sleep -Milliseconds $waitMs
+        continue
+      }
+
+      if ($statusCode) {
+        throw "AutoDNS API error ($statusCode $statusText) for $Method $Path`: $_"
+      }
+      throw "AutoDNS request failed for $Method $Path`: $_"
+    }
   }
 
   if ($response.status.type -ne 'SUCCESS' -and $response.status.type -ne 'N') {
@@ -462,7 +506,7 @@ function Format-ChangeSummary {
   return ($parts -join '; ')
 }
 
-# ---- Example config for -ExportConfig ---------------------------------------
+# ---- Example config for -ExportTemplate ---------------------------------------
 $exampleConfig = @(
   [PSCustomObject]@{
     origin = 'example.com'
@@ -522,14 +566,14 @@ $exampleConfig = @(
   }
 )
 
-# ---- -ExportConfig: print example template ----------------------------------
-if ($ExportConfig) {
+# ---- -ExportTemplate: print example template ----------------------------------
+if ($ExportTemplate) {
   $tipMessage = @'
 
 TIP: This is an example template. To generate a real config from your live
-     data on AutoDNS, use -ExportCurrentState with -Credential.
+     data on AutoDNS, use -ExportState with -Credential.
 
-     Example: .\Update-AutoDNSZones.ps1 -ExportCurrentState -Credential (Get-Credential)
+     Example: .\Update-AutoDNSZones.ps1 -ExportState -Credential (Get-Credential)
 
 '@
   Write-Log -Message $tipMessage -Color Cyan
@@ -546,15 +590,15 @@ TIP: This is an example template. To generate a real config from your live
 }
 
 # ---- Credential validation for API-dependent modes --------------------------
-if ($ExportCurrentState -or (-not $ExportConfig -and -not $ExportCurrentState -and $PSBoundParameters.ContainsKey('Config'))) {
+if ($ExportState -or (-not $ExportTemplate -and $PSBoundParameters.ContainsKey('Config'))) {
   if (-not $Credential) {
     Write-Log -Message '-Credential is required for AutoDNS API access.' -Color Red
     exit 1
   }
 }
 
-# ---- -ExportCurrentState: fetch live data from API --------------------------
-if ($ExportCurrentState) {
+# ---- -ExportState: fetch live data from API --------------------------
+if ($ExportState) {
   $originList = @()
 
   if ($PSBoundParameters.ContainsKey('Config') -and -not [string]::IsNullOrWhiteSpace($Config)) {
@@ -599,16 +643,21 @@ if ($ExportCurrentState) {
   }
 
   $exported = @()
+  $_expTotal = $originList.Count
+  $_expIndex = 0
 
   foreach ($origin in $originList) {
-    Write-Log -Message "  Fetching domain: $origin ..." -Color Gray
+    $_expIndex++
+    $_expPct = if ($_expTotal -gt 0) { [int](($_expIndex / $_expTotal) * 100) } else { 100 }
+    Write-Progress -Activity 'Exporting current state' -Status "$origin ($_expIndex/$_expTotal)" -PercentComplete $_expPct
+    Write-Host ("`rExporting ({0}/{1}): {2,-40}" -f $_expIndex, $_expTotal, $origin) -NoNewline -ForegroundColor Cyan
 
     # Fetch domain info
     try {
       $domain = Get-AutoDNSDomain -Name $origin
     }
     catch {
-      Write-Log -Message "  -> Failed to fetch domain '$origin': $_" -Color Yellow
+      Write-Log -Message "`n  -> Failed to fetch domain '$origin': $_" -Color Yellow
       continue
     }
 
@@ -647,12 +696,15 @@ if ($ExportCurrentState) {
         $entry | Add-Member -NotePropertyName records -NotePropertyValue $zone.resourceRecords
       }
       catch {
-        Write-Log -Message "  -> (zone not available: $_)" -Color Gray
+        Write-Log -Message "`n  -> (zone not available: $_)" -Color Gray
       }
     }
 
     $exported += $entry
   }
+
+  Write-Progress -Activity 'Exporting current state' -Completed
+  Write-Host ("`rFetched {0} domain(s).{1}" -f $_expTotal, (' ' * 40)) -ForegroundColor Cyan
 
   if ($exported.Count -eq 0) {
     Write-Log -Message 'No entries were exported.' -Color Yellow
@@ -674,7 +726,7 @@ if ($ExportCurrentState) {
 
 # ---- Validate config --------------------------------------------------------
 if (-not $PSBoundParameters.ContainsKey('Config') -or [string]::IsNullOrWhiteSpace($Config)) {
-  Write-Log -Message '-Config is required (or use -ExportConfig or -ExportCurrentState).' -Color Red
+  Write-Log -Message '-Config is required (or use -ExportTemplate or -ExportState).' -Color Red
   exit 1
 }
 
@@ -719,7 +771,7 @@ foreach ($entry in $configEntries) {
 
   $_pct = if ($_total -gt 0) { [int](($_index / $_total) * 100) } else { 100 }
   Write-Progress -Activity 'Inspecting domains' -Status "$origin ($_index/$_total)" -PercentComplete $_pct
-  Write-Log -Message ("Inspecting ({0}/{1}): {2}" -f $_index, $_total, $origin) -Color Cyan
+  Write-Host ("`rInspecting ({0}/{1}): {2,-40}" -f $_index, $_total, $origin) -NoNewline -ForegroundColor Cyan
 
   $hasDomainBlock = $entry.PSObject.Properties.Name -contains 'domain'
   $hasZoneFields = ($entry.PSObject.Properties.Name -contains 'main') -or ($entry.PSObject.Properties.Name -contains 'records') -or ($entry.PSObject.Properties.Name -contains 'wwwInclude') -or ($entry.PSObject.Properties.Name -contains 'dnssec') -or ($entry.PSObject.Properties.Name -contains 'resourceRecords')
@@ -812,7 +864,7 @@ foreach ($entry in $configEntries) {
 }
 
 Write-Progress -Activity 'Inspecting domains' -Completed
-Write-Log -Message "Inspected $_total domain(s)." -Color Cyan
+Write-Host ("`rInspected {0} domain(s).{1}" -f $_total, (' ' * 40)) -ForegroundColor Cyan
 
 # ---- Phase 2: Display summary table -----------------------------------------
 if ($changePlan.Count -eq 0) {
@@ -910,9 +962,16 @@ else {
 # ---- Phase 3: Apply confirmed changes ---------------------------------------
 $results = @()
 $appliedCount = 0
+$_applyTotal = $confirmedPlans.Count
+$_applyIndex = 0
 
 foreach ($plan in $confirmedPlans) {
+  $_applyIndex++
   $origin = $plan.Origin
+
+  $_applyPct = if ($_applyTotal -gt 0) { [int](($_applyIndex / $_applyTotal) * 100) } else { 100 }
+  Write-Progress -Activity 'Applying changes' -Status "$origin ($_applyIndex/$_applyTotal)" -PercentComplete $_applyPct
+  Write-Host ("`rApplying ({0}/{1}): {2,-40}" -f $_applyIndex, $_applyTotal, $origin) -NoNewline -ForegroundColor Cyan
   $entryFailed = $false
   $entryError = $null
   $entryChanges = @($plan.DomainChanges) + @($plan.ZoneChanges)
@@ -928,7 +987,7 @@ foreach ($plan in $confirmedPlans) {
 
     # --- Nameserver changes: PUT /domain/{name} ---
     if ($nsChange) {
-      $domainBody = @{ nameServers = $domainEntry.nameServers }
+      $domainBody = @{ nameServers = @($domainEntry.nameServers) }
 
       Write-Verbose "Updating nameservers for: $origin ..."
       if ($DryRun) {
@@ -938,14 +997,14 @@ foreach ($plan in $confirmedPlans) {
         try {
           $jobInfo = Update-AutoDNSDomain -Name $origin -Body $domainBody
           if ($jobInfo) {
-            Write-Log -Message "  -> [$origin] Nameserver update submitted (Job ID: $($jobInfo.JobId))." -Color Green
+            Write-Log -Message "`n  -> [$origin] Nameserver update submitted (Job ID: $($jobInfo.JobId))." -Color Green
           }
           else {
-            Write-Log -Message "  -> [$origin] Nameservers updated successfully." -Color Green
+            Write-Log -Message "`n  -> [$origin] Nameservers updated successfully." -Color Green
           }
         }
         catch {
-          Write-Log -Message "  -> [$origin] Nameserver update failed: $_" -Color Red
+          Write-Log -Message "`n  -> [$origin] Nameserver update failed: $_" -Color Red
           $entryFailed = $true
           $entryError = "$_"
         }
@@ -963,7 +1022,7 @@ foreach ($plan in $confirmedPlans) {
         $dnssecBody.autoDnssec = [bool]$domainEntry.dnssec.auto
       }
       if ($domainEntry.dnssec.PSObject.Properties.Name -contains 'keys') {
-        $dnssecBody.dnssecData = $domainEntry.dnssec.keys
+        $dnssecBody.dnssecData = @($domainEntry.dnssec.keys)
       }
 
       Write-Verbose "Updating DNSSEC configuration for: $origin ..."
@@ -974,14 +1033,14 @@ foreach ($plan in $confirmedPlans) {
         try {
           $jobInfo = Invoke-AutoDNSRequest -Path "/domain/$origin/_dnssec" -Method PUT -Body $dnssecBody
           if ($jobInfo.data -and $jobInfo.data.Count -gt 0 -and $jobInfo.data[0].id) {
-            Write-Log -Message "  -> [$origin] DNSSEC update submitted (Job ID: $($jobInfo.data[0].id))." -Color Green
+            Write-Log -Message "`n  -> [$origin] DNSSEC update submitted (Job ID: $($jobInfo.data[0].id))." -Color Green
           }
           else {
-            Write-Log -Message "  -> [$origin] DNSSEC updated successfully." -Color Green
+            Write-Log -Message "`n  -> [$origin] DNSSEC updated successfully." -Color Green
           }
         }
         catch {
-          Write-Log -Message "  -> [$origin] DNSSEC update failed: $_" -Color Red
+          Write-Log -Message "`n  -> [$origin] DNSSEC update failed: $_" -Color Red
           $entryFailed = $true
           $entryError = "$_"
         }
@@ -999,10 +1058,10 @@ foreach ($plan in $confirmedPlans) {
       else {
         try {
           Invoke-AutoDNSRequest -Path "/domain/$origin/_autoDnssecKeyRollover" -Method PUT | Out-Null
-          Write-Log -Message "  -> [$origin] Key rollover triggered." -Color Green
+          Write-Log -Message "`n  -> [$origin] Key rollover triggered." -Color Green
         }
         catch {
-          Write-Log -Message "  -> [$origin] Key rollover failed: $_" -Color Red
+          Write-Log -Message "`n  -> [$origin] Key rollover failed: $_" -Color Red
           $entryFailed = $true
           $entryError = "$_"
         }
@@ -1014,14 +1073,20 @@ foreach ($plan in $confirmedPlans) {
   if ($plan.ZoneChanges.Count -gt 0) {
     $vns = $plan.Vns
 
+    # Force array types: PowerShell unwraps single-element collections on assignment,
+    # which would serialize as a JSON object instead of an array. The AutoDNS API
+    # rejects such payloads with HTTP 400 ("Fehler beim Lesen des Auftrages").
+    $zoneRecords = @(if ($plan.DesiredPayload.Contains('resourceRecords')) { $plan.DesiredPayload.resourceRecords } else { $plan.CurrentZone.resourceRecords })
+    $zoneNameServers = @($plan.CurrentZone.nameServers)
+
     $putBody = @{
       origin = $origin
       virtualNameServer = $vns
       main = if ($plan.DesiredPayload.Contains('main')) { $plan.DesiredPayload.main } else { $plan.CurrentZone.main }
       wwwInclude = if ($plan.DesiredPayload.Contains('wwwInclude')) { $plan.DesiredPayload.wwwInclude } else { [bool]$plan.CurrentZone.wwwInclude }
       dnssec = if ($plan.DesiredPayload.Contains('dnssec')) { $plan.DesiredPayload.dnssec } else { [bool]$plan.CurrentZone.dnssec }
-      resourceRecords = if ($plan.DesiredPayload.Contains('resourceRecords')) { $plan.DesiredPayload.resourceRecords } else { $plan.CurrentZone.resourceRecords }
-      nameServers = $plan.CurrentZone.nameServers
+      resourceRecords = $zoneRecords
+      nameServers = $zoneNameServers
       soa = $plan.CurrentZone.soa
     }
 
@@ -1031,11 +1096,11 @@ foreach ($plan in $confirmedPlans) {
     else {
       try {
         Invoke-AutoDNSRequest -Path "/zone/$origin/$vns" -Method PUT -Body $putBody
-        Write-Log -Message "  -> [$origin] Zone updated successfully." -Color Green
+        Write-Log -Message "`n  -> [$origin] Zone updated successfully." -Color Green
         $appliedCount++
       }
       catch {
-        Write-Log -Message "  -> [$origin] Failed to update zone: $_" -Color Red
+        Write-Log -Message "`n  -> [$origin] Failed to update zone: $_" -Color Red
         $entryFailed = $true
         $entryError = "$_"
       }
@@ -1049,7 +1114,7 @@ foreach ($plan in $confirmedPlans) {
           Write-Verbose "DNSSEC updated at domain level for '$origin'."
         }
         catch {
-          Write-Log -Message "  -> [$origin] Warning: DNSSEC domain update failed: $_" -Color Yellow
+          Write-Log -Message "`n  -> [$origin] Warning: DNSSEC domain update failed: $_" -Color Yellow
         }
       }
     }
@@ -1064,6 +1129,9 @@ foreach ($plan in $confirmedPlans) {
     Error = $entryError
   }
 }
+
+Write-Progress -Activity 'Applying changes' -Completed
+Write-Host ("`rProcessed {0} entry(ies).{1}" -f $_applyTotal, (' ' * 40)) -ForegroundColor Cyan
 
 # ---- Final tally ------------------------------------------------------------
 $failed = @($results | Where-Object { $_.Status -eq 'Failed' })

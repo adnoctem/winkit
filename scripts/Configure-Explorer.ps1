@@ -25,6 +25,13 @@
   Restart Windows Explorer after applying changes so they take effect immediately.
   Safe to use with -Undo.
 
+.PARAMETER SysPrep
+  Mount the default user profile hive (C:\Users\Default\NTUSER.DAT) and write
+  Explorer settings there instead of HKCU.  Use this when preparing a system
+  image (sysprep / audit mode) so that newly created user profiles inherit the
+  configured Explorer defaults.  Cannot be combined with -Instant.  Requires
+  elevation.
+
 .PARAMETER Config
   Path to a JSON file containing an array of setting overrides.  Each entry in
   the JSON needs at minimum a "Name" field (matching the desired setting);
@@ -32,22 +39,19 @@
   built-in defaults.  Entries that do not match any known setting are skipped
   with a warning.
 
-.PARAMETER ExportConfig
-  Export the default Explorer settings as JSON to the console.  Use -ExportPath
-  to write to a file instead.  Cannot be combined with -DryRun.
+.PARAMETER ExportTemplate
+  Export the default Explorer settings as a JSON config template and exit.  Use
+  -ExportPath to write it to a file instead of printing to the console.
 
-.PARAMETER ExportCurrentState
-  Export current registry values as reusable JSON config and exit.
+.PARAMETER ExportState
+  Export the current Explorer settings as reusable JSON config and exit.
+
 .PARAMETER ExportPath
-  When used together with -ExportConfig, writes the JSON to this file path
-  instead of printing to the console.
+  File path for -ExportTemplate or -ExportState.  When omitted, the JSON is
+  written to the console.
 
-.PARAMETER SysPrep
-  Mount the default user profile hive (C:\Users\Default\NTUSER.DAT) and write
-  Explorer settings there instead of HKCU.  Use this when preparing a system
-  image (sysprep / audit mode) so that newly created user profiles inherit the
-  configured Explorer defaults.  Cannot be combined with -Instant.  Requires
-  elevation.
+.PARAMETER PassThru
+  Return structured operation results.
 
 .EXAMPLE
   PS> ./Configure-Explorer.ps1
@@ -74,12 +78,16 @@
   Previews the undo operation without touching the registry.
 
 .EXAMPLE
-  PS> ./Configure-Explorer.ps1 -ExportConfig
+  PS> ./Configure-Explorer.ps1 -ExportTemplate
   Prints the default settings template to the console and exits.
 
 .EXAMPLE
-  PS> ./Configure-Explorer.ps1 -ExportConfig -ExportPath '.\my-explorer.json'
+  PS> ./Configure-Explorer.ps1 -ExportTemplate -ExportPath '.\my-explorer.json'
   Exports the default settings template to .\my-explorer.json and exits.
+
+.EXAMPLE
+  PS> ./Configure-Explorer.ps1 -ExportState -ExportPath '.\my-explorer-current.json'
+  Exports the current Explorer settings to a JSON file.
 
 .EXAMPLE
   PS> ./Configure-Explorer.ps1 -Config '.\my-explorer.json'
@@ -160,21 +168,21 @@ param (
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'Export the default Explorer settings to the console (or to a file with -ExportPath).'
+    HelpMessage = 'Export the default Explorer settings as a JSON config template and exit.'
   )]
   [switch]
-  $ExportConfig,
+  $ExportTemplate,
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'Export current Explorer registry values to reusable JSON config.'
+    HelpMessage = 'Export the current Explorer settings as reusable JSON config and exit.'
   )]
   [switch]
-  $ExportCurrentState,
+  $ExportState,
 
   [Parameter(
     Mandatory = $false,
-    HelpMessage = 'File path for -ExportConfig.  When omitted the settings are printed to the console.'
+    HelpMessage = 'File path for -ExportTemplate or -ExportState. When omitted, the JSON is written to the console.'
   )]
   [string]
   $ExportPath,
@@ -783,10 +791,10 @@ $explorerSettings = @(
 )
 
 # -- Export config (print to console or write to disk and exit) ----------
-if ($ExportCurrentState) {
-  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportCurrentState.' -Color Red; exit 1 }
-  if ($ExportConfig) { Write-Log -Message '-ExportConfig cannot be combined with -ExportCurrentState.' -Color Red; exit 1 }
-  if ($Undo) { Write-Log -Message '-Undo cannot be combined with -ExportCurrentState.' -Color Red; exit 1 }
+if ($ExportState) {
+  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportState.' -Color Red; exit 1 }
+  if ($ExportTemplate) { Write-Log -Message '-ExportTemplate cannot be combined with -ExportState.' -Color Red; exit 1 }
+  if ($Undo) { Write-Log -Message '-Undo cannot be combined with -ExportState.' -Color Red; exit 1 }
   $_currentState = Export-RegistrySettingState -Settings $explorerSettings
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
@@ -797,11 +805,8 @@ if ($ExportCurrentState) {
   exit 0
 }
 
-if ($ExportConfig) {
-  if ($DryRun) {
-    Write-Log -Message '-DryRun cannot be combined with -ExportConfig.' -Color Red
-    exit 1
-  }
+if ($ExportTemplate) {
+  if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportTemplate.' -Color Red; exit 1 }
 
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
