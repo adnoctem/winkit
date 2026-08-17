@@ -18,6 +18,7 @@
     format, fmt, fix                    .ps1   format.ps1
     lint, check, analyze                .ps1   lint.ps1
     test, tests, pester                 .ps1   test.ps1
+    dependencies, deps                  .ps1   dependencies.ps1
 
   All remaining positional and named arguments after Command are forwarded to
   the target script.
@@ -42,6 +43,10 @@
   PS> .\winkit.ps1 test
   Runs tools\test.ps1 (all Pester tests).
 
+.EXAMPLE
+  PS> .\winkit.ps1 dependencies -Check
+  Runs tools\dependencies.ps1 -Check (reports outdated PSGallery dependencies).
+
 .LINK
   https://github.com/adnoctem/winkit
 
@@ -58,7 +63,7 @@ param (
 )
 
 if (-not $Command) {
-  Write-Error 'A command is required. Available: init(ialize), setup, bootstrap, build, bundle, package, format, fmt, fix, lint, check, analyze, test, pester'
+  Write-Error 'A command is required. Available: init(ialize), setup, bootstrap, build, bundle, package, format, fmt, fix, lint, check, analyze, test, pester, dependencies, deps'
   exit 1
 }
 
@@ -79,13 +84,15 @@ $scriptMap = @{
   'test' = 'test'
   'tests' = 'test'
   'pester' = 'test'
+  'dependencies' = 'dependencies'
+  'deps' = 'dependencies'
 }
 
 $commandKey = $Command.ToLowerInvariant()
 $scriptName = $scriptMap[$commandKey]
 
 if (-not $scriptName) {
-  Write-Error "Unknown command '$Command'. Available: init(ialize), setup, bootstrap, build, bundle, package, format, fmt, fix, lint, check, analyze, test, pester"
+  Write-Error "Unknown command '$Command'. Available: init(ialize), setup, bootstrap, build, bundle, package, format, fmt, fix, lint, check, analyze, test, pester, dependencies, deps"
   exit 1
 }
 

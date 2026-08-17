@@ -4,7 +4,7 @@
 
 - [x] Add [PSScriptAnalyzer](https://github.com/PowerShell/PSScriptAnalyzer)
 - [x] Add [Pester](https://pester.dev/)
-- [ ] Add scripts to mitigate [Public Firewall Profile Bug in Defender 2025](https://jans.cloud/2025/03/unidentified-network-public-firewall-profile-bei-windows-server-2025-domain-controller/)
+- [X] Add scripts to mitigate [Public Firewall Profile Bug in Defender 2025](https://jans.cloud/2025/03/unidentified-network-public-firewall-profile-bei-windows-server-2025-domain-controller/)
 - [x] ~~Add scripts for [Terminal Server configuration](https://www.server-world.info/en/note?os=Windows_Server_2025&p=remotedesktop&f=1) and the associated [Defender rules](https://gist.github.com/asheroto/530748b3bf0528cc4805d652b612f81f)~~ -> out of scope - do this with Ansible
 - [x] Create [WOL-tooling](https://www.pdq.com/blog/wake-on-lan-wol-magic-packet-powershell/)
 - [x] Create a dowloader for [VC++ Redistributables](https://learn.microsoft.com/de-de/cpp/windows/latest-supported-vc-redist?view=msvc-170)
@@ -14,26 +14,30 @@
 
 ## 💡 Ideas
 
-- [ ] [GitHub: fleschutz/PowerShell](https://github.com/fleschutz/PowerShell)
-- [ ] [GitHub: stevencohn/WindowsPowerShell](https://github.com/stevencohn/WindowsPowerShell)
-- [ ] [GitHub: WinTweakers/WindowsToolbox](https://github.com/WinTweakers/WindowsToolbox)
-- [ ] [GitHub: ScoopInstaller/Scoop](https://github.com/ScoopInstaller/Scoop)
-- [ ] [GitHub: W4RH4WK/Debloat-Windows-10](https://github.com/W4RH4WK/Debloat-Windows-10)
-- [ ] [GitHub: asheroto/winget-install](https://github.com/asheroto/winget-install/tree/master)
-- [ ] [GitHub: asheroto/UninstallTeams](https://github.com/asheroto/UninstallTeams)
-- [ ] [GitHub: jrussellfreelance](https://github.com/jrussellfreelance/powershell-scripts)
-- [ ] [GitHub: nickrod158/PowerShell-Scripts](https://github.com/nickrod518/PowerShell-Scripts/tree/master)
-- [ ] [GitHub: farag2/Utilities](https://github.com/farag2/Utilities/tree/master)
-- [ ] [GitHub: nightroman/Invoke-Build](https://github.com/nightroman/Invoke-Build)
-- [ ] [GitHub: ab14jain/PowerShell](https://github.com/ab14jain/PowerShell)
-- [ ] [Windows Administration Scripts](https://github.com/lazywinadmin/PowerShell)
-- [ ] [Awesome Windows 11 Scripts](https://github.com/awesome-windows11/windows11)
-- [ ] [Windows Debloat Tools](https://github.com/LeDragoX/Win-Debloat-Tools/blob/main/src/scripts/Optimize-Privacy.ps1)
+- [x] [`fleschutz/PowerShell`](https://github.com/fleschutz/PowerShell) -> see [`Test-PendingReboot.ps1`](/scripts/Test-PendingReboot.ps1) and [`Test-SystemFileIntegrity.ps1`](/scripts/Test-SystemFileIntegrity.ps1)
+- [x] [`stevencohn/WindowsPowerShell`](https://github.com/stevencohn/WindowsPowerShell) -> see [`Enable-WinRM.ps1`](/scripts/Enable-WinRM.ps1), [`Clear-EventLogs.ps1`](/scripts/Clear-EventLogs.ps1), [`Get-ADUserReport.ps1`](/scripts/ADDS/Get-ADUserReport.ps1) and [`Test-PendingReboot.ps1`](/scripts/Test-PendingReboot.ps1); deferred module changes logged in `secrets/PSFoundation.md`
+- [x] [`WinTweakers/WindowsToolbox`](https://github.com/WinTweakers/WindowsToolbox) -> evaluated: archived, unmaintained consumer debloat tool; every real capability is already covered by existing `Configure-*`/`Remove-*`/`Disable-*` scripts with better engineering. Explicitly rejected after review: `DisableWindowsDefender` (AV-disabling has no place in an ISO-oriented toolkit) and `MSDOSMode` (downloads unverified third-party binaries into System32). No implementation taken; independently confirmed the registry/file ownership-takeover gap (logged in `secrets/PSFoundation.md`).
+- [X] [`ScoopInstaller/Scoop`](https://github.com/ScoopInstaller/Scoop)
+- [X] [`W4RH4WK/Debloat-Windows-10`](https://github.com/W4RH4WK/Debloat-Windows-10)
+- [x] [`asheroto/winget-install`](https://github.com/asheroto/winget-install/tree/master)-> feature-diff applied to [`Install-WinGet.ps1`](/scripts/Install-WinGet.ps1): OS compatibility gate, known-error-code translation, dependency skip-if-current provisioning, Server Core portable fallback (beta caveat carried), SYSTEM-account support (documented risk); cross-script generalizations logged in `secrets/enhancements.md`; -GHtoken deferred until rate-limiting is observed.
+- [x] [`asheroto/UninstallTeams`](https://github.com/asheroto/UninstallTeams) -> see [`Remove-Teams.ps1`](/scripts/Remove-Teams.ps1)
+- [x] [`jrussellfreelance`](https://github.com/jrussellfreelance/powershell-scripts)
 
-- [ ] [Activate RDP via PowerShell](https://nt4admins.de/powershell/rdp-aktivieren-remote-per-powershell/)
-- [ ] [PowerShell send SMTP notifications](https://nt4admins.de/powershell/e-mail-benachrichtigungen-mit-der-powershell-senden/)
+-> adapted: [`Get-ADPasswordExpiry.ps1`](/scripts/ADDS/Get-ADPasswordExpiry.ps1) (FGPP-correct expiry via msDS-UserPasswordExpiryTimeComputed) and [`Get-WSUSReport.ps1`](/scripts/Get-WSUSReport.ps1); `Test-RemoteHostReachability` logged for PSFoundation (`secrets/PSFoundation.md`); secret-handling/download anti-patterns logged in `secrets/enhancements.md`. Rejected after review: plaintext-password SSH scripts, inline-AWS-key CloudWatch script, HTTP Chrome installer, MSOnline-based M365 script, role-bundle DC setup, broken send-email.ps1 (winkit already has Send-SMTPMessage.ps1).
+- [x] [`nickrod158/PowerShell-Scripts`](https://github.com/nickrod518/PowerShell-Scripts/tree/master)
+
+-> adapted: [`Get-ADGroupAudit.ps1`](/scripts/ADDS/Get-ADGroupAudit.ps1) (privileged-group last-logon audit, max LastLogon across all DCs); five module ports logged in `secrets/PSFoundation.md` (Find-ServiceAccountUsage, Test-ADCredential, Get-CertificateInventory, Convert-RobocopyExitCode, encrypted-credential-file pair); general conventions logged in `secrets/enhancements.md` (robocopy exit codes, cert-expiry standing report, NTP drift concept). Rejected: Disable-UAC (security-control disabling); non-functional references noted: Exchange Online Basic Auth script and MSOnline-based MSO folder. DHCP filter replication skipped (not needed).
+- [ ] [`farag2/Utilities`](https://github.com/farag2/Utilities/tree/master)
+- [ ] [`nightroman/Invoke-Build`](https://github.com/nightroman/Invoke-Build)
+- [X] [`ab14jain/PowerShell`](https://github.com/ab14jain/PowerShell)
+- [ ] [`lazywinadmin/PowerShell`](https://github.com/lazywinadmin/PowerShell)
+- [ ] [`awesome-windows11/windows11`](https://github.com/awesome-windows11/windows11)
+- [ ] [`LeDragoX/Win-Debloat-Tools`](https://github.com/LeDragoX/Win-Debloat-Tools/blob/main/src/scripts/Optimize-Privacy.ps1)
+
+- [X] [Activate RDP via PowerShell](https://nt4admins.de/powershell/rdp-aktivieren-remote-per-powershell/)
+- [X] [PowerShell send SMTP notifications](https://nt4admins.de/powershell/e-mail-benachrichtigungen-mit-der-powershell-senden/) -> see [`Send-SMTPMessage.ps1`](/scripts/Send-SMTPMessage.ps1)
 - [ ] [Create E-Mail Disclaimer with PowerShell](https://nt4admins.de/powershell/email-disclaimer-mit-der-powershell-erstellen/)
-- [ ] [Batch print PDF files](https://brndmp.olafritman.com/batch-print-pdf-with-powershell/)
+- [x] [Batch print PDF files](https://brndmp.olafritman.com/batch-print-pdf-with-powershell/)
 
 ## 🔗 Links
 
@@ -44,7 +48,7 @@
 - [x] [PowerShell: What is @{}](https://stackoverflow.com/questions/56965510/what-is-meaning-in-powershell)
 - [x] [PowerShell: What is %{}](https://stackoverflow.com/questions/22846596/what-does-percent-do-in-powershell)
 - [x] [PSScriptAnalyzer](https://learn.microsoft.com/de-de/powershell/utility-modules/psscriptanalyzer/overview?view=ps-modules)
-- [ ] [Copy/Move files based on RegEx](https://stackoverflow.com/questions/7893919/powershell-copy-move-files-based-on-a-regex-value-retaining-the-folder-structu)
+- [X] [Copy/Move files based on RegEx](https://stackoverflow.com/questions/7893919/powershell-copy-move-files-based-on-a-regex-value-retaining-the-folder-structu) -> handled by `augment`
 - [x] [PowerShell: What is CmdLetBinding](https://blog.ironmansoftware.com/powershell-cmdlet-binding/)
 - [x] [Explore self-elevating PowerShell scripts](https://www.reddit.com/r/PowerShell/comments/d7y0zp/self_elevating_powershell_script/)
 - [x] [PowerShell: `ConvertTo-SecureString`](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/convertto-securestring?view=powershell-7.5)
@@ -65,15 +69,15 @@
 - [x] [32k pages for AD](https://learn.microsoft.com/de-de/windows-server/identity/ad-ds/32k-pages-optional-feature)
       -> use Ansible from a control node instead
 
-- [ ] [Microsoft: CSS Exchange - HealthChecker](https://microsoft.github.io/CSS-Exchange/Diagnostics/HealthChecker/)
-- [ ] [PowerShell Exchange Web Services (EWS) scripts](https://github.com/David-Barrett-MS/PowerShell-EWS-Scripts)
-- [ ] [PowerShell Remoting](https://learn.microsoft.com/en-us/powershell/scripting/learn/ps101/08-powershell-remoting?view=powershell-7.5)
-- [ ] [PowerShell - About Functions with Advanced Methods](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_functions_advanced_methods?view=powershell-7.5)
-- [ ] [ADDS: Forests/Domains erstellen bzw. konfigurieren](https://blog.andreas-schreiner.de/2017/09/14/adds-forests-domains-erstellen-konfigurieren/)
-- [ ] [Domain Controller auf Server 2025 migrieren](https://www.windowspro.de/wolfgang-sommergut/domain-controller-windows-server-2025-migrieren)
-- [ ] [Activate RDP remotely via PowerShell](https://nt4admins.de/powershell/rdp-aktivieren-remote-per-powershell/)
-- [ ] [Activate RDP remotely via PowerShell](https://sid-500.com/2021/03/22/enable-remote-desktop-remotely-with-powershell-enable-remotedesktop/)
-- [ ] [Activate RemoteDesktop Firewall Rules](https://www.der-windows-papst.de/2018/03/30/powershell-remotedesktop-aktivieren-und-firewall/)
+- [X] [Microsoft: CSS Exchange - HealthChecker](https://microsoft.github.io/CSS-Exchange/Diagnostics/HealthChecker/) -> used in [Initialize-ExchangeServer.ps1](../scripts/ADDS/Initialize-ExchangeServer.ps1)
+- [X] [PowerShell Exchange Web Services (EWS) scripts](https://github.com/David-Barrett-MS/PowerShell-EWS-Scripts) -> not currently used
+- [X] [PowerShell Remoting](https://learn.microsoft.com/en-us/powershell/scripting/learn/ps101/08-powershell-remoting?view=powershell-7.5) -> [see Initialize-.. scripts](../scripts/ADDS)
+- [X] [PowerShell - About Functions with Advanced Methods](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_functions_advanced_methods?view=powershell-7.5)
+- [X] [ADDS: Forests/Domains erstellen bzw. konfigurieren](https://blog.andreas-schreiner.de/2017/09/14/adds-forests-domains-erstellen-konfigurieren/)
+- [X] [Domain Controller auf Server 2025 migrieren](https://www.windowspro.de/wolfgang-sommergut/domain-controller-windows-server-2025-migrieren)
+- [X] [Activate RDP remotely via PowerShell](https://nt4admins.de/powershell/rdp-aktivieren-remote-per-powershell/)
+- [X] [Activate RDP remotely via PowerShell](https://sid-500.com/2021/03/22/enable-remote-desktop-remotely-with-powershell-enable-remotedesktop/)
+- [X] [Activate RemoteDesktop Firewall Rules](https://www.der-windows-papst.de/2018/03/30/powershell-remotedesktop-aktivieren-und-firewall/)
 - [x] [Explore `PSRename`](https://github.com/mgajda83/PSRename)
 - [x] [Install `winget` via the Command-Line](https://stackoverflow.com/questions/74166150/install-winget-by-the-command-line-powershell)
 
@@ -121,9 +125,11 @@
 
 ### Windows Printing
 
-- [ ] [Printing Documents using PowerShell](https://pipe.how/invoke-print/)
-- [ ] [Streamlining batch PDF printing](https://medium.com/@mayberryjalin/powershell-streamlining-batch-pdf-printing-301f25c1cd03)
-- [ ] [Trying to send PDF print jobs to a network printer](https://community.spiceworks.com/t/trying-to-send-pdf-print-jobs-to-a-network-printer/957742)
+- [x] [Printing Documents using PowerShell](https://pipe.how/invoke-print/)
+- [x] [Streamlining batch PDF printing](https://medium.com/@mayberryjalin/powershell-streamlining-batch-pdf-printing-301f25c1cd03)
+- [x] [Trying to send PDF print jobs to a network printer](https://community.spiceworks.com/t/trying-to-send-pdf-print-jobs-to-a-network-printer/957742)
+
+-> see [`Invoke-PrintBatch.ps1`](/scripts/Files/Invoke-PrintBatch.ps1)
 
 ## ⚠️ Issues
 
