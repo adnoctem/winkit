@@ -1,6 +1,6 @@
-#######################################
-# EDITORS
-#######################################
+# .gitignore - PowerShell module
+
+###> general/editors ###
 
 # IntelliJ IDEA
 .idea/*
@@ -12,12 +12,17 @@
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+###>
 
-# Distribution folder
-dist/*
-build/*
+###> general/secret ###
 
-# temporary files
+# secrets
 secrets/*
+###>
+
+###> source/temp ###
+
+# distribution
 dist/*
 build/*
+###>

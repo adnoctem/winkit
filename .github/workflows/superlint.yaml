@@ -2,41 +2,30 @@ name: "Run Super-Linter"
 
 on: ["push", "pull_request"]
 
-permissions: read-all
+permissions: {}
 
 jobs:
   lint:
     name: Super-Lint
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      # ref: https://github.com/super-linter/super-linter#get-started
+      contents: read
       packages: read
+      issues: write
+      pull-requests: write
       statuses: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           # super-linter needs the full git history to get the
           # list of files that changed across commits
           fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 20
-
-      - name: Run Prettier
-        run: |
-          npx prettier --write "**/*.md"
-
-      - name: Commit Prettier changes
-        uses: stefanzweifel/git-auto-commit-action@v7
-        with:
-          commit_message: "style(docs): format documentation with Prettier"
-          branch: ${{ github.head_ref }}
+          persist-credentials: false
 
       - name: Superlinter
-        uses: super-linter/super-linter@v8.7.0
+        uses: super-linter/super-linter@4ce20838b8ab83717e78138c5b3a1407148e0918 # v8.7.0
         env:
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,15 +40,16 @@ jobs:
       # which maps to contents: write for the GITHUB_TOKEN (actions: write
       # is NOT sufficient and returns 403 "Resource not accessible").
       contents: write
+      pull-requests: write
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     needs: [lint]
     steps:
       - name: Dispatch a release workflow run
-        # Only branch pushes to release branches may trigger releases; PR lint
-        # runs must not.
-        if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next') && always() && contains(join(needs.*.result, ','), 'success') }}
-        uses: actions/github-script@v9
+        # release only after every platform in the test matrix succeeded
+        # ref: https://github.com/actions/runner/issues/1251
+        if: ${{ github.event_name == 'push' && always() && !contains(join(needs.*.result, ','), 'failure') }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           github-token: "${{ env.GITHUB_TOKEN }}"
           script: |

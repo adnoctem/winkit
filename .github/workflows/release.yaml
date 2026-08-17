@@ -4,62 +4,32 @@ on:
   workflow_dispatch:
   repository_dispatch:
     types: [release]
-  pull_request:
-    branches:
-      - "main"
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: read-all
 
 defaults:
   run:
     shell: pwsh
 
 concurrency:
-  group: "${{ github.workflow }}@${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
+  group: "${{ github.workflow }}@${{ github.ref }}"
 
 jobs:
-  build:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Build distribution archives
-        run: |
-          .\tools\build.ps1
-
-      - name: Upload distribution artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-          if-no-files-found: error
-
   release:
     runs-on: windows-latest
-    needs: [build]
     env:
       GITHUB_TOKEN: ${{ secrets.ANC_GITHUB_TOKEN }}
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Download distribution artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          name: dist
-          path: dist/
-
-      - name: Configure Git identity
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          persist-credentials: false
 
       - name: Semantic Release
-        uses: cycjimmy/semantic-release-action@v6
+        uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6
         id: semantic
         with:
           semantic_version: 24
@@ -70,5 +40,6 @@ jobs:
             ]
           extra_plugins: |
             @semantic-release/changelog@6.0.3
+            @semantic-release/exec@7.0.3
             @semantic-release/git@10.0.1
             conventional-changelog-conventionalcommits@8.0.0

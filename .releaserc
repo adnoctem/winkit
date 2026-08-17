@@ -35,6 +35,9 @@
       {
         "assets": [
           {
+            "path": "dist/*.zip"
+          },
+          {
             "path": "dist/*.tar.gz"
           },
           {
@@ -53,7 +56,8 @@
       "@semantic-release/git",
       {
         "assets": [
-          "CHANGELOG.md"
+          "CHANGELOG.md",
+          "requirements.psd1"
         ]
       }
     ]

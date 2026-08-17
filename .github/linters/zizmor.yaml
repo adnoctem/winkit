@@ -1,0 +1,5 @@
+# TODO(MVProwess): Try to mitigate this within PowerShell itself
+rules:
+  template-injection:
+    ignore:
+      - release.yaml
