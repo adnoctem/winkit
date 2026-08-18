@@ -37,6 +37,8 @@
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
+  Server Core: supported - silent machine-scope installers.
+  SYSTEM-account execution: supported - machine-scope installation.
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -77,6 +79,26 @@ $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
 if ($arch -eq 'arm64' -and $major -ne '14') {
   Write-Log -Message "ARM64 not available for VC++ $Version; falling back to x64." -Color Yellow
   $arch = 'x64'
+}
+
+# ---- OS compatibility gate ---------------------------------------------------
+# 14.0 (the unified 2015-2022 runtime) supports Windows 10 1607 / Server 2016
+# (build 14393) and newer; the legacy 12.0/11.0/10.0/9.0/8.0 runtimes support
+# Windows 7 / Server 2008 R2 (build 7601) and newer.
+$minSupportedBuild = if ($major -eq '14') { 14393 } else { 7601 }
+$osInfo = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+$isServerOs = ($null -ne $osInfo -and [int]$osInfo.ProductType -ge 2)
+if ($osInfo -and [int]$osInfo.OperatingSystemSKU -ge 112 -and [int]$osInfo.OperatingSystemSKU -le 115) {
+  # Server multi-session editions report as Server but behave like a workstation.
+  $isServerOs = $false
+}
+if ((Get-OSBuildNumber) -lt $minSupportedBuild) {
+  $osVersion = Get-OSVersionInfo
+  $osLabel = if ($isServerOs) { 'Windows Server' } else { 'Windows' }
+  Write-Log -Message "Unsupported OS: VC++ $Version requires $osLabel build $minSupportedBuild or newer (current: $($osVersion.DisplayVersion), build $($osVersion.CurrentBuild))." -Color Red
+  Add-OperationResult -Results $_results -Target "VCRedist-$Version" -Source 'VCRedist' -Action 'Validate' -Status 'Failed' -Detail "Unsupported OS - build $($osVersion.CurrentBuild), minimum $minSupportedBuild."
+  if ($PassThru -or $DryRun) { $_results }
+  exit 1
 }
 
 # ---- Already installed? -----------------------------------------------------

@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.1.0' }
 
 <#
 .SYNOPSIS
@@ -441,6 +441,15 @@ function Invoke-ValidatePhase {
   }
 
   # 3. Pending-reboot gate.
+  # Remote-management channel pre-flight (non-blocking diagnostic).
+  try {
+    $reachability = Test-RemoteHostReachability -ComputerName $Server -ErrorAction Stop
+    $channelDetail = (($reachability.Channels | ForEach-Object { "$($_.Source)=$($_.Status)" }) -join ', ')
+    Add-OperationResult -Results $diagnostics -Target $Server -Source 'Reachability' -Action 'Preflight' -Status 'Completed' -Detail $channelDetail
+  }
+  catch {
+    Add-OperationResult -Results $diagnostics -Target $Server -Source 'Reachability' -Action 'Preflight' -Status 'Warn' -Detail "Reachability probe failed: $(Get-RedactedError $_)"
+  }
   $pendingReboot = Test-TargetPendingReboot -Session $session -Diagnostics $diagnostics
   if ($pendingReboot) {
     Remove-PSSession -Session $session -ErrorAction SilentlyContinue

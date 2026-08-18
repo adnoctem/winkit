@@ -63,6 +63,8 @@
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
+  Server Core: supported - module-based, no Desktop Experience dependency.
+  SYSTEM-account execution: supported - no user-context dependency.
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -117,6 +119,26 @@ if ($DryRun) {
 }
 
 $_results = New-Object System.Collections.ArrayList
+
+# ---- OS compatibility gate ---------------------------------------------------
+# PSWindowsUpdate supports Windows 10 1607 / Server 2016 (build 14393) and
+# newer. Review the floor against the PSWindowsUpdate support matrix when the
+# module updates.
+$minSupportedBuild = 14393
+$osInfo = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+$isServerOs = ($null -ne $osInfo -and [int]$osInfo.ProductType -ge 2)
+if ($osInfo -and [int]$osInfo.OperatingSystemSKU -ge 112 -and [int]$osInfo.OperatingSystemSKU -le 115) {
+  # Server multi-session editions report as Server but behave like a workstation.
+  $isServerOs = $false
+}
+if ((Get-OSBuildNumber) -lt $minSupportedBuild) {
+  $osVersion = Get-OSVersionInfo
+  $osLabel = if ($isServerOs) { 'Windows Server' } else { 'Windows' }
+  Write-Log -Message "Unsupported OS: this script requires $osLabel build $minSupportedBuild or newer (current: $($osVersion.DisplayVersion), build $($osVersion.CurrentBuild))." -Color Red
+  Add-OperationResult -Results $_results -Target 'WindowsUpdates' -Source 'PSWindowsUpdate' -Action 'Validate' -Status 'Failed' -Detail "Unsupported OS - build $($osVersion.CurrentBuild), minimum $minSupportedBuild."
+  if ($PassThru -or $DryRun) { $_results }
+  exit 1
+}
 
 # ---- Ensure PSWindowsUpdate if requested ------------------------------------
 if ($Profile -ne 'StoreOnly' -and -not (Test-PSWindowsUpdateAvailable)) {

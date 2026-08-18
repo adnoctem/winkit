@@ -3,7 +3,7 @@
 #>
 
 @{
-  PSFoundation = '1.0.0'
+  PSFoundation = '1.2.0'
   Pester = '5.5.0'
   PSScriptAnalyzer = '1.22.0'
   PSWindowsUpdate = '2.2.1.5'

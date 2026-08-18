@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.1.0' }
 
 <#
 .SYNOPSIS
@@ -72,6 +72,8 @@
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
+  Server Core: not applicable - Teams clients require the Desktop Experience (no AppX subsystem on Core).
+  SYSTEM-account execution: per-user AppX removal behaves differently under SYSTEM - run as an interactive admin where possible.
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
@@ -206,6 +208,36 @@ function Invoke-TeamsUninstaller {
   }
 }
 
+function Get-AppxRemovalError {
+  <#
+    Translates known AppX/package error codes to actionable guidance. Codes
+    marked Benign indicate "already installed/removed" states that should not
+    be reported as failures. Same table as Install-WinGet's
+    Get-WingetInstallError.
+  #>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Message
+  )
+
+  $translationTable = @(
+    @{ Code = '0x80073D06'; Benign = $true; Detail = 'A newer version is already installed.' }
+    @{ Code = '0x80073CF0'; Benign = $true; Detail = 'The same version is already installed.' }
+    @{ Code = '0x80073D02'; Benign = $false; Detail = 'Resources are in use (commonly Windows Terminal holding a lock). Close Windows Terminal and retry.' }
+    @{ Code = '0x80073CF3'; Benign = $false; Detail = 'A prerequisite was not detected. Retry - this is usually transient.' }
+    @{ Code = '0x80073CF9'; Benign = $false; Detail = 'Registration failed under the SYSTEM account. Use an Administrator account instead.' }
+  )
+
+  foreach ($entry in $translationTable) {
+    if ($Message -match $entry.Code) {
+      return [pscustomobject]@{ Known = $true; Benign = $entry.Benign; Detail = $entry.Detail }
+    }
+  }
+
+  [pscustomobject]@{ Known = $false; Benign = $false; Detail = $null }
+}
+
 function Remove-TeamsAppxPackage {
   [CmdletBinding(SupportsShouldProcess = $true)]
   param([System.Collections.ArrayList]$Results)
@@ -231,7 +263,9 @@ function Remove-TeamsAppxPackage {
           Add-OperationResult -Results $Results -Target $_target -Action 'RemoveAppxPackage' -Status 'Removed' -Detail 'Teams Appx package removed.'
         }
         catch {
-          Add-OperationResult -Results $Results -Target $_target -Action 'RemoveAppxPackage' -Status 'Failed' -Detail $_.Exception.Message
+          $translated = Get-AppxRemovalError -Message $_.Exception.Message
+          $detail = if ($translated.Known) { $translated.Detail } else { $_.Exception.Message }
+          Add-OperationResult -Results $Results -Target $_target -Action 'RemoveAppxPackage' -Status 'Failed' -Detail $detail
         }
       }
       else {
@@ -261,7 +295,19 @@ function Remove-TeamsCacheFolder {
         Add-OperationResult -Results $Results -Target $_folder -Action 'RemoveCacheFolder' -Status 'Removed' -Detail 'Teams cache folder removed.'
       }
       catch {
-        Add-OperationResult -Results $Results -Target $_folder -Action 'RemoveCacheFolder' -Status 'Failed' -Detail $_.Exception.Message
+        $lockDetail = $_.Exception.Message
+        try {
+          $lockResult = Get-FileLockProcess -FilePath $_folder -ErrorAction SilentlyContinue
+          $lockers = @($lockResult.Lockers)
+          if ($lockers.Count -gt 0) {
+            $lockerNames = ($lockers | ForEach-Object { if ($_.ProcessName) { $_.ProcessName } else { "PID $($_.ProcessId)" } }) -join ', '
+            $lockDetail = "$lockDetail - held by: $lockerNames"
+          }
+        }
+        catch {
+          $lockResult = $null
+        }
+        Add-OperationResult -Results $Results -Target $_folder -Action 'RemoveCacheFolder' -Status 'Failed' -Detail $lockDetail
       }
     }
     else {

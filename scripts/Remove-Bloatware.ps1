@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.1.0' }
 
 <#
 .SYNOPSIS
@@ -226,7 +226,7 @@ $_packageGroups = @{
     '*Duolingo*'
     'PandoraMediaInc*'
     'Flipboard.Flipboard*'
-    'LinkedInforWindows*'
+    'LinkedInfoWindows*'
     '*TikTok*'
     'BytedancePte.Ltd.TikTok*'
     '*WhatsApp*'
@@ -426,7 +426,19 @@ function Invoke-BloatwareShortcutRemove {
     Add-OperationResult -Results $Results -Target $_resolvedPath -Source 'FileSystem' -Action 'RemoveShortcut' -Status 'Removed' -Detail 'Shortcut removed.'
   }
   catch {
-    Add-OperationResult -Results $Results -Target $_resolvedPath -Source 'FileSystem' -Action 'RemoveShortcut' -Status 'Failed' -Detail $_.Exception.Message
+    $lockDetail = $_.Exception.Message
+    try {
+      $lockResult = Get-FileLockProcess -FilePath $_resolvedPath -ErrorAction SilentlyContinue
+      $lockers = @($lockResult.Lockers)
+      if ($lockers.Count -gt 0) {
+        $lockerNames = ($lockers | ForEach-Object { if ($_.ProcessName) { $_.ProcessName } else { "PID $($_.ProcessId)" } }) -join ', '
+        $lockDetail = "$lockDetail - held by: $lockerNames"
+      }
+    }
+    catch {
+      $lockResult = $null
+    }
+    Add-OperationResult -Results $Results -Target $_resolvedPath -Source 'FileSystem' -Action 'RemoveShortcut' -Status 'Failed' -Detail $lockDetail
   }
 }
 

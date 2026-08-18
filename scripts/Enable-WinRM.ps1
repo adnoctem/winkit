@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.2.0' }
 
 <#
 .SYNOPSIS
@@ -78,6 +78,8 @@
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
+  Server Core: supported - remoting is the primary Server Core administration path.
+  SYSTEM-account execution: works - no user-context dependency.
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
@@ -155,7 +157,7 @@ if ($AllowUnencrypted -or $EnableBasicAuth -or $TrustedHostsAll) {
 Write-Log -Message 'Configuring the WinRM service...' -Color Yellow
 if ($PSCmdlet.ShouldProcess('WinRM', 'Set startup type to Automatic and start the service')) {
   try {
-    Set-Service -Name WinRM -StartupType Automatic -ErrorAction Stop
+    $null = Set-ServiceStartupState -Name WinRM -StartupType Automatic
     $service = Get-Service -Name WinRM -ErrorAction Stop
     if ($service.Status -ne 'Running') {
       Start-Service -Name WinRM -ErrorAction Stop

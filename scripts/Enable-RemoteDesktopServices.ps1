@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.2.0' }
 
 <#
 .SYNOPSIS
@@ -80,6 +80,8 @@
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
+  Server Core: supported - registry/service-based, no GUI dependency.
+  SYSTEM-account execution: not applicable - interactive admin context intended.
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -180,7 +182,7 @@ $rdpEnableScript = {
 
   # 3. Service - TermService running and set to Automatic.
   try {
-    Set-Service -Name TermService -StartupType Automatic -ErrorAction Stop
+    $null = Set-ServiceStartupState -Name TermService -StartupType Automatic
     $termService = Get-Service -Name TermService -ErrorAction Stop
     if ($termService.Status -ne 'Running') {
       Start-Service -Name TermService -ErrorAction Stop

@@ -33,6 +33,8 @@
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
+  Server Core: supported - no Desktop Experience dependency.
+  SYSTEM-account execution: works; installation involves no per-user registration.
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -56,6 +58,24 @@ if ($DryRun) {
 }
 
 $_results = New-Object System.Collections.ArrayList
+
+# ---- OS compatibility gate ---------------------------------------------------
+# PowerShell 7.x supports Windows 10 1607 / Server 2016 (build 14393) and newer.
+$minSupportedBuild = 14393
+$osInfo = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+$isServerOs = ($null -ne $osInfo -and [int]$osInfo.ProductType -ge 2)
+if ($osInfo -and [int]$osInfo.OperatingSystemSKU -ge 112 -and [int]$osInfo.OperatingSystemSKU -le 115) {
+  # Server multi-session editions report as Server but behave like a workstation.
+  $isServerOs = $false
+}
+if ((Get-OSBuildNumber) -lt $minSupportedBuild) {
+  $osVersion = Get-OSVersionInfo
+  $osLabel = if ($isServerOs) { 'Windows Server' } else { 'Windows' }
+  Write-Log -Message "Unsupported OS: this script requires $osLabel build $minSupportedBuild or newer (current: $($osVersion.DisplayVersion), build $($osVersion.CurrentBuild))." -Color Red
+  Add-OperationResult -Results $_results -Target 'PowerShellCore' -Source 'Winget' -Action 'Validate' -Status 'Failed' -Detail "Unsupported OS - build $($osVersion.CurrentBuild), minimum $minSupportedBuild."
+  if ($PassThru -or $DryRun) { $_results }
+  exit 1
+}
 
 if (Get-Command pwsh -ErrorAction SilentlyContinue) {
   $_installedVersion = & pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>$null

@@ -23,10 +23,10 @@
   Return structured operation results.
 
 .EXAMPLE
-  PS> ./Enable-WindowsSubsystemForLinux.ps1
+  PS> ./Enable-WSL.ps1
 
 .EXAMPLE
-  PS> ./Enable-WindowsSubsystemForLinux.ps1 -DryRun
+  PS> ./Enable-WSL.ps1 -DryRun
 
 .LINK
   https://github.com/adnoctem/winkit
@@ -34,6 +34,8 @@
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
+  Server Core: supported - optional feature enabled via DISM.
+  SYSTEM-account execution: no user-context dependency; one-time admin operation.
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -57,6 +59,26 @@ if ($DryRun) {
 }
 
 $_results = New-Object System.Collections.ArrayList
+
+# ---- OS compatibility gate ---------------------------------------------------
+# Modern WSL (WSL 1 feature availability and the WSL 2 tooling) targets
+# Windows 10 1903 / Server 2019 (build 18362) and newer.
+$minSupportedBuild = 18362
+$osInfo = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+$isServerOs = ($null -ne $osInfo -and [int]$osInfo.ProductType -ge 2)
+if ($osInfo -and [int]$osInfo.OperatingSystemSKU -ge 112 -and [int]$osInfo.OperatingSystemSKU -le 115) {
+  # Server multi-session editions report as Server but behave like a workstation.
+  $isServerOs = $false
+}
+if ((Get-OSBuildNumber) -lt $minSupportedBuild) {
+  $osVersion = Get-OSVersionInfo
+  $osLabel = if ($isServerOs) { 'Windows Server' } else { 'Windows' }
+  Write-Log -Message "Unsupported OS: this script requires $osLabel build $minSupportedBuild or newer (current: $($osVersion.DisplayVersion), build $($osVersion.CurrentBuild))." -Color Red
+  Add-OperationResult -Results $_results -Target 'WSL' -Source 'WindowsFeature' -Action 'Validate' -Status 'Failed' -Detail "Unsupported OS - build $($osVersion.CurrentBuild), minimum $minSupportedBuild."
+  if ($PassThru -or $DryRun) { $_results }
+  exit 1
+}
+
 $_featureName = 'Microsoft-Windows-Subsystem-Linux'
 
 $state = Get-WindowsOptionalFeature -Online -FeatureName $_featureName -ErrorAction SilentlyContinue
@@ -93,7 +115,7 @@ catch {
   Add-OperationResult -Results $_results -Target $_featureName -Source 'WindowsFeature' -Action 'Enable' -Status 'Failed' -Detail $_.Exception.Message
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Enable-WindowsSubsystemForLinux'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Enable-WSL'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

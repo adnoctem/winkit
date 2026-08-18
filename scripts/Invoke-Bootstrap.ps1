@@ -46,6 +46,7 @@
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
+  SYSTEM-account execution: designed for unattended execution (scheduled task / RMM / SCCM); individual invoked scripts vary in their SYSTEM-context support.
 #>
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', '', Justification = 'VCRedistVersions is a VC++ runtime version array, not a credential.')]

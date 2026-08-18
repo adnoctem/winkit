@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.1.0' }
 
 <#
 .SYNOPSIS
@@ -971,6 +971,16 @@ function Invoke-ValidatePhase {
   if (Test-TargetPendingReboot -Session $session -Diagnostics $diagnostics) {
     Remove-PSSession -Session $session -ErrorAction SilentlyContinue
     return Write-PhaseEnvelope -PhaseName 'validate' -Success $false -StartedAt $startedAt -CompletedAt (Get-Date).ToUniversalTime().ToString('o') -Diagnostics $diagnostics -ErrorText 'A reboot is pending on the target. Reboot it and re-run before proceeding.'
+  }
+
+  # Remote-management channel pre-flight (non-blocking diagnostic).
+  try {
+    $reachability = Test-RemoteHostReachability -ComputerName $Server -ErrorAction Stop
+    $channelDetail = (($reachability.Channels | ForEach-Object { "$($_.Source)=$($_.Status)" }) -join ', ')
+    Add-OperationResult -Results $diagnostics -Target $Server -Source 'Reachability' -Action 'Preflight' -Status 'Completed' -Detail $channelDetail
+  }
+  catch {
+    Add-OperationResult -Results $diagnostics -Target $Server -Source 'Reachability' -Action 'Preflight' -Status 'Warn' -Detail "Reachability probe failed: $(Get-RedactedError $_)"
   }
 
   $systemScript = {

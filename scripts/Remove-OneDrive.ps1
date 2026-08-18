@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.1.0' }
 
 <#
 .SYNOPSIS
@@ -43,6 +43,8 @@
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
+  Server Core: not applicable - OneDrive is a desktop client.
+  SYSTEM-account execution: per-user state removal behaves differently under SYSTEM - run as an interactive admin.
 #>
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'BackupPath', Justification = 'Used by nested known-folder migration helper through script scope.')]
@@ -482,7 +484,19 @@ if ($RemoveUserFolder) {
         Add-OperationResult -Results $_results -Target $_resolved -Action 'RemoveUserFolder' -Status 'Removed' -Detail ''
       }
       catch {
-        Add-OperationResult -Results $_results -Target $_resolved -Action 'RemoveUserFolder' -Status 'Failed' -Detail $_.Exception.Message
+        $lockDetail = $_.Exception.Message
+        try {
+          $lockResult = Get-FileLockProcess -FilePath $_resolved -ErrorAction SilentlyContinue
+          $lockers = @($lockResult.Lockers)
+          if ($lockers.Count -gt 0) {
+            $lockerNames = ($lockers | ForEach-Object { if ($_.ProcessName) { $_.ProcessName } else { "PID $($_.ProcessId)" } }) -join ', '
+            $lockDetail = "$lockDetail - held by: $lockerNames"
+          }
+        }
+        catch {
+          $lockResult = $null
+        }
+        Add-OperationResult -Results $_results -Target $_resolved -Action 'RemoveUserFolder' -Status 'Failed' -Detail $lockDetail
       }
     }
   }

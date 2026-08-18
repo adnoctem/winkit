@@ -55,6 +55,33 @@ if ($DryRun) {
 }
 
 $_results = New-Object System.Collections.ArrayList
+
+# ---- OS compatibility gate ---------------------------------------------------
+# Windows Sandbox requires Windows 10 1809 / Server 2019 (build 17763) or
+# newer, on the Professional, Enterprise or Education edition.
+$minSupportedBuild = 17763
+$osInfo = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+$isServerOs = ($null -ne $osInfo -and [int]$osInfo.ProductType -ge 2)
+if ($osInfo -and [int]$osInfo.OperatingSystemSKU -ge 112 -and [int]$osInfo.OperatingSystemSKU -le 115) {
+  # Server multi-session editions report as Server but behave like a workstation.
+  $isServerOs = $false
+}
+if ((Get-OSBuildNumber) -lt $minSupportedBuild) {
+  $osVersion = Get-OSVersionInfo
+  $osLabel = if ($isServerOs) { 'Windows Server' } else { 'Windows' }
+  Write-Log -Message "Unsupported OS: this script requires $osLabel build $minSupportedBuild or newer (current: $($osVersion.DisplayVersion), build $($osVersion.CurrentBuild))." -Color Red
+  Add-OperationResult -Results $_results -Target 'WindowsSandbox' -Source 'WindowsFeature' -Action 'Validate' -Status 'Failed' -Detail "Unsupported OS - build $($osVersion.CurrentBuild), minimum $minSupportedBuild."
+  if ($PassThru -or $DryRun) { $_results }
+  exit 1
+}
+$edition = Get-OSEdition
+if ($edition -notin @('Professional', 'Enterprise', 'Education')) {
+  Write-Log -Message "Unsupported edition: Windows Sandbox requires Professional, Enterprise or Education (current: $edition)." -Color Red
+  Add-OperationResult -Results $_results -Target 'WindowsSandbox' -Source 'WindowsFeature' -Action 'Validate' -Status 'Failed' -Detail "Unsupported edition - $edition."
+  if ($PassThru -or $DryRun) { $_results }
+  exit 1
+}
+
 $_featureName = 'Containers-DisposableClientVM'
 
 $state = Get-WindowsOptionalFeature -Online -FeatureName $_featureName -ErrorAction SilentlyContinue
