@@ -1,3 +1,14 @@
+## [1.2.0](https://github.com/adnoctem/winkit/compare/v1.1.0...v1.2.0) (2026-08-21)
+
+### Features
+
+* **scripts:** add New-TestOutlookMessage synthetic fixture generator ([61f407f](https://github.com/adnoctem/winkit/commit/61f407fbdc6c6646effd24d8974410c75b37da7e))
+* **tools:** run winkit Pester suites and support test -Outlook ([77586a0](https://github.com/adnoctem/winkit/commit/77586a0ba64877958b27bb7534e44db9f09f8544))
+
+### Bug Fixes
+
+* **scripts:** enforce Outlook 2007+ floor and drop broken archive stub ([ea437f0](https://github.com/adnoctem/winkit/commit/ea437f05017741df52e03123bf29ec30b2d31668))
+
 ## [1.1.0](https://github.com/adnoctem/winkit/compare/v1.0.0...v1.1.0) (2026-08-18)
 
 ### Features
