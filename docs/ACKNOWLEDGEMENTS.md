@@ -41,6 +41,7 @@
 - [`dahlbyk/posh-git` - git integration for PowerShell][posh_git_repo]
 - [`microsoft/CSS-Exchange` - Exchange Server support scripts][css_exchange_repo]
 - [`David-Barrett-MS/PowerShell-EWS-Scripts` - Exchange Web Services scripts][ews_repo]
+- [`vacpp/windows11` - script collection][vacpp_windows11_repo]
 
 ## 🧩 Snippets
 
@@ -181,3 +182,4 @@
 [posh_git_repo]: https://github.com/dahlbyk/posh-git
 [css_exchange_repo]: https://github.com/microsoft/CSS-Exchange
 [ews_repo]: https://github.com/David-Barrett-MS/PowerShell-EWS-Scripts
+[vacpp_windows11_repo]: https://github.com/vacpp/windows11

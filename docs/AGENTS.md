@@ -7,7 +7,7 @@
 - `.\winkit.ps1 init` — install the exact module versions pinned in `requirements.psd1` (aliases: `setup`, `bootstrap`)
 - `.\winkit.ps1 format` — in-place PSScriptAnalyzer formatting; `-Check` = read-only mode (used by CI and pre-commit)
 - `.\winkit.ps1 lint` — PSScriptAnalyzer rule checks, exit 1 on findings
-- `.\winkit.ps1 test` — **stub**: winkit has no Pester tests; the test suite lives in the PSFoundation repo
+- `.\winkit.ps1 test` — run the winkit Pester suite under `tests/` (logic tests, no Outlook); `-Outlook` also runs the integration suite (needs Outlook, uses a scratch PST). Module logic tests live in the PSFoundation repo
 - `.\winkit.ps1 deps` — compare `requirements.psd1` pins against the PowerShell Gallery (`-Check` reports only)
 - `.\winkit.ps1 build` — create `dist/` archives (ZIP + tar.gz) from `scripts/`
 
