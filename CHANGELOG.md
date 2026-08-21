@@ -1,3 +1,9 @@
+## [1.2.1](https://github.com/adnoctem/winkit/compare/v1.2.0...v1.2.1) (2026-08-21)
+
+### Bug Fixes
+
+* **scripts:** persist synthetic items in the target folder ([71fc7db](https://github.com/adnoctem/winkit/commit/71fc7db1e451cdbd31383f2ac69ae03096b4ee1f))
+
 ## [1.2.0](https://github.com/adnoctem/winkit/compare/v1.1.0...v1.2.0) (2026-08-21)
 
 ### Features
