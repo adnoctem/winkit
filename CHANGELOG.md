@@ -2,8 +2,8 @@
 
 ### Features
 
-* **scripts:** add AD/Exchange orchestration, removal, and system tooling ([5cc2f20](https://github.com/adnoctem/winkit/commit/5cc2f2020bb209e299011514278dce1db1b612b1)), closes [#4799](https://github.com/adnoctem/winkit/issues/4799)
-* **scripts:** expand ADDS toolkit and adopt PSFoundation 1.2.0 ([8f9a9dd](https://github.com/adnoctem/winkit/commit/8f9a9ddcc18efc33a338c74d6c587d7695544c86))
+- **scripts:** add AD/Exchange orchestration, removal, and system tooling ([5cc2f20](https://github.com/adnoctem/winkit/commit/5cc2f2020bb209e299011514278dce1db1b612b1)), closes [#4799](https://github.com/adnoctem/winkit/issues/4799)
+- **scripts:** expand ADDS toolkit and adopt PSFoundation 1.2.0 ([8f9a9dd](https://github.com/adnoctem/winkit/commit/8f9a9ddcc18efc33a338c74d6c587d7695544c86))
 
 ## 1.0.0 (2026-08-10)
 
