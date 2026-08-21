@@ -71,14 +71,14 @@ BeforeAll {
 
 Describe 'New-TestOutlookMessage' {
   It 'creates the requested number of deterministic items' {
-    $_generatorArgs = @(
-      '-Count', '20',
-      '-Seed', '42',
-      '-DuplicateRatio', '0.25',
-      '-StoreName', $script:StoreName,
-      '-PassThru'
-    )
-    if ($script:RedemptionAvailable) { $_generatorArgs += '-UseRedemption' }
+    $_generatorArgs = @{
+      Count = 20
+      Seed = 42
+      DuplicateRatio = 0.25
+      StoreName = $script:StoreName
+      PassThru = $true
+    }
+    if ($script:RedemptionAvailable) { $_generatorArgs['UseRedemption'] = $true }
 
     $_results = & $script:Generator @_generatorArgs
     $_created = @($_results | Where-Object { $_.Status -eq 'Created' })
@@ -190,15 +190,15 @@ Describe 'Optimize-Outlook deduplication' {
 
 Describe 'New-TestOutlookMessage determinism' {
   It 'seeds a deterministic Message-ID sequence with duplicates' {
-    $_generatorArgs = @(
-      '-Count', '8',
-      '-Seed', '7',
-      '-DuplicateRatio', '0.25',
-      '-StoreName', $script:StoreName,
-      '-TargetFolderName', 'WinkitIds',
-      '-PassThru'
-    )
-    if ($script:RedemptionAvailable) { $_generatorArgs += '-UseRedemption' }
+    $_generatorArgs = @{
+      Count = 8
+      Seed = 7
+      DuplicateRatio = 0.25
+      StoreName = $script:StoreName
+      TargetFolderName = 'WinkitIds'
+      PassThru = $true
+    }
+    if ($script:RedemptionAvailable) { $_generatorArgs['UseRedemption'] = $true }
 
     $_results = & $script:Generator @_generatorArgs
     $_ids = @($_results | Where-Object { $_.Status -eq 'Created' } | ForEach-Object { $_.MessageId }) -join ';'
@@ -220,17 +220,17 @@ Describe 'New-OutlookArchive' {
   }
 
   It 'honours StartDate bounds when ReceivedTime was injected' {
-    $_generatorArgs = @(
-      '-Count', '10',
-      '-Seed', '9',
-      '-DuplicateRatio', '0.0',
-      '-StoreName', $script:StoreName,
-      '-TargetFolderName', 'WinkitDated',
-      '-StartDate', '2024-01-01',
-      '-EndDate', '2024-12-31',
-      '-PassThru'
-    )
-    if ($script:RedemptionAvailable) { $_generatorArgs += '-UseRedemption' }
+    $_generatorArgs = @{
+      Count = 10
+      Seed = 9
+      DuplicateRatio = 0.0
+      StoreName = $script:StoreName
+      TargetFolderName = 'WinkitDated'
+      StartDate = '2024-01-01'
+      EndDate = '2024-12-31'
+      PassThru = $true
+    }
+    if ($script:RedemptionAvailable) { $_generatorArgs['UseRedemption'] = $true }
 
     $_created = @(& $script:Generator @_generatorArgs | Where-Object { $_.Status -eq 'Created' })
     $_injected = @($_created | Where-Object { $_.HeaderInjected }).Count

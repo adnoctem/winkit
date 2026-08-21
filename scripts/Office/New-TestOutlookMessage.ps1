@@ -227,6 +227,11 @@ function Add-TestOutlookMessageObjectModel {
     }
 
     $_item.Save()
+
+    # Items created via Items.Add persist to the default store's Drafts on
+    # Save, not to the originating folder. Move the item into the target
+    # folder explicitly so fixtures land where they are expected.
+    $null = $_item.Move($Folder)
     return $_injected
   }
   finally {
