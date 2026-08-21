@@ -40,6 +40,10 @@
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
+  Server Core: not applicable - Outlook is a desktop client.
+  SYSTEM-account execution: not applicable - requires an interactive Outlook profile.
+  Outlook version: 2007 (version 12) or later - AddStoreEx creates Unicode PSTs.
+  Bitness: Outlook 2007 is 32-bit only - run under 32-bit PowerShell (x86).
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
@@ -289,6 +293,12 @@ try {
   }
 
   $_context = Connect-Outlook
+
+  $_outlookMajor = [int](($_context.App.Version -split '\.')[0])
+  if ($_outlookMajor -lt 12) {
+    throw "Outlook 2007 (version 12) or later is required. Detected Outlook version: $($_context.App.Version)"
+  }
+
   $_sourceRoot = Get-OutlookStoreRoot -Namespace $_context.Namespace -Name $StoreName
   Write-Verbose "Source: $($_sourceRoot.FolderPath)"
 

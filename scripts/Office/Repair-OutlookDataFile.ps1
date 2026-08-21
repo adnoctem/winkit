@@ -34,6 +34,9 @@
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
+  Server Core: not applicable - Outlook data files are a desktop client concern.
+  SYSTEM-account execution: works for launching the repair tool; the tool itself may require interactive confirmation.
+  Outlook version: 2007 (version 12) or later - ScanPST.exe/ScanOST.exe are discovered from Office 12 installations onward.
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]

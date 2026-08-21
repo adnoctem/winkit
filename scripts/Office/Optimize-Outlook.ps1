@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.3.0' }
 
 <#
 .SYNOPSIS
@@ -36,6 +36,10 @@
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
+  Server Core: not applicable - Outlook is a desktop client.
+  SYSTEM-account execution: not applicable - requires an interactive Outlook profile.
+  Outlook version: 2007 (version 12) or later - PropertyAccessor is required.
+  Bitness: Outlook 2007 is 32-bit only - run under 32-bit PowerShell (x86).
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
@@ -103,9 +107,9 @@ function Get-MessageId {
       try {
         $_headers = $_propertyAccessor.GetProperty($_tag)
         if (-not [string]::IsNullOrWhiteSpace($_headers)) {
-          $_match = [regex]::Match([string]$_headers, '(?im)^Message-ID:\s*(<[^>]+>)')
-          if ($_match.Success) {
-            return $_match.Groups[1].Value.Trim()
+          $_messageId = Get-TransportMessageId -HeaderText ([string]$_headers)
+          if (-not [string]::IsNullOrWhiteSpace($_messageId)) {
+            return $_messageId
           }
         }
       }
@@ -277,6 +281,12 @@ $_reviewFolder = $null
 
 try {
   $_context = Connect-Outlook
+
+  $_outlookMajor = [int](($_context.App.Version -split '\.')[0])
+  if ($_outlookMajor -lt 12) {
+    throw "Outlook 2007 (version 12) or later is required. Detected Outlook version: $($_context.App.Version)"
+  }
+
   $_storeRoot = Get-OutlookStoreRoot -Namespace $_context.Namespace -Name $StoreName
   Write-Verbose "Store root: $($_storeRoot.FolderPath)"
 
