@@ -1,0 +1,412 @@
+﻿#Requires -Version 5.1
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+
+<#
+.SYNOPSIS
+  Creates synthetic Outlook mail items for testing and demos.
+.DESCRIPTION
+  Fabricates a deterministic set of mail items in a target Outlook folder.
+  Subjects, bodies, and RFC Message-ID transport headers are derived from a
+  seed value, and a configurable fraction of items reuses an earlier Message-ID
+  so deduplication scripts can be exercised. Received times are spread across
+  an optional date range.
+
+  Transport headers are normally read-only for locally created items. By
+  default the script writes them best-effort through PropertyAccessor; pass
+  -UseRedemption to require the free-for-personal-use Redemption component
+  (Redemption.RDOSession), which can write headers and backdated ReceivedTime
+  values reliably.
+.PARAMETER Count
+  Number of mail items to create.
+.PARAMETER Seed
+  Deterministic seed used to derive subjects and Message-IDs.
+.PARAMETER DuplicateRatio
+  Fraction of items that reuses an earlier Message-ID (0.0 to 1.0).
+.PARAMETER StartDate
+  Inclusive lower bound for the synthetic ReceivedTime spread.
+.PARAMETER EndDate
+  Inclusive upper bound for the synthetic ReceivedTime spread.
+.PARAMETER StoreName
+  Display name of the Outlook store to process. If omitted, the default
+  delivery store is used. Run with -Verbose to list detected stores.
+.PARAMETER TargetFolderName
+  Folder created under the store root that receives the synthetic items.
+.PARAMETER UseRedemption
+  Require the Redemption component for header and ReceivedTime injection.
+  Fails when Redemption.RDOSession is not registered.
+.PARAMETER DryRun
+  Preview the item plan without creating anything.
+.PARAMETER PassThru
+  Return structured operation result objects.
+.PARAMETER QuitOutlook
+  Quit the Outlook application object on exit. Leave off if Outlook was already
+  open interactively.
+.EXAMPLE
+  PS> .\New-TestOutlookMessage.ps1 -Count 20 -Seed 42 -DuplicateRatio 0.25
+  Creates 20 synthetic items in a WinkitTestData folder; 5 of them duplicate
+  an earlier Message-ID.
+.EXAMPLE
+  PS> .\New-TestOutlookMessage.ps1 -Count 10 -Seed 1 -StartDate '2024-01-01' -EndDate '2024-12-31' -UseRedemption
+  Creates 10 items with ReceivedTime spread across 2024 and reliable headers.
+.LINK
+  https://github.com/adnoctem/winkit
+.NOTES
+  Author: MVProwess <info@mvprowess.com>
+  License: MIT
+  Server Core: not applicable - Outlook is a desktop client.
+  SYSTEM-account execution: not applicable - requires an interactive Outlook profile.
+  Outlook version: 2007 (version 12) or later - PropertyAccessor is required.
+  Bitness: Outlook 2007 is 32-bit only - run under 32-bit PowerShell (x86).
+#>
+
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+param (
+  [ValidateRange(1, 10000)]
+  [int]
+  $Count = 10,
+
+  [int]
+  $Seed = 1,
+
+  [ValidateRange(0.0, 1.0)]
+  [double]
+  $DuplicateRatio = 0.2,
+
+  [datetime]
+  $StartDate,
+
+  [datetime]
+  $EndDate,
+
+  [string]
+  $StoreName,
+
+  [string]
+  $TargetFolderName = 'WinkitTestData',
+
+  [switch]
+  $UseRedemption,
+
+  [switch]
+  $DryRun,
+
+  [switch]
+  $PassThru,
+
+  [switch]
+  $QuitOutlook
+)
+
+Import-Module PSFoundation -Force
+
+# -----------------------------------------------------------------------------
+
+if ($DryRun) {
+  $WhatIfPreference = $true
+  Write-Log -Message "DRY RUN - no synthetic Outlook messages will be created`n" -Color Yellow
+}
+
+# olMailItem class; PR_TRANSPORT_MESSAGE_HEADERS (Unicode then ANSI) and
+# PR_MESSAGE_DELIVERY_TIME.
+$script:OL_MAIL = 0
+$script:HDR_TAG_UNICODE = 'http://schemas.microsoft.com/mapi/proptag/0x007D001E'
+$script:HDR_TAG_ANSI = 'http://schemas.microsoft.com/mapi/proptag/0x007D001F'
+$script:RECEIVED_TAG = 'http://schemas.microsoft.com/mapi/proptag/0x0E060040'
+
+$_results = New-Object System.Collections.ArrayList
+
+function Get-TestMessageId {
+  param (
+    [int]
+    $Index,
+
+    [int]
+    $Seed,
+
+    [int]
+    $UniqueCount
+  )
+
+  $_effectiveIndex = if ($Index -le $UniqueCount) {
+    $Index
+  }
+  else {
+    (($Index - $UniqueCount - 1) % $UniqueCount) + 1
+  }
+
+  "<winkit-$Seed-$_effectiveIndex@synthetic.local>"
+}
+
+function Get-TestReceivedTime {
+  param (
+    [datetime]
+    $Start,
+
+    [datetime]
+    $End,
+
+    [int]
+    $Index,
+
+    [int]
+    $Count
+  )
+
+  if ($Start -and $End -and $Count -gt 1) {
+    return $Start.AddMinutes((($End - $Start).TotalMinutes) * ($Index - 1) / ($Count - 1))
+  }
+
+  if ($Start) { return $Start }
+  if ($End) { return $End }
+
+  (Get-Date).AddMinutes($Index - $Count)
+}
+
+function New-TestOutlookMessageBody {
+  [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Pure string builder; it does not change system state.')]
+  param (
+    [string]
+    $MessageId,
+
+    [datetime]
+    $Received
+  )
+
+  $_stamp = $Received.ToString('r')
+  "Message-ID: $MessageId`r`nDate: $_stamp`r`n`r`nSynthetic message generated by winkit for automated testing."
+}
+
+function Add-TestOutlookMessageObjectModel {
+  [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingEmptyCatchBlock', '', Justification = 'Header and ReceivedTime injection is best-effort; Outlook marks these transport properties read-only.')]
+  [CmdletBinding(SupportsShouldProcess = $true)]
+  param (
+    [object]
+    $Folder,
+
+    [string]
+    $Subject,
+
+    [string]
+    $Body,
+
+    [datetime]
+    $Received,
+
+    [string]
+    $HeaderText
+  )
+
+  if (-not $PSCmdlet.ShouldProcess($Subject, 'Create synthetic Outlook message')) {
+    return $false
+  }
+
+  $_item = $Folder.Items.Add($script:OL_MAIL)
+  $_injected = $false
+  try {
+    $_item.Subject = $Subject
+    $_item.Body = $Body
+
+    try {
+      $_item.PropertyAccessor.SetProperty($script:RECEIVED_TAG, $Received)
+      $_injected = $true
+    }
+    catch { }
+
+    try {
+      $_item.PropertyAccessor.SetProperty($script:HDR_TAG_UNICODE, $HeaderText)
+    }
+    catch {
+      $_injected = $false
+      try {
+        $_item.PropertyAccessor.SetProperty($script:HDR_TAG_ANSI, $HeaderText)
+        $_injected = $true
+      }
+      catch {
+        $_injected = $false
+      }
+    }
+
+    $_item.Save()
+    return $_injected
+  }
+  finally {
+    Remove-ComObject $_item
+  }
+}
+
+function Add-TestOutlookMessageRedemption {
+  [CmdletBinding(SupportsShouldProcess = $true)]
+  param (
+    [object]
+    $RdoFolder,
+
+    [string]
+    $Subject,
+
+    [string]
+    $Body,
+
+    [datetime]
+    $Received,
+
+    [string]
+    $HeaderText
+  )
+
+  if (-not $PSCmdlet.ShouldProcess($Subject, 'Create synthetic Outlook message')) {
+    return $false
+  }
+
+  $_item = $RdoFolder.Items.Add($script:OL_MAIL)
+  try {
+    $_item.Subject = $Subject
+    $_item.Body = $Body
+    $_item.Fields[$script:RECEIVED_TAG] = $Received
+    $_item.Fields[$script:HDR_TAG_UNICODE] = $HeaderText
+    $_item.Save()
+    return $true
+  }
+  finally {
+    Remove-ComObject $_item
+  }
+}
+
+$_context = $null
+$_storeRoot = $null
+$_targetFolder = $null
+$_rdoSession = $null
+$_rdoFolder = $null
+
+try {
+  $_context = Connect-Outlook
+
+  $_outlookMajor = [int](($_context.App.Version -split '\.')[0])
+  if ($_outlookMajor -lt 12) {
+    throw "Outlook 2007 (version 12) or later is required. Detected Outlook version: $($_context.App.Version)"
+  }
+
+  $_storeRoot = Get-OutlookStoreRoot -Namespace $_context.Namespace -Name $StoreName
+  Write-Verbose "Store root: $($_storeRoot.FolderPath)"
+
+  if (-not $WhatIfPreference) {
+    $_targetFolder = Get-OutlookSubFolder -ParentFolder $_storeRoot -Name $TargetFolderName -Create
+
+    if ($UseRedemption) {
+      try {
+        $_rdoSession = New-Object -ComObject Redemption.RDOSession
+        $_rdoSession.Logon()
+      }
+      catch {
+        throw 'Redemption is not registered. Install the free-for-personal-use Redemption component or run without -UseRedemption.'
+      }
+
+      $_rdoFolder = $_rdoSession.GetFolderFromPath($_targetFolder.FolderPath)
+    }
+  }
+
+  $_duplicates = [int][Math]::Floor($Count * $DuplicateRatio)
+  $_unique = [Math]::Max(1, $Count - $_duplicates)
+  Write-Verbose "Planning $Count items: $_unique unique Message-IDs, $_duplicates duplicates."
+
+  $_dateBounds = @{}
+  if ($PSBoundParameters.ContainsKey('StartDate')) { $_dateBounds['Start'] = $StartDate }
+  if ($PSBoundParameters.ContainsKey('EndDate')) { $_dateBounds['End'] = $EndDate }
+
+  for ($_index = 1; $_index -le $Count; $_index++) {
+    $_messageId = Get-TestMessageId -Index $_index -Seed $Seed -UniqueCount $_unique
+    $_received = Get-TestReceivedTime -Index $_index -Count $Count @_dateBounds
+    $_subject = "Winkit synthetic $_index (seed $Seed)"
+    $_body = New-TestOutlookMessageBody -MessageId $_messageId -Received $_received
+    $_headerText = "Message-ID: $_messageId`r`nReceived: from synthetic.local (10.0.0.1)`r`nDate: $($_received.ToString('r'))"
+
+    if ($WhatIfPreference) {
+      Add-OperationResult -Results $_results -Target $_subject -Source 'Outlook' -Scope $TargetFolderName -Action 'Create' -Status 'Skipped' -Detail 'DryRun' -Property @{
+        Received = $_received
+        MessageId = $_messageId
+        HeaderInjected = $false
+      }
+      continue
+    }
+
+    try {
+      $_injected = if ($_rdoFolder) {
+        Add-TestOutlookMessageRedemption -RdoFolder $_rdoFolder -Subject $_subject -Body $_body -Received $_received -HeaderText $_headerText -WhatIf:$WhatIfPreference
+      }
+      else {
+        Add-TestOutlookMessageObjectModel -Folder $_targetFolder -Subject $_subject -Body $_body -Received $_received -HeaderText $_headerText -WhatIf:$WhatIfPreference
+      }
+
+      Add-OperationResult -Results $_results -Target $_subject -Source 'Outlook' -Scope $TargetFolderName -Action 'Create' -Status 'Created' -Property @{
+        Received = $_received
+        MessageId = $_messageId
+        HeaderInjected = $_injected
+      }
+    }
+    catch {
+      Add-OperationResult -Results $_results -Target $_subject -Source 'Outlook' -Scope $TargetFolderName -Action 'Create' -Status 'Failed' -Detail $_.Exception.Message
+      Write-Warning "Item ${_index}: $($_.Exception.Message)"
+    }
+  }
+}
+finally {
+  Remove-ComObject $_rdoFolder
+
+  if ($_rdoSession) {
+    try {
+      $_rdoSession.Logoff()
+    }
+    catch {
+      Write-Verbose "Could not log off Redemption session: $($_.Exception.Message)"
+    }
+
+    Remove-ComObject $_rdoSession
+  }
+
+  Remove-ComObject $_targetFolder
+  Remove-ComObject $_storeRoot
+
+  if ($_context) {
+    try {
+      if ($QuitOutlook) {
+        $_context.App.Quit()
+      }
+    }
+    catch {
+      Write-Verbose "Could not quit Outlook: $($_.Exception.Message)"
+    }
+
+    Remove-ComObject $_context.Namespace $_context.App
+  }
+
+  Invoke-ComGarbageCollection
+}
+
+$_created = @($_results | Where-Object { $_.Status -eq 'Created' }).Count
+$_injected = @($_results | Where-Object { $_.Status -eq 'Created' -and $_.HeaderInjected }).Count
+$_failed = @($_results | Where-Object { $_.Status -eq 'Failed' }).Count
+
+if ($WhatIfPreference) {
+  $_planned = @($_results | Where-Object { $_.Detail -eq 'DryRun' }).Count
+  Write-Log -Message "Synthetic message preview complete. Items to create: $_planned | Failed: $_failed | Folder: $TargetFolderName" -Color Yellow
+}
+else {
+  $_mode = if ($_rdoFolder) { 'Redemption' } else { 'object model' }
+  Write-Log -Message "Synthetic messages complete. Created: $_created | Header injection: $_injected | Failed: $_failed | Folder: $TargetFolderName | Mode: $_mode" -Color $(if ($_failed -gt 0 -or $_injected -lt $_created) { 'Yellow' } else { 'Green' })
+}
+
+if (-not $UseRedemption -and $_created -gt 0 -and $_injected -eq 0) {
+  Write-Log -Message 'Transport headers could not be injected. Install Redemption (free) and rerun with -UseRedemption for reliable Message-ID data.' -Color Yellow
+}
+
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'New-TestOutlookMessage'
+if ($_operationLog) {
+  Write-Log -Message "Operation log: $_operationLog" -Color Gray
+}
+
+if ($PassThru -or $DryRun) {
+  $_results
+}
+
+if ($_failed -gt 0) {
+  exit 1
+}
