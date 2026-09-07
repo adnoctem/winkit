@@ -5,9 +5,9 @@
 @{
   PSFoundation = '1.3.0'
   Pester = '5.5.0'
-  PSScriptAnalyzer = '1.22.0'
+  PSScriptAnalyzer = '1.25.01.22.0
   PSWindowsUpdate = '2.2.1.5'
   PSWritePDF = '0.0.20'
-  PSWriteOffice = '0.2.0'
-  Transferetto = '1.0.0'
+  PSWriteOffice = '3.0.50.2.0
+  Transferetto = '2.0.11.0.0
 }
