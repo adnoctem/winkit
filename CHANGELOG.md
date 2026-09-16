@@ -1,3 +1,9 @@
+## [1.2.2](https://github.com/adnoctem/winkit/compare/v1.2.1...v1.2.2) (2026-09-16)
+
+### Bug Fixes
+
+* **tools:** use closing-quote capture group when bumping dependency versions ([e24054e](https://github.com/adnoctem/winkit/commit/e24054e32c65d8c5936b76c65ed52d7d86c72b03))
+
 ## [1.2.1](https://github.com/adnoctem/winkit/compare/v1.2.0...v1.2.1) (2026-08-21)
 
 ### Bug Fixes
