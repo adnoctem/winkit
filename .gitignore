@@ -1,28 +1,49 @@
 # .gitignore - PowerShell module
 
+###> general/ai ###
+
+# personal harness settings
+.claude/
+.codex/
+.agents/
+.openaxis/
+.omc/
+.omx/
+
+# assistants and IDEs
+.cursor/
+.windsurf/
+.cline/
+.roo/
+.aide/
+.cody/
+.continue/
+
+# local integrations
+.ollama/
+.openwebui/
+.crewai/
+.autogen/
+###>
+
 ###> general/editors ###
 
 # IntelliJ IDEA
-.idea/*
-!.idea/dataSources.xml
+.idea/
 
 # VS Code
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+.vscode/
 ###>
 
 ###> general/secret ###
 
 # secrets
-secrets/*
+secrets/
 ###>
 
 ###> source/temp ###
 
 # distribution
-dist/*
-build/*
+dist/
+build/
 ###>
