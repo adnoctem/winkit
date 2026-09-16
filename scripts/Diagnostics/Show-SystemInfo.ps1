@@ -18,7 +18,7 @@
 .EXAMPLE
   PS> .\Show-SystemInfo.ps1
 .EXAMPLE
-  PS> . .\scripts\Show-SystemInfo.ps1
+  PS> . .\scripts\Diagnostics\Show-SystemInfo.ps1
   PS> fetch
 .LINK
   https://github.com/adnoctem/winkit
@@ -45,7 +45,7 @@ function Show-SystemInfo {
     .EXAMPLE
       PS> fetch
     .LINK
-      https://github.com/adnoctem/winkit/scripts/Show-SystemInfo.ps1
+      https://github.com/adnoctem/winkit/scripts/Diagnostics/Show-SystemInfo.ps1
     .NOTES
       Author: MVProwess <info@mvprowess.com>
       License: MIT

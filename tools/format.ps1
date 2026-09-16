@@ -40,7 +40,7 @@
   Verifies formatting and exits non-zero if any file would change.
 
 .EXAMPLE
-  PS> ./format.ps1 -Path ./lib,./scripts
+  PS> ./format.ps1 -Path ./scripts,./tools
   Formats only the library and script directories.
 
 .LINK

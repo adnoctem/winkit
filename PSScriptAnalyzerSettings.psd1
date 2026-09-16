@@ -53,17 +53,17 @@
     PSUseSingularNouns = @{
       Enable = $true
       NounAllowList = @(
-        # lib/data.ps1 + scripts/Update-AutoDNSZones.ps1
+        # PSFoundation data.ps1 + scripts/Administration/Update-AutoDNSZones.ps1
         'Arrays',
-        # lib/system.ps1
+        # PSFoundation system.ps1
         'Paths',
-        # scripts/Update-AutoDNSZones.ps1
+        # scripts/Administration/Update-AutoDNSZones.ps1
         'Records',
-        # scripts/Find-OffHoursActivity.ps1
+        # scripts/Diagnostics/Find-OffHoursActivity.ps1
         'Profiles',
-        # scripts/Remove-Bloatware.ps1
+        # scripts/Software/Remove-Bloatware.ps1
         'Policies',
-        # scripts/Enable-RemoteDesktopServices.ps1
+        # scripts/Features/Enable-RemoteDesktopServices.ps1
         'RemoteDesktopServices'
       )
     }

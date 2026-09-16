@@ -79,6 +79,17 @@ param (
 
 Import-Module PSFoundation -Force
 
+# ---- Installer manifest ------------------------------------------------------
+# Every script this launcher runs, as a path relative to the scripts/ directory,
+# so which file runs - and where it lives - is readable in one place. The
+# execution order and its dependency rules live further down; this table only
+# says where each step's script is found.
+$BootstrapScripts = @{
+  WinGet = 'Software/Install-WinGet'
+  PowerShellCore = 'Software/Install-PowerShellCore'
+  VCRedistributables = 'Software/Install-VCRedistributables'
+}
+
 # -----------------------------------------------------------------------------
 
 if (-not (Test-Elevation)) {
@@ -140,10 +151,10 @@ public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint M
 
 # ---- Step runner ------------------------------------------------------------
 function Invoke-BootstrapStep {
-  param([string]$Name, [string]$ScriptName, [hashtable]$Arguments = @{})
-  $path = Join-Path $PSScriptRoot $ScriptName
+  param([string]$Name, [string]$ScriptPath, [hashtable]$Arguments = @{})
+  $path = Join-Path $PSScriptRoot "$ScriptPath.ps1"
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-    Write-Log -Message "  Installer '$ScriptName' not found at $path - skipping." -Color Yellow
+    Write-Log -Message "  Installer '$ScriptPath' not found at $path - skipping." -Color Yellow
     Add-OperationResult -Results $_results -Target $Name -Source 'Bootstrap' -Action 'Install' -Status 'Skipped' -SkippedReason 'ScriptNotFound'
     return $false
   }
@@ -170,11 +181,11 @@ Write-Log -Message 'Starting winkit bootstrap.' -Color Cyan
 $_stepResults = @{}
 
 # 1. winget â€" foundation for everything else.
-$_stepResults['winget'] = Invoke-BootstrapStep -Name 'Install winget' -ScriptName 'Install-WinGet.ps1'
+$_stepResults['winget'] = Invoke-BootstrapStep -Name 'Install winget' -ScriptPath $BootstrapScripts.WinGet
 
 # 2. PowerShell 7 â€" depends on winget.
 if ($_stepResults['winget'] -or $DryRun) {
-  $_stepResults['pwsh'] = Invoke-BootstrapStep -Name 'Install PowerShell 7' -ScriptName 'Install-PowerShellCore.ps1'
+  $_stepResults['pwsh'] = Invoke-BootstrapStep -Name 'Install PowerShell 7' -ScriptPath $BootstrapScripts.PowerShellCore
 }
 else {
   Write-Log -Message 'Skipping PowerShell 7 â€" winget step did not succeed.' -Color Yellow
@@ -183,7 +194,7 @@ else {
 
 # 3. VC++ redistributables â€" independent of the above.
 foreach ($v in $VCRedistVersions) {
-  $_stepResults["vcredist-$v"] = Invoke-BootstrapStep -Name "Install VC++ $v" -ScriptName 'Install-VCRedistributables.ps1' -Arguments @{ Version = $v }
+  $_stepResults["vcredist-$v"] = Invoke-BootstrapStep -Name "Install VC++ $v" -ScriptPath $BootstrapScripts.VCRedistributables -Arguments @{ Version = $v }
 }
 
 # 4. PATH registration.

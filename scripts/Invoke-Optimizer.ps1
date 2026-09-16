@@ -17,7 +17,8 @@
   in isolation so one failure does not abort the whole run unless -StopOnError
   is specified.
 
-  resolved from the scripts/ directory.
+  Each profile lists the scripts it runs as paths relative to the scripts/
+  directory; see the profile manifest near the top of this file.
 
 .PARAMETER Profile
   Which configuration set to run. If omitted, the profile is auto-detected
@@ -103,37 +104,43 @@ if ($DryRun) {
 }
 
 # ---- Profile manifest --------------------------------------------------------
-# $Common scripts are applied to every non-Minimal profile as a shared baseline.
-# Adding a new config script means adding its base name here under the right
-# profiles - not editing launcher files.
+# Every script this launcher can run is listed here as a path relative to the
+# scripts/ directory, so which file runs - and where it lives - is readable in
+# one place without searching the tree. Adding a new config script means adding
+# its relative path here under the right profiles, not editing launcher files.
+#
+# Paths are resolved verbatim against $PSScriptRoot; a script that moves must be
+# updated here, which is deliberate. Resolving by base name alone would hide
+# which file actually runs and would silently pick one of them if two scripts
+# ever shared a name across folders.
 $Common = @(
-  'Disable-DiagnosticTracking'
-  'Configure-Updates'
+  'Privacy/Disable-DiagnosticTracking'
+  'System/Configure-Updates'
 )
 
 $profileSets = @{
   Minimal = $Common
   Desktop = $Common + @(
-    'Disable-ContentDelivery'
-    'Set-AppPermissionDefaults'
-    'Configure-BrowserPolicies'
-    'Configure-Privacy'
-    'Configure-AI'
-    'Configure-System'
-    'Configure-StartMenu'
-    'Configure-Taskbar'
-    'Configure-Explorer'
-    'Disable-GameDVR'
-    'Disable-PointerAcceleration'
-    'Remove-Bloatware'
-    'Remove-OneDrive'
-    'Set-TerminalExperienceDefaults'
+    'Privacy/Disable-ContentDelivery'
+    'Privacy/Set-AppPermissionDefaults'
+    'Privacy/Configure-BrowserPolicies'
+    'Privacy/Configure-Privacy'
+    'Privacy/Configure-AI'
+    'System/Configure-System'
+    'Interface/Configure-StartMenu'
+    'Interface/Configure-Taskbar'
+    'Interface/Configure-Explorer'
+    'Interface/Disable-GameDVR'
+    'Interface/Disable-PointerAcceleration'
+    'Software/Remove-Bloatware'
+    'Software/Remove-OneDrive'
+    'Interface/Set-TerminalExperienceDefaults'
   )
   Server = $Common + @(
-    'Disable-ContentDelivery'
-    'Set-AppPermissionDefaults'
-    'Configure-BrowserPolicies'
-    'Configure-System'
+    'Privacy/Disable-ContentDelivery'
+    'Privacy/Set-AppPermissionDefaults'
+    'Privacy/Configure-BrowserPolicies'
+    'System/Configure-System'
   )
   DC = $Common
 }
@@ -163,14 +170,14 @@ $_ordered = foreach ($_n in $_scriptNames) { if ($_seen.Add($_n)) { $_n } }
 
 $_scriptsDir = $PSScriptRoot
 $_resolved = New-Object System.Collections.ArrayList
-foreach ($_name in $_ordered) {
-  $_path = Join-Path $_scriptsDir "$_name.ps1"
+foreach ($_relativePath in $_ordered) {
+  $_path = Join-Path $_scriptsDir "$_relativePath.ps1"
   if (-not (Test-Path -LiteralPath $_path -PathType Leaf)) {
-    Write-Log -Message "Script '$_name' listed in profile '$_resolvedProfile' not found at $_path - skipping." -Color Yellow
+    Write-Log -Message "Script '$_relativePath' listed in profile '$_resolvedProfile' not found at $_path - skipping." -Color Yellow
     continue
   }
   [void]$_resolved.Add([PSCustomObject]@{
-      Name = $_name
+      Name = Split-Path -Path $_relativePath -Leaf
       Path = $_path
     })
 }

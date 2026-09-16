@@ -117,10 +117,12 @@
 [so_return_type]: https://stackoverflow.com/questions/64891846/specify-function-return-type
 [so_validatepattern]: https://stackoverflow.com/questions/56583435/using-validateset-and-validatepattern-to-allow-new-values
 [so_array_iteration]: https://stackoverflow.com/questions/66528639/how-to-iterate-through-an-array-of-objects-in-powershell
-[so_securestring]: https://stackoverflow.com/questions/40446583/how-to-pass-the-password-as-argument-in-powershell-script-and-convert-to-secure
+[so_securestring]:
+  https://stackoverflow.com/questions/40446583/how-to-pass-the-password-as-argument-in-powershell-script-and-convert-to-secure
 [so_regex_copy]: https://stackoverflow.com/questions/7893919/powershell-copy-move-files-based-on-a-regex-value-retaining-the-folder-structu
 [so_winget_install]: https://stackoverflow.com/questions/74166150/install-winget-by-the-command-line-powershell
-[so_outlook_folder]: https://stackoverflow.com/questions/32964591/powershell-get-where-outlook-by-default-stores-its-data-files-when-outlook-is-i
+[so_outlook_folder]:
+  https://stackoverflow.com/questions/32964591/powershell-get-where-outlook-by-default-stores-its-data-files-when-outlook-is-i
 [so_move_emails]: https://stackoverflow.com/questions/28880777/powershell-moving-emails-to-archive-folder-moves-all-but-last-email
 [gist_pst]: https://gist.github.com/timsonner/d9d9894ca8ee026d8f8285d51a5fdacc
 [gist_cim_updates]: https://gist.github.com/wise-io/70687623206a4175ca591bccc8971e7f
@@ -132,9 +134,11 @@
 [nt4admins_smtp]: https://nt4admins.de/powershell/e-mail-benachrichtigungen-mit-der-powershell-senden/
 [nt4admins_disclaimer]: https://nt4admins.de/powershell/email-disclaimer-mit-der-powershell-erstellen/
 [sid500_rdp]: https://sid-500.com/2021/03/22/enable-remote-desktop-remotely-with-powershell-enable-remotedesktop/
-[windowspro_dc_install]: https://www.windowspro.de/wolfgang-sommergut/domaenen-controller-windows-server-2025-installieren-32k-datenbank-nutzen
+[windowspro_dc_install]:
+  https://www.windowspro.de/wolfgang-sommergut/domaenen-controller-windows-server-2025-installieren-32k-datenbank-nutzen
 [windowspro_dc_migrate]: https://www.windowspro.de/wolfgang-sommergut/domain-controller-windows-server-2025-migrieren
-[windowspro_pswindowsupdate]: https://www.windowspro.de/wolfgang-sommergut/windows-updates-powershell-pswindowsupdate-auflisten-herunterladen-installieren
+[windowspro_pswindowsupdate]:
+  https://www.windowspro.de/wolfgang-sommergut/windows-updates-powershell-pswindowsupdate-auflisten-herunterladen-installieren
 [jans_cloud_firewall]: https://jans.cloud/2025/03/unidentified-network-public-firewall-profile-bei-windows-server-2025-domain-controller/
 [frankysweb_exchange]: https://www.frankysweb.de/en/installation-exchange-2019-cu14-on-windows-server-2025/
 [itlearner_dc]: https://it-learner.de/domaenencontroller-mit-windows-server-2025/
@@ -152,7 +156,8 @@
 [rakhesh_path]: https://rakhesh.com/powershell/powershell-path-separator-based-on-os/
 [neolisk_chars]: https://www.neolisk.blog/posts/2009-07-23-powershell-special-characters/
 [ironman_cmdletbinding]: https://blog.ironmansoftware.com/powershell-cmdlet-binding/
-[scriptingnerd_precommit]: https://scriptingnerd.com/2024/11/01/running-a-powershell-script-on-your-code-before-a-git-commit-using-pre-commit/
+[scriptingnerd_precommit]:
+  https://scriptingnerd.com/2024/11/01/running-a-powershell-script-on-your-code-before-a-git-commit-using-pre-commit/
 [setuserfta_progids]: https://setuserfta.com/guide-to-understanding-progids-and-file-type-associations/
 [pdq_wol]: https://www.pdq.com/blog/wake-on-lan-wol-magic-packet-powershell/
 [msxfaq_psparam]: https://www.msxfaq.de/code/powershell/psparam.htm

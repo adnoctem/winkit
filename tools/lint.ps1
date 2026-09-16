@@ -11,7 +11,7 @@
   sensitive content is never analyzed.
 
   PSScriptAnalyzer 1.25.0 expects a single string for -Path and rejects an
-  array such as `-Path ./lib,./scripts`, so results are collected per file and
+  array such as `-Path ./scripts,./tools`, so results are collected per file and
   printed together.
 
   The script exits with code 1 when any analyzer findings remain, making it
@@ -31,7 +31,7 @@
   Runs analyzer checks over all repository PowerShell sources.
 
 .EXAMPLE
-  PS> ./lint.ps1 -Path ./lib,./scripts/Windows
+  PS> ./lint.ps1 -Path ./scripts/Privacy,./scripts/Interface
   Runs analyzer checks over selected paths.
 
 .LINK

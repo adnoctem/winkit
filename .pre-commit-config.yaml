@@ -45,7 +45,7 @@ repos:
     hooks:
       - id: prettier-format
         name: Prettier format
-        entry: bun x prettier --write "**/*.md"
+        entry: bun x prettier --write "**/*.md" --prose-wrap=always --end-of-line=crlf --print-width=140
         language: system
         pass_filenames: false
 

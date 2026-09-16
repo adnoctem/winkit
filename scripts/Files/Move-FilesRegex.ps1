@@ -23,7 +23,7 @@
 .EXAMPLE
   PS> .\Move-FilesRegex.ps1 -Source C:\Users\Markus\Images -RegEx '^IMG_\d{4}_\d{2}\.(jpg|jpeg|png)$' -Destination D:\Storage\Images
 .LINK
-  https://github.com/adnoctem/winkit/scripts/Move-FilesRegex.ps1
+  https://github.com/adnoctem/winkit/scripts/Files/Move-FilesRegex.ps1
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
