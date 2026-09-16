@@ -153,7 +153,7 @@ function Update-VersionLine {
       # (Name = 'version'), so the version lives on the same line as the name.
       for ($j = $i; $j -lt $updated.Count -and $j -le $i + 3; $j++) {
         if ($updated[$j] -match $VersionPattern) {
-          $updated[$j] = $updated[$j] -replace $VersionPattern, ('${1}' + $NewVersion + '${2}')
+          $updated[$j] = $updated[$j] -replace $VersionPattern, ('${1}' + $NewVersion + '${3}')
           break
         }
       }
