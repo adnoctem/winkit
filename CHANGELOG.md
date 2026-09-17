@@ -1,3 +1,9 @@
+## [1.2.3](https://github.com/adnoctem/winkit/compare/v1.2.2...v1.2.3) (2026-09-17)
+
+### Bug Fixes
+
+* **scripts:** complete the Group Policy pipeline on PSFoundation 1.4.0 ([99b0ae4](https://github.com/adnoctem/winkit/commit/99b0ae4e7fdef9b4bf9e081225259126325729f7))
+
 ## [1.2.2](https://github.com/adnoctem/winkit/compare/v1.2.1...v1.2.2) (2026-09-16)
 
 ### Bug Fixes
