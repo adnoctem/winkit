@@ -262,6 +262,26 @@ _**NOTE**_: In order to make testing and merging of PRs easier, please submit ch
 - Scripts under `scripts/` must include comment-based help (`.SYNOPSIS`, `.DESCRIPTION`, `.PARAMETER`, `.EXAMPLE`)
 - Library functions under `lib/` must include comment-based help where the function is public-facing
 
+### Parameter Naming
+
+The same concept must use the same parameter name in every script. Before adding a parameter, grep for the name you have in mind and follow
+what comparable scripts already do — an operator should be able to guess a parameter from another script without reading the help.
+
+| Purpose                                                                        | Name                                             |
+| ------------------------------------------------------------------------------ | ------------------------------------------------ |
+| The single thing a script acts on                                              | `-Path`                                          |
+| One of several distinct inputs                                                 | `-SourcePath`, `-DatabasePath`, `-BackupPath`, … |
+| A file or folder the script **generates** (reports, archives, build artifacts) | `-OutputPath`                                    |
+| Where existing files are **copied or moved** to                                | `-Destination`                                   |
+
+Never invent a suffix variant of a name already in use: `-DestinationFolder`, `-DestinationPath` and `-TargetFolder` all mean
+`-Destination`. Whether a value is absolute or relative does not change the name — say which one it is in `.PARAMETER` instead. Switches
+follow the same rule: `-DryRun` previews, `-PassThru` returns results, `-Force` overrides a safety check.
+
+A few scripts predate this rule: `Office/New-OutlookArchive.ps1` (`-SourceFolder`, `-DestinationParent`),
+`Office/New-TestOutlookMessage.ps1` (`-TargetFolderName`) and `Policy/Export-LocalPolicy.ps1` (`-Path` for an output file). Renaming a
+parameter breaks callers and scheduled tasks, so align them only as part of a deliberate breaking change.
+
 ### Versioning
 
 The `winkit` PowerShell module declared in [`lib/winkit.psd1`](../lib/winkit.psd1) follows [SemVer](https://semver.org/).
