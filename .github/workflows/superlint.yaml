@@ -16,10 +16,8 @@ jobs:
       statuses: write
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          # super-linter needs the full git history to get the
-          # list of files that changed across commits
           fetch-depth: 0
           persist-credentials: false
 
@@ -28,6 +26,7 @@ jobs:
         env:
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PowerShell
           VALIDATE_POWERSHELL: true
           FIX_POWERSHELL: false
 
@@ -39,12 +38,12 @@ jobs:
       security-events: write # required by upload-sarif action
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: Run PSScriptAnalyzer
-        uses: microsoft/psscriptanalyzer-action@2044ae068e37d0161fa2127de04c19633882f061 # v1.0
+        uses: microsoft/psscriptanalyzer-action@6b2948b1944407914a58661c49941824d149734f # v1.1
         with:
           path: .\
           recurse: true
@@ -57,7 +56,7 @@ jobs:
         # findings must reach the code-scanning dashboard even when the
         # analysis itself fails the job
         if: always()
-        uses: github/codeql-action/upload-sarif@d6317709a54fd87078d323eeb0e48ec331c8e621 # v3
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
         with:
           sarif_file: results.sarif
           category: psscriptanalyzer
@@ -78,7 +77,7 @@ jobs:
         # release only after every platform in the test matrix succeeded
         # ref: https://github.com/actions/runner/issues/1251
         if: ${{ github.event_name == 'push' && always() && !contains(join(needs.*.result, ','), 'failure') }}
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           github-token: "${{ env.GITHUB_TOKEN }}"
           script: |

@@ -2,7 +2,8 @@
 
 ### Features
 
-* **scripts:** add maintenance scripts to backup .kdbx databases ([b7c7379](https://github.com/adnoctem/winkit/commit/b7c7379e81f1e4b4e274ada18a49c7ccda7f4c5e))
+- **scripts:** add maintenance scripts to backup .kdbx databases
+  ([b7c7379](https://github.com/adnoctem/winkit/commit/b7c7379e81f1e4b4e274ada18a49c7ccda7f4c5e))
 
 ## [1.2.3](https://github.com/adnoctem/winkit/compare/v1.2.2...v1.2.3) (2026-09-17)
 
