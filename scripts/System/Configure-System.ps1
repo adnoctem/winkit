@@ -122,128 +122,128 @@ $regHive = if ($SysPrep) { 'Registry::HKEY_USERS\DefaultUser' } else { 'HKCU:' }
 
 $systemSettings = @(
   @{
-    Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power'
-    Name = 'HiberbootEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'Power'
+    Path        = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power'
+    Name        = 'HiberbootEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Power'
     Description = 'Disable Fast Startup.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9'
-    Name = 'ACSettingIndex'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
-    Group = 'Power'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9'
+    Name        = 'ACSettingIndex'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
+    Group       = 'Power'
     Description = 'Disable Modern Standby networking on AC power.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9'
-    Name = 'DCSettingIndex'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
-    Group = 'Power'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9'
+    Name        = 'DCSettingIndex'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
+    Group       = 'Power'
     Description = 'Disable Modern Standby networking on battery.'
   }
   @{
-    Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling'
-    Name = 'PowerThrottlingOff'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 14393
-    Group = 'Power'
+    Path        = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling'
+    Name        = 'PowerThrottlingOff'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 14393
+    Group       = 'Power'
     Description = 'Disable CPU PowerThrottling.'
   }
   @{
-    Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\BitLocker'
-    Name = 'PreventDeviceEncryption'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
-    Group = 'Security'
+    Path        = 'HKLM:\SYSTEM\CurrentControlSet\Control\BitLocker'
+    Name        = 'PreventDeviceEncryption'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
+    Group       = 'Security'
     Description = 'Disable automatic BitLocker device encryption.'
   }
   @{
-    Path = "$regHive\Control Panel\Accessibility\StickyKeys"
-    Name = 'Flags'
-    Preferred = '506'
-    Default = $null
-    Type = 'String'
-    MinBuild = 26100
-    Group = 'Security'
+    Path        = "$regHive\Control Panel\Accessibility\StickyKeys"
+    Name        = 'Flags'
+    Preferred   = '506'
+    Default     = $null
+    Type        = 'String'
+    MinBuild    = 26100
+    Group       = 'Security'
     Description = 'Disable Sticky Keys keyboard shortcut.'
   }
   @{
-    Path = "$regHive\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy"
-    Name = '01'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
-    Group = 'Storage'
+    Path        = "$regHive\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy"
+    Name        = '01'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
+    Group       = 'Storage'
     Description = 'Disable Storage Sense automatic cleanup.'
   }
   @{
-    Path = "$regHive\Software\Microsoft\Windows\CurrentVersion\CDP"
-    Name = 'DragTrayEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 26200
-    Group = 'Shell'
+    Path        = "$regHive\Software\Microsoft\Windows\CurrentVersion\CDP"
+    Name        = 'DragTrayEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 26200
+    Group       = 'Shell'
     Description = 'Disable Drag Tray sharing UI.'
   }
   @{
-    Path = "$regHive\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32"
-    Name = ''
-    Preferred = ''
-    Default = $null
-    Type = 'String'
-    MinBuild = 22000
-    Group = 'Shell'
+    Path        = "$regHive\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32"
+    Name        = ''
+    Preferred   = ''
+    Default     = $null
+    Type        = 'String'
+    MinBuild    = 22000
+    Group       = 'Shell'
     Description = 'Use classic Windows 10 context menu style.'
   }
   @{
-    Path = "$regHive\Control Panel\Mouse"
-    Name = 'MouseSpeed'
-    Preferred = '0'
-    Default = $null
-    Type = 'String'
-    Group = 'Pointer'
+    Path        = "$regHive\Control Panel\Mouse"
+    Name        = 'MouseSpeed'
+    Preferred   = '0'
+    Default     = $null
+    Type        = 'String'
+    Group       = 'Pointer'
     Description = 'Disable pointer acceleration: speed.'
   }
   @{
-    Path = "$regHive\Control Panel\Mouse"
-    Name = 'MouseThreshold1'
-    Preferred = '0'
-    Default = $null
-    Type = 'String'
-    Group = 'Pointer'
+    Path        = "$regHive\Control Panel\Mouse"
+    Name        = 'MouseThreshold1'
+    Preferred   = '0'
+    Default     = $null
+    Type        = 'String'
+    Group       = 'Pointer'
     Description = 'Disable pointer acceleration: threshold 1.'
   }
   @{
-    Path = "$regHive\Control Panel\Mouse"
-    Name = 'MouseThreshold2'
-    Preferred = '0'
-    Default = $null
-    Type = 'String'
-    Group = 'Pointer'
+    Path        = "$regHive\Control Panel\Mouse"
+    Name        = 'MouseThreshold2'
+    Preferred   = '0'
+    Default     = $null
+    Type        = 'String'
+    Group       = 'Pointer'
     Description = 'Disable pointer acceleration: threshold 2.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DriverSearching'
-    Name = 'SearchOrderConfig'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'Drivers'
+    Path        = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DriverSearching'
+    Name        = 'SearchOrderConfig'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Drivers'
     Description = 'Disable automatic driver installation from Windows Update.'
   }
 )

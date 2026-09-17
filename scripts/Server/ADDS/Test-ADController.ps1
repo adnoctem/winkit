@@ -88,14 +88,14 @@ try {
 }
 catch {
   $envelope = [pscustomobject][ordered]@{
-    phase = 'test'
-    success = $false
-    status = 'fail'
-    server = $Server
-    startedAt = $startedAt
+    phase       = 'test'
+    success     = $false
+    status      = 'fail'
+    server      = $Server
+    startedAt   = $startedAt
     completedAt = (Get-Date).ToUniversalTime().ToString('o')
     diagnostics = @()
-    error = $_.Exception.Message
+    error       = $_.Exception.Message
   }
   $envelope | ConvertTo-Json -Depth 6 -Compress | Write-Output
   if ($OutputPath) {
@@ -113,9 +113,9 @@ $checkScript = {
     $status = if ($service) { $service.Status.ToString() } else { 'Missing' }
     $checks += [pscustomobject]@{
       Category = 'Service'
-      Name = $name
-      Status = $(if ($status -eq 'Running') { 'Pass' } else { 'Fail' })
-      Detail = $status
+      Name     = $name
+      Status   = $(if ($status -eq 'Running') { 'Pass' } else { 'Fail' })
+      Detail   = $status
     }
   }
 
@@ -129,10 +129,10 @@ $checkScript = {
 
     $dcs = @(Get-ADDomainController -Filter * -ErrorAction Stop)
     $roleHolders = [ordered]@{
-      SchemaMaster = $forest.SchemaMaster
-      DomainNamingMaster = $forest.DomainNamingMaster
-      PDCEmulator = $domain.PDCEmulator
-      RIDMaster = $domain.RIDMaster
+      SchemaMaster         = $forest.SchemaMaster
+      DomainNamingMaster   = $forest.DomainNamingMaster
+      PDCEmulator          = $domain.PDCEmulator
+      RIDMaster            = $domain.RIDMaster
       InfrastructureMaster = $domain.InfrastructureMaster
     }
 
@@ -151,9 +151,9 @@ $checkScript = {
       }
       $checks += [pscustomobject]@{
         Category = 'FSMO'
-        Name = 'SingleDCHolder'
-        Status = $(if ($allLocal) { 'Pass' } else { 'Warn' })
-        Detail = $(if ($allLocal) { 'All roles held by this server (single-DC forest).' } else { 'Single-DC forest but not all roles resolve to this server - investigate.' })
+        Name     = 'SingleDCHolder'
+        Status   = $(if ($allLocal) { 'Pass' } else { 'Warn' })
+        Detail   = $(if ($allLocal) { 'All roles held by this server (single-DC forest).' } else { 'Single-DC forest but not all roles resolve to this server - investigate.' })
       }
     }
     else {
@@ -183,9 +183,9 @@ $checkScript = {
     $failedMarkers = @($dcdiagOutput -split "`r?`n" | Where-Object { $_ -match 'failed test' })
     $checks += [pscustomobject]@{
       Category = 'dcdiag'
-      Name = 'TestSuite'
-      Status = $(if ($failedMarkers.Count -eq 0) { 'Pass' } else { 'Fail' })
-      Detail = $(if ($failedMarkers.Count -eq 0) { 'all selected tests passed' } else { "$($failedMarkers.Count) failed test marker(s) found" })
+      Name     = 'TestSuite'
+      Status   = $(if ($failedMarkers.Count -eq 0) { 'Pass' } else { 'Fail' })
+      Detail   = $(if ($failedMarkers.Count -eq 0) { 'all selected tests passed' } else { "$($failedMarkers.Count) failed test marker(s) found" })
     }
   }
   catch {
@@ -198,9 +198,9 @@ $checkScript = {
       $count = @(Get-WinEvent -FilterHashtable @{ LogName = $logName; Level = 2; StartTime = $since } -ErrorAction Stop).Count
       $checks += [pscustomobject]@{
         Category = 'EventLog'
-        Name = $logName
-        Status = $(if ($count -eq 0) { 'Pass' } else { 'Warn' })
-        Detail = "$count error event(s) in the last 24 hours"
+        Name     = $logName
+        Status   = $(if ($count -eq 0) { 'Pass' } else { 'Warn' })
+        Detail   = "$count error event(s) in the last 24 hours"
       }
     }
     catch {
@@ -220,14 +220,14 @@ try {
 catch {
   Remove-PSSession -Session $session -ErrorAction SilentlyContinue
   $envelope = [pscustomobject][ordered]@{
-    phase = 'test'
-    success = $false
-    status = 'fail'
-    server = $Server
-    startedAt = $startedAt
+    phase       = 'test'
+    success     = $false
+    status      = 'fail'
+    server      = $Server
+    startedAt   = $startedAt
     completedAt = (Get-Date).ToUniversalTime().ToString('o')
     diagnostics = @()
-    error = $_.Exception.Message
+    error       = $_.Exception.Message
   }
   $envelope | ConvertTo-Json -Depth 6 -Compress | Write-Output
   if ($OutputPath) {
@@ -250,14 +250,14 @@ if ($failedChecks.Count -gt 0) {
 }
 
 $envelope = [pscustomobject][ordered]@{
-  phase = 'test'
-  success = ($status -ne 'fail')
-  status = $status
-  server = $Server
-  startedAt = $startedAt
+  phase       = 'test'
+  success     = ($status -ne 'fail')
+  status      = $status
+  server      = $Server
+  startedAt   = $startedAt
   completedAt = (Get-Date).ToUniversalTime().ToString('o')
   diagnostics = @($result.Checks)
-  error = $null
+  error       = $null
 }
 
 $json = $envelope | ConvertTo-Json -Depth 6 -Compress

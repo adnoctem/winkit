@@ -1,0 +1,10 @@
+<BackupInst xmlns="http://www.microsoft.com/GroupPolicy/GPOOperations/Manifest">
+  <GPOGuid><![CDATA[{{GPOGuid}}]]></GPOGuid>
+  <GPODomain><![CDATA[{{GPODomain}}]]></GPODomain>
+  <GPODomainGuid><![CDATA[{{GPODomainGuid}}]]></GPODomainGuid>
+  <GPODomainController><![CDATA[{{GPODomainController}}]]></GPODomainController>
+  <BackupTime><![CDATA[{{BackupTime}}]]></BackupTime>
+  <ID><![CDATA[{{BackupId}}]]></ID>
+  <Comment><![CDATA[{{Comment}}]]></Comment>
+  <GPODisplayName><![CDATA[{{GPODisplayName}}]]></GPODisplayName>
+</BackupInst>

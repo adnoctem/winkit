@@ -89,155 +89,155 @@ $_markerEnd = '# ---- end winkit managed blocklist ----'
 
 $_blocklist = @(
   @{
-    Host = 'vortex.data.microsoft.com'
+    Host     = 'vortex.data.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'vortex-win.data.microsoft.com'
+    Host     = 'vortex-win.data.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'telecommand.telemetry.microsoft.com'
+    Host     = 'telecommand.telemetry.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'telecommand.telemetry.microsoft.com.nsatc.net'
+    Host     = 'telecommand.telemetry.microsoft.com.nsatc.net'
     Category = 'Telemetry'
   }
   @{
-    Host = 'oca.telemetry.microsoft.com'
+    Host     = 'oca.telemetry.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'oca.telemetry.microsoft.com.nsatc.net'
+    Host     = 'oca.telemetry.microsoft.com.nsatc.net'
     Category = 'Telemetry'
   }
   @{
-    Host = 'sqm.telemetry.microsoft.com'
+    Host     = 'sqm.telemetry.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'sqm.telemetry.microsoft.com.nsatc.net'
+    Host     = 'sqm.telemetry.microsoft.com.nsatc.net'
     Category = 'Telemetry'
   }
   @{
-    Host = 'watson.telemetry.microsoft.com'
+    Host     = 'watson.telemetry.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'watson.telemetry.microsoft.com.nsatc.net'
+    Host     = 'watson.telemetry.microsoft.com.nsatc.net'
     Category = 'Telemetry'
   }
   @{
-    Host = 'redir.metaservices.microsoft.com'
+    Host     = 'redir.metaservices.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'choice.microsoft.com'
+    Host     = 'choice.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'choice.microsoft.com.nsatc.net'
+    Host     = 'choice.microsoft.com.nsatc.net'
     Category = 'Telemetry'
   }
   @{
-    Host = 'df.telemetry.microsoft.com'
+    Host     = 'df.telemetry.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'reports.wes.df.telemetry.microsoft.com'
+    Host     = 'reports.wes.df.telemetry.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'services.wes.df.telemetry.microsoft.com'
+    Host     = 'services.wes.df.telemetry.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'sqm.df.telemetry.microsoft.com'
+    Host     = 'sqm.df.telemetry.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'telemetry.urs.microsoft.com'
+    Host     = 'telemetry.urs.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'telemetry.appex.bing.net'
+    Host     = 'telemetry.appex.bing.net'
     Category = 'Telemetry'
   }
   @{
-    Host = 'settings-sandbox.data.microsoft.com'
+    Host     = 'settings-sandbox.data.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'settings-win.data.microsoft.com'
+    Host     = 'settings-win.data.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'settings.data.microsoft.com'
+    Host     = 'settings.data.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'diagnostics.support.microsoft.com'
+    Host     = 'diagnostics.support.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'corp.sts.microsoft.com'
+    Host     = 'corp.sts.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'statsfe2.ws.microsoft.com'
+    Host     = 'statsfe2.ws.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'statsfe1.ws.microsoft.com'
+    Host     = 'statsfe1.ws.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'feedback.windows.com'
+    Host     = 'feedback.windows.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'feedback.microsoft-hohm.com'
+    Host     = 'feedback.microsoft-hohm.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'feedback.search.microsoft.com'
+    Host     = 'feedback.search.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'pre.footprintpredict.com'
+    Host     = 'pre.footprintpredict.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'i1.services.social.microsoft.com'
+    Host     = 'i1.services.social.microsoft.com'
     Category = 'Telemetry'
   }
   @{
-    Host = 'i1.services.social.microsoft.com.nsatc.net'
+    Host     = 'i1.services.social.microsoft.com.nsatc.net'
     Category = 'Telemetry'
   }
   @{
-    Host = 'watson.live.com'
+    Host     = 'watson.live.com'
     Category = 'CrashReport'
   }
   @{
-    Host = 'watson.ppe.telemetry.microsoft.com'
+    Host     = 'watson.ppe.telemetry.microsoft.com'
     Category = 'CrashReport'
   }
   @{
-    Host = 'compatexchange.cloudapp.net'
+    Host     = 'compatexchange.cloudapp.net'
     Category = 'CrashReport'
   }
   @{
-    Host = 'inference.location.live.net'
+    Host     = 'inference.location.live.net'
     Category = 'Location'
   }
   @{
-    Host = 'rad.msn.com'
+    Host     = 'rad.msn.com'
     Category = 'Advertising'
   }
   @{
-    Host = 'preview.msn.com'
+    Host     = 'preview.msn.com'
     Category = 'Advertising'
   }
 )

@@ -111,14 +111,14 @@ try {
 }
 catch {
   $envelope = [pscustomobject][ordered]@{
-    phase = 'test'
-    success = $false
-    status = 'fail'
-    server = $Server
-    startedAt = $startedAt
+    phase       = 'test'
+    success     = $false
+    status      = 'fail'
+    server      = $Server
+    startedAt   = $startedAt
     completedAt = (Get-Date).ToUniversalTime().ToString('o')
     diagnostics = @()
-    error = $_.Exception.Message
+    error       = $_.Exception.Message
   }
   $envelope | ConvertTo-Json -Depth 6 -Compress | Write-Output
   if ($OutputPath) {
@@ -157,9 +157,9 @@ $checkScript = {
     foreach ($service in $exchangeServices) {
       $checks += [pscustomobject]@{
         Category = 'Service'
-        Name = $service.Name
-        Status = $(if ($service.Status -eq 'Running') { 'Pass' } else { 'Fail' })
-        Detail = $service.Status.ToString()
+        Name     = $service.Name
+        Status   = $(if ($service.Status -eq 'Running') { 'Pass' } else { 'Fail' })
+        Detail   = $service.Status.ToString()
       }
     }
   }
@@ -168,9 +168,9 @@ $checkScript = {
   if ($databaseStates.Count -gt 0) {
     $checks += [pscustomobject]@{
       Category = 'Database'
-      Name = 'MailboxDatabases'
-      Status = $(if ($mounted.Count -eq $databaseStates.Count) { 'Pass' } else { 'Warn' })
-      Detail = "$($mounted.Count) of $($databaseStates.Count) databases mounted"
+      Name     = 'MailboxDatabases'
+      Status   = $(if ($mounted.Count -eq $databaseStates.Count) { 'Pass' } else { 'Warn' })
+      Detail   = "$($mounted.Count) of $($databaseStates.Count) databases mounted"
     }
   }
 
@@ -188,8 +188,8 @@ $checkScript = {
     foreach ($disk in $disks) {
       $freePercent = if ($disk.Size -gt 0) { [math]::Round((($disk.FreeSpace / $disk.Size) * 100), 1) } else { 0 }
       [pscustomobject]@{
-        DeviceId = $disk.DeviceID
-        FreePercent = $freePercent
+        DeviceId      = $disk.DeviceID
+        FreePercent   = $freePercent
         FreeGigabytes = [math]::Round($disk.FreeSpace / 1GB, 1)
       }
     }
@@ -198,9 +198,9 @@ $checkScript = {
   foreach ($disk in @($diskStates)) {
     $checks += [pscustomobject]@{
       Category = 'Disk'
-      Name = $disk.DeviceId
-      Status = $(if ($disk.FreePercent -lt 15) { 'Warn' } else { 'Pass' })
-      Detail = "$($disk.FreeGigabytes) GB free ($($disk.FreePercent)%)"
+      Name     = $disk.DeviceId
+      Status   = $(if ($disk.FreePercent -lt 15) { 'Warn' } else { 'Pass' })
+      Detail   = "$($disk.FreeGigabytes) GB free ($($disk.FreePercent)%)"
     }
   }
 
@@ -225,14 +225,14 @@ try {
 catch {
   Remove-PSSession -Session $session -ErrorAction SilentlyContinue
   $envelope = [pscustomobject][ordered]@{
-    phase = 'test'
-    success = $false
-    status = 'fail'
-    server = $Server
-    startedAt = $startedAt
+    phase       = 'test'
+    success     = $false
+    status      = 'fail'
+    server      = $Server
+    startedAt   = $startedAt
     completedAt = (Get-Date).ToUniversalTime().ToString('o')
     diagnostics = @()
-    error = $_.Exception.Message
+    error       = $_.Exception.Message
   }
   $envelope | ConvertTo-Json -Depth 6 -Compress | Write-Output
   if ($OutputPath) {
@@ -278,7 +278,7 @@ if ($IncludeHealthChecker) {
           $reports = @(Get-ChildItem -Path $dir -File | Select-Object -ExpandProperty FullName)
           [pscustomobject]@{
             ExitCode = $process.ExitCode
-            Reports = $reports
+            Reports  = $reports
           }
         }
         $job = Start-Job -ScriptBlock $inner -ArgumentList $directory
@@ -378,14 +378,14 @@ if ($failedChecks.Count -gt 0) {
 }
 
 $envelope = [pscustomobject][ordered]@{
-  phase = 'test'
-  success = ($status -ne 'fail')
-  status = $status
-  server = $Server
-  startedAt = $startedAt
+  phase       = 'test'
+  success     = ($status -ne 'fail')
+  status      = $status
+  server      = $Server
+  startedAt   = $startedAt
   completedAt = (Get-Date).ToUniversalTime().ToString('o')
   diagnostics = @($diagnostics)
-  error = $null
+  error       = $null
 }
 
 $json = $envelope | ConvertTo-Json -Depth 6 -Compress

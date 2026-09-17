@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
 
 <#
 .SYNOPSIS
@@ -127,7 +127,7 @@ if (-not $DryRun) {
 # ---- Profile manifest --------------------------------------------------------
 $Common = @(
   @{
-    Name = 'Collection metadata'
+    Name   = 'Collection metadata'
     Script = {
       @"
 CaseDir: $_caseDir
@@ -139,7 +139,7 @@ Profile: Quick
     }
   }
   @{
-    Name = 'Basic host information'
+    Name   = 'Basic host information'
     Script = {
       $null = Invoke-SafeProcess -FilePath 'systeminfo.exe' -OutputPath (Join-Path $_textDir 'SystemInfo.txt')
       $null = Invoke-SafeProcess -FilePath 'whoami.exe' -ArgumentList @('/all') -OutputPath (Join-Path $_textDir 'WhoAmI-All.txt')
@@ -149,7 +149,7 @@ Profile: Quick
     }
   }
   @{
-    Name = 'Defender state and detections'
+    Name   = 'Defender state and detections'
     Script = {
       Get-MpThreatDetection | Format-List * | Out-File -LiteralPath (Join-Path $_textDir 'Defender-ThreatDetections.txt') -Encoding UTF8
       Get-MpThreat | Format-List * | Out-File -LiteralPath (Join-Path $_textDir 'Defender-Threats.txt') -Encoding UTF8
@@ -158,7 +158,7 @@ Profile: Quick
     }
   }
   @{
-    Name = 'Export key event logs'
+    Name   = 'Export key event logs'
     Script = {
       Export-EventLog -LogName 'Microsoft-Windows-Windows Defender/Operational' -OutputPath (Join-Path $_evtxDir 'Microsoft-Windows-Windows_Defender_Operational.evtx') -MissingLogPath (Join-Path $_textDir 'Missing-EventLogs.txt')
       Export-EventLog -LogName 'Microsoft-Windows-PowerShell/Operational' -OutputPath (Join-Path $_evtxDir 'Microsoft-Windows-PowerShell_Operational.evtx') -MissingLogPath (Join-Path $_textDir 'Missing-EventLogs.txt')
@@ -167,7 +167,7 @@ Profile: Quick
     }
   }
   @{
-    Name = 'Scheduled tasks'
+    Name   = 'Scheduled tasks'
     Script = {
       $null = Invoke-SafeProcess -FilePath 'schtasks.exe' -ArgumentList @('/query', '/fo', 'LIST', '/v') -OutputPath (Join-Path $_textDir 'ScheduledTasks-Full.txt')
       Get-ScheduledTaskAction | Export-Csv -LiteralPath (Join-Path $_textDir 'ScheduledTasks-Actions.csv') -NoTypeInformation -Encoding UTF8
@@ -175,7 +175,7 @@ Profile: Quick
     }
   }
   @{
-    Name = 'Registry persistence - Run keys'
+    Name   = 'Registry persistence - Run keys'
     Script = {
       Export-RegistryKey -Key 'HKLM\Software\Microsoft\Windows\CurrentVersion\Run' -OutputPath (Join-Path $_registryDir 'HKLM-Run.reg')
       Export-RegistryKey -Key 'HKCU\Software\Microsoft\Windows\CurrentVersion\Run' -OutputPath (Join-Path $_registryDir 'HKCU-Run.reg')
@@ -183,7 +183,7 @@ Profile: Quick
     }
   }
   @{
-    Name = 'Semantic logon events - failed logons'
+    Name   = 'Semantic logon events - failed logons'
     Script = {
       $failed = Get-WindowsLogonEvent -Id 4625 -StartTime (Get-Date).AddDays(-7) -ErrorAction SilentlyContinue
       if ($failed) {
@@ -197,7 +197,7 @@ Profile: Quick
     }
   }
   @{
-    Name = 'Semantic service events - new installations'
+    Name   = 'Semantic service events - new installations'
     Script = {
       $newServices = Get-WindowsServiceEvent -Id 7045, 4697 -StartTime (Get-Date).AddDays(-30) -ErrorAction SilentlyContinue
       if ($newServices) {
@@ -212,7 +212,7 @@ Profile: Quick
     }
   }
   @{
-    Name = 'Semantic logon events - RDP'
+    Name   = 'Semantic logon events - RDP'
     Script = {
       $rdpLogons = Get-WindowsLogonEvent -Id 4624 -LogonType 10 -StartTime (Get-Date).AddDays(-7) -ErrorAction SilentlyContinue
       if ($rdpLogons) {
@@ -230,7 +230,7 @@ Profile: Quick
 
 $Quick = $Common + @(
   @{
-    Name = 'Process and network state'
+    Name   = 'Process and network state'
     Script = {
       $null = Invoke-SafeProcess -FilePath 'tasklist.exe' -ArgumentList @('/v') -OutputPath (Join-Path $_textDir 'Tasklist.txt')
       $null = Invoke-SafeProcess -FilePath 'netstat.exe' -ArgumentList @('-ano') -OutputPath (Join-Path $_textDir 'Netstat.txt')
@@ -238,7 +238,7 @@ $Quick = $Common + @(
     }
   }
   @{
-    Name = 'Users and groups'
+    Name   = 'Users and groups'
     Script = {
       $null = Invoke-SafeProcess -FilePath 'net.exe' -ArgumentList @('user') -OutputPath (Join-Path $_textDir 'LocalUsers.txt')
       $null = Invoke-SafeProcess -FilePath 'net.exe' -ArgumentList @('localgroup', 'administrators') -OutputPath (Join-Path $_textDir 'LocalAdministrators.txt')
@@ -246,7 +246,7 @@ $Quick = $Common + @(
     }
   }
   @{
-    Name = 'Services'
+    Name   = 'Services'
     Script = {
       Get-Service | Sort-Object Name | Format-Table -AutoSize | Out-File -LiteralPath (Join-Path $_textDir 'Services.txt') -Encoding UTF8
       Get-CimInstance Win32_Service |
@@ -256,7 +256,7 @@ $Quick = $Common + @(
     }
   }
   @{
-    Name = 'Semantic account change events'
+    Name   = 'Semantic account change events'
     Script = {
       $accountChanges = Get-WindowsAccountChangeEvent -StartTime (Get-Date).AddDays(-7) -ErrorAction SilentlyContinue
       if ($accountChanges) {
@@ -271,7 +271,7 @@ $Quick = $Common + @(
     }
   }
   @{
-    Name = 'Semantic boot/crash events'
+    Name   = 'Semantic boot/crash events'
     Script = {
       $bootEvents = Get-WindowsBootEvent -StartTime (Get-Date).AddDays(-30) -ErrorAction SilentlyContinue
       if ($bootEvents) {
@@ -289,7 +289,7 @@ $Quick = $Common + @(
 
 $Full = $Quick + @(
   @{
-    Name = 'Full event log export'
+    Name   = 'Full event log export'
     Script = {
       $logs = @(
         'Application'
@@ -308,14 +308,14 @@ $Full = $Quick + @(
     }
   }
   @{
-    Name = 'Registry persistence - Services and WINEVT'
+    Name   = 'Registry persistence - Services and WINEVT'
     Script = {
       Export-RegistryKey -Key 'HKLM\SYSTEM\CurrentControlSet\Services' -OutputPath (Join-Path $_registryDir 'HKLM-Services.reg')
       Export-RegistryKey -Key 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WINEVT' -OutputPath (Join-Path $_registryDir 'HKLM-WINEVT.reg')
     }
   }
   @{
-    Name = 'WMI persistence'
+    Name   = 'WMI persistence'
     Script = {
       $wmi = Get-WMIPersistence
       $wmi.EventFilters | Format-List * | Out-File -LiteralPath (Join-Path $_textDir 'WMI-EventFilters.txt') -Encoding UTF8
@@ -324,7 +324,7 @@ $Full = $Quick + @(
     }
   }
   @{
-    Name = 'ZIP archive'
+    Name   = 'ZIP archive'
     Script = {
       $zip = "$_caseDir.zip"
       if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
@@ -333,7 +333,7 @@ $Full = $Quick + @(
     }
   }
   @{
-    Name = 'Semantic PowerShell events'
+    Name   = 'Semantic PowerShell events'
     Script = {
       $psEvents = Get-WindowsPowerShellEvent -Id 4104 -StartTime (Get-Date).AddDays(-7) -MaxEvents 500 -ErrorAction SilentlyContinue
       if ($psEvents) {
@@ -348,7 +348,7 @@ $Full = $Quick + @(
     }
   }
   @{
-    Name = 'Semantic scheduled task events'
+    Name   = 'Semantic scheduled task events'
     Script = {
       $taskEvents = Get-WindowsScheduledTaskEvent -Id 106, 140, 141 -StartTime (Get-Date).AddDays(-30) -MaxEvents 500 -ErrorAction SilentlyContinue
       if ($taskEvents) {
@@ -363,7 +363,7 @@ $Full = $Quick + @(
     }
   }
   @{
-    Name = 'Semantic Sysmon telemetry'
+    Name   = 'Semantic Sysmon telemetry'
     Script = {
       if (Test-WindowsEventLogChannel -LogName 'Microsoft-Windows-Sysmon/Operational') {
         $sysmonEvents = Get-WindowsSysmonEvent -Id 1, 3, 10, 11, 22 -StartTime (Get-Date).AddDays(-7) -MaxEvents 500 -ErrorAction SilentlyContinue
@@ -386,7 +386,7 @@ $Full = $Quick + @(
 
 $profileSets = @{
   Quick = $Quick
-  Full = $Full
+  Full  = $Full
 }
 
 # ---- Profile resolution ------------------------------------------------------

@@ -207,8 +207,8 @@ $ProgressPreference = 'SilentlyContinue'
 $exchangeProfiles = @{
   '2019-CU14' = @{
     MinimumDotNetRelease = 528040
-    LicenseFlag = '/IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF'
-    WindowsFeatures = @(
+    LicenseFlag          = '/IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF'
+    WindowsFeatures      = @(
       'Server-Media-Foundation',
       'NET-Framework-45-Features',
       'RPC-over-HTTP-proxy',
@@ -242,14 +242,14 @@ $exchangeProfiles = @{
       'Windows-Identity-Foundation',
       'RSAT-ADDS'
     )
-    PrereqInstallers = @{
+    PrereqInstallers     = @{
       VCRedist2012x64 = 'https://download.microsoft.com/download/1/6/B/16B06F60-3B20-4FF2-B699-5E9B7962F9AE/VSU_4/vcredist_x64.exe'
       VCRedist2013x64 = 'https://aka.ms/highdpimfc2013x64enu'
-      UrlRewrite = 'https://download.microsoft.com/download/1/2/8/128E2E22-C1B9-44A4-BE2A-5859ED1D4592/rewrite_amd64_en-US.msi'
+      UrlRewrite      = 'https://download.microsoft.com/download/1/2/8/128E2E22-C1B9-44A4-BE2A-5859ED1D4592/rewrite_amd64_en-US.msi'
     }
-    Roles = @{
+    Roles                = @{
       ManagementTools = 'ManagementTools'
-      Full = 'Mailbox'
+      Full            = 'Mailbox'
     }
   }
 }
@@ -286,17 +286,17 @@ function Write-PhaseEnvelope {
   )
 
   $envelope = [pscustomobject][ordered]@{
-    phase = $PhaseName
-    success = $Success
-    server = $Server
-    domainName = $DomainName
-    mode = $Mode
+    phase           = $PhaseName
+    success         = $Success
+    server          = $Server
+    domainName      = $DomainName
+    mode            = $Mode
     exchangeVersion = $ExchangeVersion
-    startedAt = $StartedAt
-    completedAt = $CompletedAt
-    rebootRequired = $RebootRequired
-    diagnostics = @($Diagnostics)
-    error = $ErrorText
+    startedAt       = $StartedAt
+    completedAt     = $CompletedAt
+    rebootRequired  = $RebootRequired
+    diagnostics     = @($Diagnostics)
+    error           = $ErrorText
   }
 
   $json = $envelope | ConvertTo-Json -Depth 6 -Compress
@@ -438,7 +438,7 @@ function Test-TargetPendingReboot {
 
     [pscustomobject]@{
       PendingReboot = ($indicators.Count -gt 0)
-      Indicators = $indicators
+      Indicators    = $indicators
     }
   }
 
@@ -537,7 +537,7 @@ function Invoke-SetupExeStep {
       $logTail = if (Test-Path -LiteralPath $logPath) { @(Get-Content -LiteralPath $logPath -Tail 25) } else { @() }
       [pscustomobject]@{
         ExitCode = $process.ExitCode
-        LogTail = $logTail
+        LogTail  = $logTail
       }
     }
     $job = Start-Job -ScriptBlock $inner -ArgumentList $setupPath, $setupArgs
@@ -662,7 +662,7 @@ function Install-ExchangeFeature {
       $stillMissing = @(Get-WindowsFeature -Name $names | Where-Object { -not $_.Installed } | ForEach-Object { $_.Name })
       [pscustomobject]@{
         RebootRequired = $rebootRequired
-        StillMissing = $stillMissing
+        StillMissing   = $stillMissing
       }
     }
     $job = Start-Job -ScriptBlock $inner -ArgumentList (, $featureNames)
@@ -989,13 +989,13 @@ function Invoke-ValidatePhase {
     $disk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter 'DeviceID="C:"' -ErrorAction SilentlyContinue
     $groupOutput = (whoami /groups) -join "`n"
     [pscustomobject]@{
-      DomainRole = $computerSystem.DomainRole
-      Domain = $computerSystem.Domain
-      DotNetRelease = $dotNetRelease
-      FreeGigabytes = if ($disk) { [math]::Round($disk.FreeSpace / 1GB, 1) } else { $null }
-      SchemaAdmins = ($groupOutput -match 'Schema Admins')
+      DomainRole       = $computerSystem.DomainRole
+      Domain           = $computerSystem.Domain
+      DotNetRelease    = $dotNetRelease
+      FreeGigabytes    = if ($disk) { [math]::Round($disk.FreeSpace / 1GB, 1) } else { $null }
+      SchemaAdmins     = ($groupOutput -match 'Schema Admins')
       EnterpriseAdmins = ($groupOutput -match 'Enterprise Admins')
-      DomainAdmins = ($groupOutput -match 'Domain Admins')
+      DomainAdmins     = ($groupOutput -match 'Domain Admins')
     }
   }
 
@@ -1259,7 +1259,7 @@ function Invoke-VerifyPhase {
       foreach ($name in $serviceNames) {
         $service = Get-Service -Name $name -ErrorAction SilentlyContinue
         $checks += [pscustomobject]@{
-          Name = $name
+          Name   = $name
           Status = if ($service) { $service.Status.ToString() } else { 'Missing' }
         }
       }
@@ -1279,10 +1279,10 @@ function Invoke-VerifyPhase {
       $emsOk = $false
     }
     [pscustomobject]@{
-      Services = $checks
+      Services        = $checks
       EMSSnapinLoaded = $emsOk
-      ServerInfo = $serverInfo
-      DatabaseStates = $databaseStates
+      ServerInfo      = $serverInfo
+      DatabaseStates  = $databaseStates
     }
   }
 

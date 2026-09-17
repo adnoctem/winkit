@@ -139,101 +139,101 @@ $gameBarServicesClassesKey = 'HKLM:\SOFTWARE\Classes\ms-gamebarservices'
 
 $gameDvrSettings = @(
   @{
-    Path = $gameConfigStoreKey
-    Name = 'GameDVR_Enabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = $gameConfigStoreKey
+    Name        = 'GameDVR_Enabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'DisableDVR: Disable Game DVR for the current user'
   }
   @{
-    Path = $gameDvrUserKey
-    Name = 'AppCaptureEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = $gameDvrUserKey
+    Name        = 'AppCaptureEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'DisableDVR: Disable app capture for the current user'
   }
   @{
-    Path = $gameDvrPolicyKey
-    Name = 'AllowGameDVR'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = $gameDvrPolicyKey
+    Name        = 'AllowGameDVR'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'DisableDVR: Disable Game DVR machine-wide'
   }
   @{
-    Path = 'HKCU:\SOFTWARE\Microsoft\GameBar'
-    Name = 'UseNexusForGameBarEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKCU:\SOFTWARE\Microsoft\GameBar'
+    Name        = 'UseNexusForGameBarEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'DisableGameBarIntegration: Disable Nexus/Game Bar integration'
   }
 
   @{
-    Path = $gameBarClassesKey
-    Name = ''
-    Preferred = 'URL:ms-gamebar'
-    Default = $null
-    Type = 'String'
+    Path        = $gameBarClassesKey
+    Name        = ''
+    Preferred   = 'URL:ms-gamebar'
+    Default     = $null
+    Type        = 'String'
     Description = 'DisableGameBarIntegration: Register ms-gamebar protocol label'
   }
   @{
-    Path = $gameBarClassesKey
-    Name = 'URL Protocol'
-    Preferred = ''
-    Default = $null
-    Type = 'String'
+    Path        = $gameBarClassesKey
+    Name        = 'URL Protocol'
+    Preferred   = ''
+    Default     = $null
+    Type        = 'String'
     Description = 'DisableGameBarIntegration: Preserve ms-gamebar URL protocol marker'
   }
   @{
-    Path = $gameBarClassesKey
-    Name = 'NoOpenWith'
-    Preferred = ''
-    Default = $null
-    Type = 'String'
+    Path        = $gameBarClassesKey
+    Name        = 'NoOpenWith'
+    Preferred   = ''
+    Default     = $null
+    Type        = 'String'
     Description = 'DisableGameBarIntegration: Hide ms-gamebar protocol from Open With'
   }
   @{
-    Path = "$gameBarClassesKey\shell\open\command"
-    Name = ''
-    Preferred = '%SystemRoot%\System32\systray.exe'
-    Default = $null
-    Type = 'String'
+    Path        = "$gameBarClassesKey\shell\open\command"
+    Name        = ''
+    Preferred   = '%SystemRoot%\System32\systray.exe'
+    Default     = $null
+    Type        = 'String'
     Description = 'DisableGameBarIntegration: Redirect ms-gamebar launch command'
   }
 
   @{
-    Path = $gameBarServicesClassesKey
-    Name = ''
-    Preferred = 'URL:ms-gamebarservices'
-    Default = $null
-    Type = 'String'
+    Path        = $gameBarServicesClassesKey
+    Name        = ''
+    Preferred   = 'URL:ms-gamebarservices'
+    Default     = $null
+    Type        = 'String'
     Description = 'DisableGameBarIntegration: Register ms-gamebarservices protocol label'
   }
   @{
-    Path = $gameBarServicesClassesKey
-    Name = 'URL Protocol'
-    Preferred = ''
-    Default = $null
-    Type = 'String'
+    Path        = $gameBarServicesClassesKey
+    Name        = 'URL Protocol'
+    Preferred   = ''
+    Default     = $null
+    Type        = 'String'
     Description = 'DisableGameBarIntegration: Preserve ms-gamebarservices URL protocol marker'
   }
   @{
-    Path = $gameBarServicesClassesKey
-    Name = 'NoOpenWith'
-    Preferred = ''
-    Default = $null
-    Type = 'String'
+    Path        = $gameBarServicesClassesKey
+    Name        = 'NoOpenWith'
+    Preferred   = ''
+    Default     = $null
+    Type        = 'String'
     Description = 'DisableGameBarIntegration: Hide ms-gamebarservices protocol from Open With'
   }
   @{
-    Path = "$gameBarServicesClassesKey\shell\open\command"
-    Name = ''
-    Preferred = '%SystemRoot%\System32\systray.exe'
-    Default = $null
-    Type = 'String'
+    Path        = "$gameBarServicesClassesKey\shell\open\command"
+    Name        = ''
+    Preferred   = '%SystemRoot%\System32\systray.exe'
+    Default     = $null
+    Type        = 'String'
     Description = 'DisableGameBarIntegration: Redirect ms-gamebarservices launch command'
   }
 )

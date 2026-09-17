@@ -48,13 +48,13 @@ foreach ($name in $requirements.Keys) {
   Write-Host "    -> Installing $name $targetVersion ..." -ForegroundColor Yellow
 
   $installParams = @{
-    Name = $name
-    RequiredVersion = $targetVersion
-    Scope = 'CurrentUser'
-    Force = $true
-    AllowClobber = $true
+    Name               = $name
+    RequiredVersion    = $targetVersion
+    Scope              = 'CurrentUser'
+    Force              = $true
+    AllowClobber       = $true
     SkipPublisherCheck = $true
-    ErrorAction = 'Stop'
+    ErrorAction        = 'Stop'
   }
 
   try {

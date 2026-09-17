@@ -131,10 +131,10 @@ foreach ($groupName in $Group) {
     }
 
     $report += [pscustomobject]@{
-      Group = $groupName
-      SamAccountName = $member.SamAccountName
-      Name = $member.Name
-      LastLogon = $lastLogon
+      Group              = $groupName
+      SamAccountName     = $member.SamAccountName
+      Name               = $member.Name
+      LastLogon          = $lastLogon
       DaysSinceLastLogon = $daysSince
     }
   }

@@ -123,9 +123,9 @@ foreach ($m in $mappings) {
     Remove-SmbMapping -LocalPath $drive -Force -UpdateProfile -ErrorAction SilentlyContinue
 
     $params = @{
-      LocalPath = $drive
-      RemotePath = $remote
-      Persistent = $Persistent
+      LocalPath   = $drive
+      RemotePath  = $remote
+      Persistent  = $Persistent
       ErrorAction = 'Stop'
     }
     if ($Credential) {

@@ -110,84 +110,84 @@ $results = New-Object System.Collections.ArrayList
 
 $updateSettings = @(
   @{
-    Path = 'Registry::HKEY_USERS\S-1-5-20\Software\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Settings'
-    Name = 'DownloadMode'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'DeliveryOptimization'
+    Path        = 'Registry::HKEY_USERS\S-1-5-20\Software\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Settings'
+    Name        = 'DownloadMode'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'DeliveryOptimization'
     Description = 'Disable sharing downloaded updates with other PCs for NETWORK SERVICE.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings'
-    Name = 'IsContinuousInnovationOptedIn'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'InnovationOptIn'
+    Path        = 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings'
+    Name        = 'IsContinuousInnovationOptedIn'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'InnovationOptIn'
     Description = 'Disable getting latest updates as soon as available.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
-    Name = 'NoAutoRebootWithLoggedOnUsers'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'RestartBehavior'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
+    Name        = 'NoAutoRebootWithLoggedOnUsers'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'RestartBehavior'
     Description = 'Prevent automatic restarts while users are logged on.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
-    Name = 'ExcludeWUDriversInQualityUpdate'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'DriverUpdates'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
+    Name        = 'ExcludeWUDriversInQualityUpdate'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'DriverUpdates'
     Description = 'Exclude drivers from Windows quality updates.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UpdatePolicy\PolicyState'
-    Name = 'ExcludeWUDrivers'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'DriverUpdates'
+    Path        = 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UpdatePolicy\PolicyState'
+    Name        = 'ExcludeWUDrivers'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'DriverUpdates'
     Description = 'Exclude drivers policy state.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
-    Name = 'NoAutoUpdate'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'Schedule'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
+    Name        = 'NoAutoUpdate'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Schedule'
     Description = 'Keep automatic updates enabled while using configured schedule values.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
-    Name = 'AUOptions'
-    Preferred = 4
-    Default = $null
-    Type = 'DWord'
-    Group = 'Schedule'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
+    Name        = 'AUOptions'
+    Preferred   = 4
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Schedule'
     Description = 'Auto download and schedule install.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
-    Name = 'ScheduledInstallDay'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'Schedule'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
+    Name        = 'ScheduledInstallDay'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Schedule'
     Description = 'Install updates every day when scheduled.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
-    Name = 'ScheduledInstallTime'
-    Preferred = 3
-    Default = $null
-    Type = 'DWord'
-    Group = 'Schedule'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
+    Name        = 'ScheduledInstallTime'
+    Preferred   = 3
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Schedule'
     Description = 'Scheduled install hour, 24-hour local time.'
   }
 )

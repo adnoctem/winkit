@@ -113,43 +113,43 @@ $regHive = if ($SysPrep) { 'Registry::HKEY_USERS\DefaultUser' } else { 'HKCU:' }
 
 $appearanceSettings = @(
   @{
-    Path = "$regHive\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-    Name = 'AppsUseLightTheme'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = "$regHive\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+    Name        = 'AppsUseLightTheme'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'App mode: dark (0), light (1).'
   }
   @{
-    Path = "$regHive\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-    Name = 'SystemUsesLightTheme'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = "$regHive\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+    Name        = 'SystemUsesLightTheme'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'System mode: dark (0), light (1).'
   }
   @{
-    Path = "$regHive\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-    Name = 'EnableTransparency'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = "$regHive\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+    Name        = 'EnableTransparency'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Transparency effects: off (0), on (1).'
   }
   @{
-    Path = "$regHive\Control Panel\Desktop\WindowMetrics"
-    Name = 'MinAnimate'
-    Preferred = 0
-    Default = 1
-    Type = 'String'
+    Path        = "$regHive\Control Panel\Desktop\WindowMetrics"
+    Name        = 'MinAnimate'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'String'
     Description = 'Window animation effects: off (0), on (1).'
   }
   @{
-    Path = "$regHive\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-    Name = 'TaskbarAnimations'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = "$regHive\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    Name        = 'TaskbarAnimations'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Taskbar animations: off (0), on (1).'
   }
 )

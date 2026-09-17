@@ -129,84 +129,84 @@ $machineConsentRoot = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Capabilit
 
 $capabilities = @(
   @{
-    Capability = 'webcam'
-    Group = 'Camera'
+    Capability  = 'webcam'
+    Group       = 'Camera'
     Description = 'camera access'
   }
   @{
-    Capability = 'microphone'
-    Group = 'Microphone'
+    Capability  = 'microphone'
+    Group       = 'Microphone'
     Description = 'microphone access'
   }
   @{
-    Capability = 'location'
-    Group = 'Location'
+    Capability  = 'location'
+    Group       = 'Location'
     Description = 'location access'
   }
   @{
-    Capability = 'contacts'
-    Group = 'Contacts'
+    Capability  = 'contacts'
+    Group       = 'Contacts'
     Description = 'contacts access'
   }
   @{
-    Capability = 'appointments'
-    Group = 'Calendar'
+    Capability  = 'appointments'
+    Group       = 'Calendar'
     Description = 'calendar access'
   }
   @{
-    Capability = 'phoneCallHistory'
-    Group = 'CallHistory'
+    Capability  = 'phoneCallHistory'
+    Group       = 'CallHistory'
     Description = 'call history access'
   }
   @{
-    Capability = 'email'
-    Group = 'Email'
+    Capability  = 'email'
+    Group       = 'Email'
     Description = 'email access'
   }
   @{
-    Capability = 'radios'
-    Group = 'Radios'
+    Capability  = 'radios'
+    Group       = 'Radios'
     Description = 'radio control access'
   }
   @{
-    Capability = 'documentsLibrary'
-    Group = 'DocumentsLibrary'
+    Capability  = 'documentsLibrary'
+    Group       = 'DocumentsLibrary'
     Description = 'Documents library access'
   }
   @{
-    Capability = 'picturesLibrary'
-    Group = 'PicturesLibrary'
+    Capability  = 'picturesLibrary'
+    Group       = 'PicturesLibrary'
     Description = 'Pictures library access'
   }
   @{
-    Capability = 'videosLibrary'
-    Group = 'VideosLibrary'
+    Capability  = 'videosLibrary'
+    Group       = 'VideosLibrary'
     Description = 'Videos library access'
   }
   @{
-    Capability = 'broadFileSystemAccess'
-    Group = 'BroadFileSystem'
+    Capability  = 'broadFileSystemAccess'
+    Group       = 'BroadFileSystem'
     Description = 'broad file system access'
   }
 )
 
 $permissionSettings = foreach ($capability in $capabilities) {
   @{
-    Path = "$machineConsentRoot\$($capability.Capability)"
-    Name = 'Value'
-    Preferred = 'Deny'
-    Default = $null
-    Type = 'String'
-    Group = $capability.Group
+    Path        = "$machineConsentRoot\$($capability.Capability)"
+    Name        = 'Value'
+    Preferred   = 'Deny'
+    Default     = $null
+    Type        = 'String'
+    Group       = $capability.Group
     Description = "Deny machine-default $($capability.Description)."
   }
   @{
-    Path = "$userConsentRoot\$($capability.Capability)"
-    Name = 'Value'
-    Preferred = 'Deny'
-    Default = $null
-    Type = 'String'
-    Group = $capability.Group
+    Path        = "$userConsentRoot\$($capability.Capability)"
+    Name        = 'Value'
+    Preferred   = 'Deny'
+    Default     = $null
+    Type        = 'String'
+    Group       = $capability.Group
     Description = "Deny current/default user $($capability.Description)."
   }
 }

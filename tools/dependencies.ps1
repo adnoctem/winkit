@@ -170,7 +170,7 @@ $requirements = Import-PowerShellDataFile -LiteralPath $RequirementsPath
 $declared = New-Object System.Collections.Generic.List[object]
 foreach ($name in $requirements.Keys) {
   $declared.Add([pscustomobject]@{
-      Name = $name
+      Name            = $name
       DeclaredVersion = $requirements[$name]
     })
 }
@@ -194,9 +194,9 @@ foreach ($dep in $declared) {
 
   if ($isOutdated) {
     $outdated.Add([pscustomobject]@{
-        Name = $dep.Name
+        Name            = $dep.Name
         DeclaredVersion = $dep.DeclaredVersion
-        LatestVersion = $latest
+        LatestVersion   = $latest
       })
     Write-Host ('  {0,-24} {1,-12} {2,-12} {3}' -f $dep.Name, $dep.DeclaredVersion, $latest, 'OUTDATED') -ForegroundColor Yellow
   }

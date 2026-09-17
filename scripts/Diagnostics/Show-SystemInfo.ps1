@@ -105,63 +105,63 @@ function Show-SystemInfo {
 
   $logoRows = @(
     @{
-      L = $blank
+      L  = $blank
       LC = 'White'
-      R = $blank
+      R  = $blank
       RC = 'White'
     }
     @{
-      L = $pane
+      L  = $pane
       LC = 'Red'
-      R = $pane
+      R  = $pane
       RC = 'Green'
     }
     @{
-      L = $pane
+      L  = $pane
       LC = 'Red'
-      R = $pane
+      R  = $pane
       RC = 'Green'
     }
     @{
-      L = $pane
+      L  = $pane
       LC = 'Red'
-      R = $pane
+      R  = $pane
       RC = 'Green'
     }
     @{
-      L = $pane
+      L  = $pane
       LC = 'Red'
-      R = $pane
+      R  = $pane
       RC = 'Green'
     }
     @{
-      L = $blank
+      L  = $blank
       LC = 'White'
-      R = $blank
+      R  = $blank
       RC = 'White'
     }
     @{
-      L = $pane
+      L  = $pane
       LC = 'Blue'
-      R = $pane
+      R  = $pane
       RC = 'Yellow'
     }
     @{
-      L = $pane
+      L  = $pane
       LC = 'Blue'
-      R = $pane
+      R  = $pane
       RC = 'Yellow'
     }
     @{
-      L = $pane
+      L  = $pane
       LC = 'Blue'
-      R = $pane
+      R  = $pane
       RC = 'Yellow'
     }
     @{
-      L = $pane
+      L  = $pane
       LC = 'Blue'
-      R = $pane
+      R  = $pane
       RC = 'Yellow'
     }
   )
@@ -173,49 +173,49 @@ function Show-SystemInfo {
     @{ Type = 'Header' }
     @{ Type = 'Separator' }
     @{
-      Type = 'Field'
+      Type  = 'Field'
       Label = 'os'
       Value = $osLine
       Color = 'Green'
     }
     @{
-      Type = 'Field'
+      Type  = 'Field'
       Label = 'host'
       Value = $hostModel
       Color = 'Yellow'
     }
     @{
-      Type = 'Field'
+      Type  = 'Field'
       Label = 'kernel'
       Value = $kernelLine
       Color = 'Cyan'
     }
     @{
-      Type = 'Field'
+      Type  = 'Field'
       Label = 'uptime'
       Value = $uptime.Display
       Color = 'Magenta'
     }
     @{
-      Type = 'Field'
+      Type  = 'Field'
       Label = 'shell'
       Value = $shellLine
       Color = 'Red'
     }
     @{
-      Type = 'Field'
+      Type  = 'Field'
       Label = 'pkgs'
       Value = $pkgsLine
       Color = 'Blue'
     }
     @{
-      Type = 'Field'
+      Type  = 'Field'
       Label = 'memory'
       Value = $memLine
       Color = 'DarkYellow'
     }
     @{
-      Type = 'Field'
+      Type  = 'Field'
       Label = 'disk'
       Value = $diskLine
       Color = 'DarkCyan'

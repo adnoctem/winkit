@@ -151,7 +151,7 @@ function Read-PfSenseFileExport {
 
     $peerLookup[$name] = @{
       PSK = $psk
-      IP = $ip
+      IP  = $ip
     }
   }
 
@@ -182,9 +182,9 @@ function Read-PfSenseAPIExport {
   $headers = @{ Authorization = "Basic $encodedCreds" }
 
   $restParams = @{
-    Uri = "https://$PfSenseHostName/api/v2/vpn/wireguard/peers"
-    Method = 'GET'
-    Headers = $headers
+    Uri         = "https://$PfSenseHostName/api/v2/vpn/wireguard/peers"
+    Method      = 'GET'
+    Headers     = $headers
     ContentType = 'application/json'
   }
 
@@ -233,7 +233,7 @@ function Read-PfSenseAPIExport {
 
     $peerLookup[$name] = @{
       PSK = $psk
-      IP = $ip
+      IP  = $ip
     }
   }
 
@@ -281,9 +281,9 @@ if ($APIExport) {
     $headers = @{ Authorization = "Basic $encodedCreds" }
 
     $tunnelParams = @{
-      Uri = "https://$PfSenseHost/api/v2/vpn/wireguard/tunnels"
-      Method = 'GET'
-      Headers = $headers
+      Uri         = "https://$PfSenseHost/api/v2/vpn/wireguard/tunnels"
+      Method      = 'GET'
+      Headers     = $headers
       ContentType = 'application/json'
     }
     if ($SkipCertificateCheck) {

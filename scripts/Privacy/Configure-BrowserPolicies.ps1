@@ -108,102 +108,102 @@ if ($DryRun) { $WhatIfPreference = $true; Write-Log -Message "DRY RUN - no chang
 
 $browserSettings = @(
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
-    Name = 'BlockThirdPartyCookies'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'Edge'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
+    Name        = 'BlockThirdPartyCookies'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Edge'
     Description = 'Block third-party cookies in Microsoft Edge.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
-    Name = 'AutofillCreditCardEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'Edge'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
+    Name        = 'AutofillCreditCardEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Edge'
     Description = 'Disable credit card autofill in Microsoft Edge.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
-    Name = 'SyncDisabled'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'Edge'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
+    Name        = 'SyncDisabled'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Edge'
     Description = 'Disable Microsoft Edge sync.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
-    Name = 'BackgroundModeEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'Edge'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
+    Name        = 'BackgroundModeEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Edge'
     Description = 'Disable Microsoft Edge background mode.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
-    Name = 'PersonalizationReportingEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'Edge'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
+    Name        = 'PersonalizationReportingEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Edge'
     Description = 'Disable Microsoft Edge personalization reporting.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
-    Name = 'DiagnosticData'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'Edge'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
+    Name        = 'DiagnosticData'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Edge'
     Description = 'Disable Microsoft Edge diagnostic data.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Google\Chrome'
-    Name = 'ChromeCleanupEnabled'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'ChromeOptional'
+    Path        = 'HKLM:\SOFTWARE\Policies\Google\Chrome'
+    Name        = 'ChromeCleanupEnabled'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ChromeOptional'
     Description = 'Optional: disable Chrome cleanup.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Google\Chrome'
-    Name = 'ChromeCleanupReportingEnabled'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'ChromeOptional'
+    Path        = 'HKLM:\SOFTWARE\Policies\Google\Chrome'
+    Name        = 'ChromeCleanupReportingEnabled'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ChromeOptional'
     Description = 'Optional: disable Chrome cleanup reporting.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Google\Chrome'
-    Name = 'MetricsReportingEnabled'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'ChromeOptional'
+    Path        = 'HKLM:\SOFTWARE\Policies\Google\Chrome'
+    Name        = 'MetricsReportingEnabled'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ChromeOptional'
     Description = 'Optional: disable Chrome metrics reporting.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Mozilla\Firefox'
-    Name = 'DisableTelemetry'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'FirefoxOptional'
+    Path        = 'HKLM:\SOFTWARE\Policies\Mozilla\Firefox'
+    Name        = 'DisableTelemetry'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'FirefoxOptional'
     Description = 'Optional: disable Firefox telemetry.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Mozilla\Firefox'
-    Name = 'DisableDefaultBrowserAgent'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'FirefoxOptional'
+    Path        = 'HKLM:\SOFTWARE\Policies\Mozilla\Firefox'
+    Name        = 'DisableDefaultBrowserAgent'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'FirefoxOptional'
     Description = 'Optional: disable Firefox default browser agent.'
   }
 )

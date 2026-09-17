@@ -17,3 +17,9 @@ indent_size = 2
 [*.{json,md}]
 indent_style = space
 indent_size = 2
+
+# LGPO text policy sources: trailing whitespace is part of string values, and
+# LGPO reads BOM-less files as ANSI, so keep both as written.
+[resources/policies/*.txt]
+charset = utf-8-bom
+trim_trailing_whitespace = false

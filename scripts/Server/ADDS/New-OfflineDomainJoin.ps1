@@ -86,7 +86,7 @@ Write-Log -Message "Provisioning computer account $ComputerName in $DomainName..
 try {
   $blobParams = @{
     ComputerName = $ComputerName
-    Domain = $DomainName
+    Domain       = $DomainName
   }
   if ($Credential) {
     $blobParams.Credential = $Credential

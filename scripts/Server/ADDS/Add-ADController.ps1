@@ -238,15 +238,15 @@ function Write-PhaseEnvelope {
   )
 
   $envelope = [pscustomobject][ordered]@{
-    phase = $PhaseName
-    success = $Success
-    server = $Server
-    domainName = $DomainName
-    startedAt = $StartedAt
-    completedAt = $CompletedAt
+    phase          = $PhaseName
+    success        = $Success
+    server         = $Server
+    domainName     = $DomainName
+    startedAt      = $StartedAt
+    completedAt    = $CompletedAt
     rebootRequired = $RebootRequired
-    diagnostics = @($Diagnostics)
-    error = $ErrorText
+    diagnostics    = @($Diagnostics)
+    error          = $ErrorText
   }
 
   $json = $envelope | ConvertTo-Json -Depth 6 -Compress
@@ -418,7 +418,7 @@ function Test-TargetPendingReboot {
 
     [pscustomobject]@{
       PendingReboot = ($indicators.Count -gt 0)
-      Indicators = $indicators
+      Indicators    = $indicators
     }
   }
 
@@ -482,7 +482,7 @@ function Test-DomainFunctionalLevel {
       $rootDse = New-Object System.DirectoryServices.DirectoryEntry("LDAP://$domainName/rootDSE")
       $rootDse.RefreshCache()
       [pscustomobject]@{
-        Success = $true
+        Success             = $true
         DomainFunctionality = [int]$rootDse.Properties['domainFunctionality'].Value
         ForestFunctionality = [int]$rootDse.Properties['forestFunctionality'].Value
       }
@@ -490,7 +490,7 @@ function Test-DomainFunctionalLevel {
     catch {
       [pscustomobject]@{
         Success = $false
-        Detail = $_.Exception.Message
+        Detail  = $_.Exception.Message
       }
     }
   }
@@ -513,10 +513,10 @@ function Test-DomainFunctionalLevel {
   }
 
   [pscustomobject]@{
-    DomainLevel = $result.DomainFunctionality
-    ForestLevel = $result.ForestFunctionality
-    DomainName = Get-FunctionalLevelName -Level $result.DomainFunctionality
-    ForestName = Get-FunctionalLevelName -Level $result.ForestFunctionality
+    DomainLevel      = $result.DomainFunctionality
+    ForestLevel      = $result.ForestFunctionality
+    DomainName       = Get-FunctionalLevelName -Level $result.DomainFunctionality
+    ForestName       = Get-FunctionalLevelName -Level $result.ForestFunctionality
     MeetsRequirement = (($result.DomainFunctionality -ge 7) -and ($result.ForestFunctionality -ge 7))
   }
 }
@@ -599,8 +599,8 @@ function Invoke-ValidatePhase {
     $computerSystem = Get-CimInstance -ClassName Win32_ComputerSystem
     $ntds = Get-Service -Name NTDS -ErrorAction SilentlyContinue
     [pscustomobject]@{
-      DomainRole = $computerSystem.DomainRole
-      Domain = $computerSystem.Domain
+      DomainRole    = $computerSystem.DomainRole
+      Domain        = $computerSystem.Domain
       NTDSInstalled = ($null -ne $ntds)
     }
   }
@@ -665,7 +665,7 @@ function Invoke-JoinPhase {
     $computerSystem = Get-CimInstance -ClassName Win32_ComputerSystem
     [pscustomobject]@{
       DomainRole = $computerSystem.DomainRole
-      Domain = $computerSystem.Domain
+      Domain     = $computerSystem.Domain
     }
   }
 
@@ -709,9 +709,9 @@ function Invoke-JoinPhase {
     $arguments = @{
       DomainName = $domainName
       Credential = $joinCredential
-      Restart = $false
-      Force = $true
-      Confirm = $false
+      Restart    = $false
+      Force      = $true
+      Confirm    = $false
     }
     if ($newName) {
       $arguments.NewName = $newName
@@ -767,8 +767,8 @@ function Invoke-PromotePhase {
     $computerSystem = Get-CimInstance -ClassName Win32_ComputerSystem
     $ntds = Get-Service -Name NTDS -ErrorAction SilentlyContinue
     [pscustomobject]@{
-      DomainRole = $computerSystem.DomainRole
-      Domain = $computerSystem.Domain
+      DomainRole    = $computerSystem.DomainRole
+      Domain        = $computerSystem.Domain
       NTDSInstalled = ($null -ne $ntds)
     }
   }
@@ -829,7 +829,7 @@ function Invoke-PromotePhase {
         $rebootRequired = [bool]$installResult.RestartNeeded
       }
       [pscustomobject]@{
-        Installed = $installed
+        Installed      = $installed
         RebootRequired = $rebootRequired
       }
     }
@@ -993,9 +993,9 @@ function Invoke-VerifyPhase {
       $adOk = $false
     }
     [pscustomobject]@{
-      Sysvol = $sysvol
+      Sysvol   = $sysvol
       Netlogon = $netlogon
-      AD = $adOk
+      AD       = $adOk
     }
   }
 
@@ -1043,9 +1043,9 @@ function Invoke-VerifyPhase {
       $status = if ($service) { $service.Status.ToString() } else { 'Missing' }
       $checks += [pscustomobject]@{
         Category = 'Service'
-        Name = $name
-        Status = $(if ($status -eq 'Running') { 'Pass' } else { 'Fail' })
-        Detail = $status
+        Name     = $name
+        Status   = $(if ($status -eq 'Running') { 'Pass' } else { 'Fail' })
+        Detail   = $status
       }
     }
 
@@ -1058,9 +1058,9 @@ function Invoke-VerifyPhase {
     }
     $checks += [pscustomobject]@{
       Category = 'DNS'
-      Name = 'SRV'
-      Status = $(if ($srvRecords.Count -gt 0) { 'Pass' } else { 'Fail' })
-      Detail = "$($srvRecords.Count) _ldap._tcp.dc._msdcs SRV record(s) resolved."
+      Name     = 'SRV'
+      Status   = $(if ($srvRecords.Count -gt 0) { 'Pass' } else { 'Fail' })
+      Detail   = "$($srvRecords.Count) _ldap._tcp.dc._msdcs SRV record(s) resolved."
     }
 
     $replOutput = ''
@@ -1074,29 +1074,29 @@ function Invoke-VerifyPhase {
     }
     $checks += [pscustomobject]@{
       Category = 'Replication'
-      Name = 'repadmin'
-      Status = $(if (-not $replFailed) { 'Pass' } else { 'Warn' })
-      Detail = $(if (-not $replFailed) { 'repadmin /replsummary shows no failures.' } else { 'repadmin /replsummary reported failures - investigate.' })
+      Name     = 'repadmin'
+      Status   = $(if (-not $replFailed) { 'Pass' } else { 'Warn' })
+      Detail   = $(if (-not $replFailed) { 'repadmin /replsummary shows no failures.' } else { 'repadmin /replsummary reported failures - investigate.' })
     }
 
     $dcs = @(Get-ADDomainController -Filter * -ErrorAction SilentlyContinue)
     $thisDc = Get-ADDomainController -Identity $env:COMPUTERNAME -ErrorAction SilentlyContinue
     $checks += [pscustomobject]@{
       Category = 'AD'
-      Name = 'DomainControllers'
-      Status = 'Pass'
-      Detail = ($dcs | ForEach-Object { $_.Name }) -join ', '
+      Name     = 'DomainControllers'
+      Status   = 'Pass'
+      Detail   = ($dcs | ForEach-Object { $_.Name }) -join ', '
     }
     $checks += [pscustomobject]@{
       Category = 'AD'
-      Name = 'ThisDC'
-      Status = $(if ($thisDc) { 'Pass' } else { 'Fail' })
-      Detail = $(if ($thisDc) { "Registered as DC; Global Catalog: $($thisDc.IsGlobalCatalog)" } else { 'Not found in the domain controller list.' })
+      Name     = 'ThisDC'
+      Status   = $(if ($thisDc) { 'Pass' } else { 'Fail' })
+      Detail   = $(if ($thisDc) { "Registered as DC; Global Catalog: $($thisDc.IsGlobalCatalog)" } else { 'Not found in the domain controller list.' })
     }
 
     [pscustomobject]@{
-      Checks = $checks
-      DcCount = $dcs.Count
+      Checks        = $checks
+      DcCount       = $dcs.Count
       GlobalCatalog = if ($thisDc) { [bool]$thisDc.IsGlobalCatalog } else { $false }
     }
   }
@@ -1149,10 +1149,10 @@ function Invoke-FsmoPhase {
     $forest = Get-ADForest -Server localhost -ErrorAction Stop
     $domain = Get-ADDomain -Server localhost -ErrorAction Stop
     $before = [ordered]@{
-      SchemaMaster = $forest.SchemaMaster
-      DomainNamingMaster = $forest.DomainNamingMaster
-      PDCEmulator = $domain.PDCEmulator
-      RIDMaster = $domain.RIDMaster
+      SchemaMaster         = $forest.SchemaMaster
+      DomainNamingMaster   = $forest.DomainNamingMaster
+      PDCEmulator          = $domain.PDCEmulator
+      RIDMaster            = $domain.RIDMaster
       InfrastructureMaster = $domain.InfrastructureMaster
     }
 
@@ -1162,16 +1162,16 @@ function Invoke-FsmoPhase {
     $forestAfter = Get-ADForest -Server localhost -ErrorAction Stop
     $domainAfter = Get-ADDomain -Server localhost -ErrorAction Stop
     $after = [ordered]@{
-      SchemaMaster = $forestAfter.SchemaMaster
-      DomainNamingMaster = $forestAfter.DomainNamingMaster
-      PDCEmulator = $domainAfter.PDCEmulator
-      RIDMaster = $domainAfter.RIDMaster
+      SchemaMaster         = $forestAfter.SchemaMaster
+      DomainNamingMaster   = $forestAfter.DomainNamingMaster
+      PDCEmulator          = $domainAfter.PDCEmulator
+      RIDMaster            = $domainAfter.RIDMaster
       InfrastructureMaster = $domainAfter.InfrastructureMaster
     }
 
     [pscustomobject]@{
       Before = $before
-      After = $after
+      After  = $after
     }
   }
 
@@ -1235,10 +1235,10 @@ function Invoke-DemotePhase {
       $domain = Get-ADDomain -Server localhost -ErrorAction Stop
       $forest = Get-ADForest -Server localhost -ErrorAction Stop
       $holders = @{
-        SchemaMaster = $forest.SchemaMaster
-        DomainNamingMaster = $forest.DomainNamingMaster
-        PDCEmulator = $domain.PDCEmulator
-        RIDMaster = $domain.RIDMaster
+        SchemaMaster         = $forest.SchemaMaster
+        DomainNamingMaster   = $forest.DomainNamingMaster
+        PDCEmulator          = $domain.PDCEmulator
+        RIDMaster            = $domain.RIDMaster
         InfrastructureMaster = $domain.InfrastructureMaster
       }
     }
@@ -1246,9 +1246,9 @@ function Invoke-DemotePhase {
       $holders = @{}
     }
     [pscustomobject]@{
-      DomainRole = $computerSystem.DomainRole
+      DomainRole   = $computerSystem.DomainRole
       ComputerName = $env:COMPUTERNAME
-      Holders = $holders
+      Holders      = $holders
     }
   }
 
@@ -1398,7 +1398,7 @@ function Invoke-DemotePhase {
       param($oldName)
       $dcs = @(Get-ADDomainController -Filter * -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)
       [pscustomobject]@{
-        Dcs = $dcs
+        Dcs     = $dcs
         OldGone = ($dcs -notcontains $oldName)
       }
     }

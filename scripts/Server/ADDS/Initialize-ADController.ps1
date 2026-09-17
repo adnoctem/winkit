@@ -188,16 +188,16 @@ function Write-PhaseEnvelope {
   )
 
   $envelope = [pscustomobject][ordered]@{
-    phase = $PhaseName
-    success = $Success
-    server = $Server
-    domainName = $DomainName
+    phase             = $PhaseName
+    success           = $Success
+    server            = $Server
+    domainName        = $DomainName
     domainNetbiosName = $DomainNetbiosName
-    startedAt = $StartedAt
-    completedAt = $CompletedAt
-    rebootRequired = $RebootRequired
-    diagnostics = @($Diagnostics)
-    error = $ErrorText
+    startedAt         = $StartedAt
+    completedAt       = $CompletedAt
+    rebootRequired    = $RebootRequired
+    diagnostics       = @($Diagnostics)
+    error             = $ErrorText
   }
 
   $json = $envelope | ConvertTo-Json -Depth 6 -Compress
@@ -368,7 +368,7 @@ function Test-TargetPendingReboot {
 
     [pscustomobject]@{
       PendingReboot = ($indicators.Count -gt 0)
-      Indicators = $indicators
+      Indicators    = $indicators
     }
   }
 
@@ -470,8 +470,8 @@ function Invoke-ValidatePhase {
     $computerSystem = Get-CimInstance -ClassName Win32_ComputerSystem
     $ntds = Get-Service -Name NTDS -ErrorAction SilentlyContinue
     [pscustomobject]@{
-      DomainRole = $computerSystem.DomainRole
-      Domain = $computerSystem.Domain
+      DomainRole    = $computerSystem.DomainRole
+      Domain        = $computerSystem.Domain
       NTDSInstalled = ($null -ne $ntds)
     }
   }
@@ -511,7 +511,7 @@ function Invoke-ValidatePhase {
         $rebootRequired = [bool]$installResult.RestartNeeded
       }
       [pscustomobject]@{
-        Installed = $installed
+        Installed      = $installed
         RebootRequired = $rebootRequired
       }
     }
@@ -566,7 +566,7 @@ function Invoke-ValidatePhase {
       $precheckErrors = @($precheckErrors) + $_.Exception.Message
     }
     [pscustomobject]@{
-      Success = ($precheckErrors.Count -eq 0)
+      Success  = ($precheckErrors.Count -eq 0)
       Messages = ($output + $precheckErrors)
     }
   }
@@ -619,8 +619,8 @@ function Invoke-PromotePhase {
     $computerSystem = Get-CimInstance -ClassName Win32_ComputerSystem
     $ntds = Get-Service -Name NTDS -ErrorAction SilentlyContinue
     [pscustomobject]@{
-      DomainRole = $computerSystem.DomainRole
-      Domain = $computerSystem.Domain
+      DomainRole    = $computerSystem.DomainRole
+      Domain        = $computerSystem.Domain
       NTDSInstalled = ($null -ne $ntds)
     }
   }
@@ -872,7 +872,7 @@ function Invoke-DcFirewallProfileMitigation {
     $profiles = @(Get-NetConnectionProfile -ErrorAction SilentlyContinue | Select-Object InterfaceAlias, NetworkCategory)
     [pscustomobject]@{
       Categories = @($profiles | ForEach-Object { $_.NetworkCategory.ToString() })
-      Profiles = $profiles
+      Profiles   = $profiles
     }
   }
   $toggleScript = {
@@ -995,9 +995,9 @@ function Invoke-VerifyPhase {
       $adOk = $false
     }
     [pscustomobject]@{
-      Sysvol = $sysvol
+      Sysvol   = $sysvol
       Netlogon = $netlogon
-      AD = $adOk
+      AD       = $adOk
     }
   }
 

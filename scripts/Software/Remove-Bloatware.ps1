@@ -251,7 +251,7 @@ $_packageGroups = @{
     'MicrosoftCorporationII.MicrosoftEdgeGameAssist*'
   )
 
-  OEM = @(
+  OEM     = @(
     'DolbyLaboratories.DolbyAccess*'
     'NVIDIACorp.NVIDIAControlPanel*'
     'Microsoft.DrawboardPDF*'
@@ -260,7 +260,7 @@ $_packageGroups = @{
     'RealtekSemiconductorCorp.RealtekAudioControl*'
   )
 
-  Risky = @(
+  Risky   = @(
     'MicrosoftWindows.Client.WebExperience*'
     'Microsoft.Windows.DevHome*'
     'MicrosoftWindows.UndockedDevKit*'
@@ -764,7 +764,7 @@ if (-not $SkipProvisioned) {
 
     if ($DryRun -and $_provisionedOnly.Count -gt 0) {
       $_provisionedPreview = $_provisionedOnly | Select-Object Pattern, Protected, ProtectedReason, @{
-        Name = 'PackageName'
+        Name       = 'PackageName'
         Expression = { $_.Package.PackageName }
       }
       $_provisionedPreview | Format-Table -AutoSize
@@ -790,7 +790,7 @@ else {
 
   if ($DryRun -and $_installedMatched.Count -gt 0) {
     $_installedPreview = $_installedMatched | Select-Object Pattern, Protected, ProtectedReason, @{
-      Name = 'PackageName'
+      Name       = 'PackageName'
       Expression = { $_.Package.PackageName }
     }
     $_installedPreview | Format-Table -AutoSize

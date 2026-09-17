@@ -226,23 +226,23 @@ function Get-ADUserReport {
   }
 
   [pscustomobject]@{
-    SamAccountName = [string]$properties['sAMAccountName']
+    SamAccountName    = [string]$properties['sAMAccountName']
     UserPrincipalName = [string]$properties['userPrincipalName']
-    DisplayName = [string]$properties['displayName']
-    Mail = [string]$properties['mail']
-    MailAliases = @($mailAliases)
-    ProxyAddresses = @($proxyAddresses)
-    Department = [string]$properties['department']
-    Title = [string]$properties['title']
-    Manager = $managerDn
-    ManagerName = $managerName
-    DirectReports = @($directReports)
+    DisplayName       = [string]$properties['displayName']
+    Mail              = [string]$properties['mail']
+    MailAliases       = @($mailAliases)
+    ProxyAddresses    = @($proxyAddresses)
+    Department        = [string]$properties['department']
+    Title             = [string]$properties['title']
+    Manager           = $managerDn
+    ManagerName       = $managerName
+    DirectReports     = @($directReports)
     DirectReportCount = $directReports.Count
-    Groups = @($groups)
-    GroupCount = $groups.Count
-    PasswordLastSet = $passwordLastSet
-    PasswordAgeDays = $passwordAgeDays
-    PasswordStale = (($null -ne $passwordAgeDays) -and ($passwordAgeDays -gt $MaxAgeDays))
+    Groups            = @($groups)
+    GroupCount        = $groups.Count
+    PasswordLastSet   = $passwordLastSet
+    PasswordAgeDays   = $passwordAgeDays
+    PasswordStale     = (($null -ne $passwordAgeDays) -and ($passwordAgeDays -gt $MaxAgeDays))
   }
 }
 

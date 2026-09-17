@@ -72,11 +72,11 @@ BeforeAll {
 Describe 'New-TestOutlookMessage' {
   It 'creates the requested number of deterministic items' {
     $_generatorArgs = @{
-      Count = 20
-      Seed = 42
+      Count          = 20
+      Seed           = 42
       DuplicateRatio = 0.25
-      StoreName = $script:StoreName
-      PassThru = $true
+      StoreName      = $script:StoreName
+      PassThru       = $true
     }
     if ($script:RedemptionAvailable) { $_generatorArgs['UseRedemption'] = $true }
 
@@ -191,12 +191,12 @@ Describe 'Optimize-Outlook deduplication' {
 Describe 'New-TestOutlookMessage determinism' {
   It 'seeds a deterministic Message-ID sequence with duplicates' {
     $_generatorArgs = @{
-      Count = 8
-      Seed = 7
-      DuplicateRatio = 0.25
-      StoreName = $script:StoreName
+      Count            = 8
+      Seed             = 7
+      DuplicateRatio   = 0.25
+      StoreName        = $script:StoreName
       TargetFolderName = 'WinkitIds'
-      PassThru = $true
+      PassThru         = $true
     }
     if ($script:RedemptionAvailable) { $_generatorArgs['UseRedemption'] = $true }
 
@@ -221,14 +221,14 @@ Describe 'New-OutlookArchive' {
 
   It 'honours StartDate bounds when ReceivedTime was injected' {
     $_generatorArgs = @{
-      Count = 10
-      Seed = 9
-      DuplicateRatio = 0.0
-      StoreName = $script:StoreName
+      Count            = 10
+      Seed             = 9
+      DuplicateRatio   = 0.0
+      StoreName        = $script:StoreName
       TargetFolderName = 'WinkitDated'
-      StartDate = '2024-01-01'
-      EndDate = '2024-12-31'
-      PassThru = $true
+      StartDate        = '2024-01-01'
+      EndDate          = '2024-12-31'
+      PassThru         = $true
     }
     if ($script:RedemptionAvailable) { $_generatorArgs['UseRedemption'] = $true }
 

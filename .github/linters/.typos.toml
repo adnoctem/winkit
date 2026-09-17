@@ -1,0 +1,8 @@
+[files]
+extend-exclude = []
+
+[default]
+extend-ignore-identifiers-re = [".*fo*"]
+
+[default.extend-identifiers]
+fo = "fo"

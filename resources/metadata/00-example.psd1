@@ -1,16 +1,16 @@
 ﻿@{
-  SourceFile = '01-telemetry.lgpo'
-  Title = 'Telemetry and diagnostic data restraint'
-  Owner = '<role-or-name>'
-  IntroducedVersion = '2026-06-14-01'
-  LastReviewed = '2026-06-14'
+  SourceFile         = '01-telemetry.lgpo'
+  Title              = 'Telemetry and diagnostic data restraint'
+  Owner              = '<role-or-name>'
+  IntroducedVersion  = '2026-06-14-01'
+  LastReviewed       = '2026-06-14'
 
-  IsoControls = @(
+  IsoControls        = @(
     'A.5.34 — Privacy and protection of PII'
     'A.8.16 — Monitoring activities (data minimisation)'
   )
 
-  Justification = @'
+  Justification      = @'
 Windows Diagnostic Data collection includes telemetry beyond what is required
 for product functionality and security. Disabling reduces both the attack
 surface for data exfiltration via Microsoft-approved channels and the volume
@@ -27,8 +27,8 @@ also a tracking identifier; disabling it aligns with the same justification.
     'ADMX: ControlPanelDisplay.admx, policy "DisablePersonalisation"'
   )
 
-  AppliesTo = @{
+  AppliesTo          = @{
     WindowsEditions = @('Pro', 'Enterprise', 'Education')
-    MinBuild = 19041
+    MinBuild        = 19041
   }
 }

@@ -68,8 +68,8 @@ Write-Log -Message "Querying accounts expiring within $DaysUntilExpiry day(s)...
 
 $searchParams = @{
   AccountExpiring = $true
-  TimeSpan = (New-TimeSpan -Days $DaysUntilExpiry)
-  UsersOnly = $true
+  TimeSpan        = (New-TimeSpan -Days $DaysUntilExpiry)
+  UsersOnly       = $true
 }
 if ($Server) {
   $searchParams.Server = $Server
@@ -90,11 +90,11 @@ foreach ($account in $accounts) {
     continue
   }
   $report += [pscustomobject]@{
-    SamAccountName = $account.SamAccountName
-    Name = $account.Name
+    SamAccountName        = $account.SamAccountName
+    Name                  = $account.Name
     AccountExpirationDate = $account.AccountExpirationDate
-    DaysUntilExpiration = [math]::Round(($account.AccountExpirationDate - $now).TotalDays, 1)
-    Enabled = $account.Enabled
+    DaysUntilExpiration   = [math]::Round(($account.AccountExpirationDate - $now).TotalDays, 1)
+    Enabled               = $account.Enabled
   }
 }
 

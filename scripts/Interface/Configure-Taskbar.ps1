@@ -149,121 +149,121 @@ $widgetsDshKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Dsh'
 
 $taskbarSettings = @(
   @{
-    Path = $advancedKey
-    Name = 'TaskbarAl'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
-    Group = 'Alignment'
+    Path        = $advancedKey
+    Name        = 'TaskbarAl'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
+    Group       = 'Alignment'
     Description = 'Taskbar alignment: left. Windows centered default is 1.'
   }
   @{
-    Path = $searchKey
-    Name = 'SearchboxTaskbarMode'
-    Preferred = 0
-    Default = 2
-    Type = 'DWord'
-    MinBuild = 22000
-    Group = 'Search'
+    Path        = $searchKey
+    Name        = 'SearchboxTaskbarMode'
+    Preferred   = 0
+    Default     = 2
+    Type        = 'DWord'
+    MinBuild    = 22000
+    Group       = 'Search'
     Description = 'Taskbar search display mode. 0 hide, 1 icon, 2 box, 3 label.'
   }
   @{
-    Path = $advancedKey
-    Name = 'ShowTaskViewButton'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
-    Group = 'Buttons'
+    Path        = $advancedKey
+    Name        = 'ShowTaskViewButton'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
+    Group       = 'Buttons'
     Description = 'Hide Task View button.'
   }
   @{
-    Path = $advancedKey
-    Name = 'TaskbarMn'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MaxBuild = 22621
-    Group = 'Buttons'
+    Path        = $advancedKey
+    Name        = 'TaskbarMn'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MaxBuild    = 22621
+    Group       = 'Buttons'
     Description = 'Hide Chat / Meet Now button.'
   }
   @{
-    Path = $policyExplorerKey
-    Name = 'HideSCAMeetNow'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MaxBuild = 22621
-    Group = 'Buttons'
+    Path        = $policyExplorerKey
+    Name        = 'HideSCAMeetNow'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MaxBuild    = 22621
+    Group       = 'Buttons'
     Description = 'Hide Meet Now policy button.'
   }
   @{
-    Path = $widgetsPolicyManagerKey
-    Name = 'value'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'Buttons'
+    Path        = $widgetsPolicyManagerKey
+    Name        = 'value'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Buttons'
     Description = 'Disable Widgets / News and Interests through PolicyManager.'
   }
   @{
-    Path = $widgetsDshKey
-    Name = 'AllowNewsAndInterests'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'Buttons'
+    Path        = $widgetsDshKey
+    Name        = 'AllowNewsAndInterests'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Buttons'
     Description = 'Disable Widgets / News and Interests policy.'
   }
   @{
-    Path = "$advancedKey\TaskbarDeveloperSettings"
-    Name = 'TaskbarEndTask'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22631
-    Group = 'Behavior'
+    Path        = "$advancedKey\TaskbarDeveloperSettings"
+    Name        = 'TaskbarEndTask'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22631
+    Group       = 'Behavior'
     Description = 'Show End Task in taskbar context menu.'
   }
   @{
-    Path = $advancedKey
-    Name = 'LastActiveClick'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
-    Group = 'Behavior'
+    Path        = $advancedKey
+    Name        = 'LastActiveClick'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
+    Group       = 'Behavior'
     Description = 'Enable last active click behavior for grouped apps.'
   }
   @{
-    Path = $advancedKey
-    Name = 'TaskbarGlomLevel'
-    Preferred = 0
-    Default = 0
-    Type = 'DWord'
-    MinBuild = 22000
-    Group = 'Combining'
+    Path        = $advancedKey
+    Name        = 'TaskbarGlomLevel'
+    Preferred   = 0
+    Default     = 0
+    Type        = 'DWord'
+    MinBuild    = 22000
+    Group       = 'Combining'
     Description = 'Main taskbar combining. 0 always combine and hide labels, 1 when full, 2 never.'
   }
   @{
-    Path = $advancedKey
-    Name = 'MMTaskbarGlomLevel'
-    Preferred = 0
-    Default = 0
-    Type = 'DWord'
-    MinBuild = 22000
-    Group = 'Combining'
+    Path        = $advancedKey
+    Name        = 'MMTaskbarGlomLevel'
+    Preferred   = 0
+    Default     = 0
+    Type        = 'DWord'
+    MinBuild    = 22000
+    Group       = 'Combining'
     Description = 'Secondary taskbar combining. 0 always combine and hide labels, 1 when full, 2 never.'
   }
   @{
-    Path = $advancedKey
-    Name = 'MMTaskbarMode'
-    Preferred = 1
-    Default = 0
-    Type = 'DWord'
-    MinBuild = 22000
-    Group = 'MultiMonitor'
+    Path        = $advancedKey
+    Name        = 'MMTaskbarMode'
+    Preferred   = 1
+    Default     = 0
+    Type        = 'DWord'
+    MinBuild    = 22000
+    Group       = 'MultiMonitor'
     Description = 'Multi-monitor taskbar mode. 0 all, 1 main and active, 2 active only.'
   }
 )

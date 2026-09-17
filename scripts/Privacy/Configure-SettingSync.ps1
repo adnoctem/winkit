@@ -99,83 +99,83 @@ if ($DryRun) {
 
 $syncSettings = @(
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
-    Name = 'DisableSettingSync'
-    Preferred = 2
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
+    Name        = 'DisableSettingSync'
+    Preferred   = 2
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable Windows setting sync. (2 = disabled)'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
-    Name = 'DisableSettingSyncUserOverride'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
+    Name        = 'DisableSettingSyncUserOverride'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Prevent users from re-enabling setting sync.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
-    Name = 'DisableAppSyncSettingSync'
-    Preferred = 2
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
+    Name        = 'DisableAppSyncSettingSync'
+    Preferred   = 2
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable app data sync.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
-    Name = 'DisableApplicationSettingSync'
-    Preferred = 2
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
+    Name        = 'DisableApplicationSettingSync'
+    Preferred   = 2
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable application setting sync.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
-    Name = 'DisableCredentialsSettingSync'
-    Preferred = 2
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
+    Name        = 'DisableCredentialsSettingSync'
+    Preferred   = 2
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable credential/password sync.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
-    Name = 'DisableDesktopThemeSettingSync'
-    Preferred = 2
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
+    Name        = 'DisableDesktopThemeSettingSync'
+    Preferred   = 2
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable theme/desktop sync.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
-    Name = 'DisableStartLayoutSettingSync'
-    Preferred = 2
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
+    Name        = 'DisableStartLayoutSettingSync'
+    Preferred   = 2
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable Start layout sync.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
-    Name = 'DisableWebBrowserSettingSync'
-    Preferred = 2
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
+    Name        = 'DisableWebBrowserSettingSync'
+    Preferred   = 2
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable web browser data sync.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
-    Name = 'DisableLanguageSettingSync'
-    Preferred = 2
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
+    Name        = 'DisableLanguageSettingSync'
+    Preferred   = 2
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable language preference sync.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
-    Name = 'DisableWindowsSettingSync'
-    Preferred = 2
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows\SettingSync'
+    Name        = 'DisableWindowsSettingSync'
+    Preferred   = 2
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable Windows setting sync (broad).'
   }
 )

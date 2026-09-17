@@ -112,18 +112,18 @@ $registryPath = 'HKCU:\Control Panel\Mouse'
 $mouseValues = @(
   @{
     Name = 'MouseSpeed'
-    Off = '0'
-    On = '1'
+    Off  = '0'
+    On   = '1'
   }
   @{
     Name = 'MouseThreshold1'
-    Off = '0'
-    On = '6'
+    Off  = '0'
+    On   = '6'
   }
   @{
     Name = 'MouseThreshold2'
-    Off = '0'
-    On = '10'
+    Off  = '0'
+    On   = '10'
   }
 )
 

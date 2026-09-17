@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
 
 <#
 .SYNOPSIS

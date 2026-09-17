@@ -255,10 +255,10 @@ function Get-DhcpLeaseRecord {
       $_mac = Format-MacAddress -Value $_lease.ClientId
       if ($_mac) {
         [void]$_found.Add([PSCustomObject]@{
-            IPAddress = $_lease.IPAddress.ToString()
+            IPAddress  = $_lease.IPAddress.ToString()
             MacAddress = $_mac
-            HostName = $_lease.HostName
-            ScopeId = $_scope
+            HostName   = $_lease.HostName
+            ScopeId    = $_scope
           })
       }
     }
@@ -276,11 +276,11 @@ function Get-NeighborMacAddress {
   )
 
   $_statePriority = @{
-    'Reachable' = 0
-    'Permanent' = 1
-    'Stale' = 2
-    'Delay' = 3
-    'Probe' = 4
+    'Reachable'   = 0
+    'Permanent'   = 1
+    'Stale'       = 2
+    'Delay'       = 3
+    'Probe'       = 4
     'Unreachable' = 5
   }
 
@@ -301,9 +301,9 @@ function Get-NeighborMacAddress {
     $_mac = Format-MacAddress -Value $_best.LinkLayerAddress
     if ($_mac -and $_mac -ne '00:00:00:00:00:00') {
       [void]$_found.Add([PSCustomObject]@{
-          IPAddress = $_address
+          IPAddress  = $_address
           MacAddress = $_mac
-          State = $_best.State
+          State      = $_best.State
         })
     }
   }
@@ -467,10 +467,10 @@ function Add-MacResolution {
 
   $_seenMacs[$MacAddress] = $true
   [void]$_resolutionResults.Add([PSCustomObject]@{
-      HostName = if ($HostName) { $HostName } else { $null }
-      IPAddress = $IPAddress
+      HostName   = if ($HostName) { $HostName } else { $null }
+      IPAddress  = $IPAddress
       MacAddress = $MacAddress
-      Source = $Source
+      Source     = $Source
     })
   return $true
 }

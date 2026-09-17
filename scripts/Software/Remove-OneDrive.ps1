@@ -209,22 +209,22 @@ function Set-OneDrivePolicy {
 
   $_settings = @(
     @{
-      Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive'
-      Name = 'DisableFileSync'
+      Path  = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive'
+      Name  = 'DisableFileSync'
       Value = 1
-      Type = 'DWord'
+      Type  = 'DWord'
     },
     @{
-      Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive'
-      Name = 'DisableFileSyncNGSC'
+      Path  = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive'
+      Name  = 'DisableFileSyncNGSC'
       Value = 1
-      Type = 'DWord'
+      Type  = 'DWord'
     },
     @{
-      Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent'
-      Name = 'DisableWindowsConsumerFeatures'
+      Path  = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent'
+      Name  = 'DisableWindowsConsumerFeatures'
       Value = 1
-      Type = 'DWord'
+      Type  = 'DWord'
     }
   )
 
@@ -356,40 +356,40 @@ function Restore-KnownFolderRegistry {
   $_shellFolders = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'
   $_settings = @(
     @{
-      Path = $_userShellFolders
-      Name = 'Desktop'
+      Path  = $_userShellFolders
+      Name  = 'Desktop'
       Value = '%USERPROFILE%\Desktop'
-      Type = 'ExpandString'
+      Type  = 'ExpandString'
     },
     @{
-      Path = $_userShellFolders
-      Name = 'Personal'
+      Path  = $_userShellFolders
+      Name  = 'Personal'
       Value = '%USERPROFILE%\Documents'
-      Type = 'ExpandString'
+      Type  = 'ExpandString'
     },
     @{
-      Path = $_userShellFolders
-      Name = 'My Pictures'
+      Path  = $_userShellFolders
+      Name  = 'My Pictures'
       Value = '%USERPROFILE%\Pictures'
-      Type = 'ExpandString'
+      Type  = 'ExpandString'
     },
     @{
-      Path = $_shellFolders
-      Name = 'Desktop'
+      Path  = $_shellFolders
+      Name  = 'Desktop'
       Value = (Join-Path -Path $env:USERPROFILE -ChildPath 'Desktop')
-      Type = 'String'
+      Type  = 'String'
     },
     @{
-      Path = $_shellFolders
-      Name = 'Personal'
+      Path  = $_shellFolders
+      Name  = 'Personal'
       Value = (Join-Path -Path $env:USERPROFILE -ChildPath 'Documents')
-      Type = 'String'
+      Type  = 'String'
     },
     @{
-      Path = $_shellFolders
-      Name = 'My Pictures'
+      Path  = $_shellFolders
+      Name  = 'My Pictures'
       Value = (Join-Path -Path $env:USERPROFILE -ChildPath 'Pictures')
-      Type = 'String'
+      Type  = 'String'
     }
   )
 

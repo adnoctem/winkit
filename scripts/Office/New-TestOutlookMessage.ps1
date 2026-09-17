@@ -326,8 +326,8 @@ try {
 
     if ($WhatIfPreference) {
       Add-OperationResult -Results $_results -Target $_subject -Source 'Outlook' -Scope $TargetFolderName -Action 'Create' -Status 'Skipped' -Detail 'DryRun' -Property @{
-        Received = $_received
-        MessageId = $_messageId
+        Received       = $_received
+        MessageId      = $_messageId
         HeaderInjected = $false
       }
       continue
@@ -342,8 +342,8 @@ try {
       }
 
       Add-OperationResult -Results $_results -Target $_subject -Source 'Outlook' -Scope $TargetFolderName -Action 'Create' -Status 'Created' -Property @{
-        Received = $_received
-        MessageId = $_messageId
+        Received       = $_received
+        MessageId      = $_messageId
         HeaderInjected = $_injected
       }
     }

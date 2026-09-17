@@ -268,7 +268,7 @@ function Invoke-EuroPdfAsync {
 
   $_body = @{
     document_content = $HtmlContent
-    async = $true
+    async            = $true
   }
   if ($PdfProfile) { $_body.profile = $PdfProfile }
   if ($Pipeline) { $_body.pipeline = $Pipeline }
@@ -368,7 +368,7 @@ function Invoke-DocRaptorSync {
   )
 
   $_body = @{
-    type = 'pdf'
+    type             = 'pdf'
     document_content = $HtmlContent
   }
 
@@ -420,9 +420,9 @@ function Invoke-DocRaptorAsync {
   )
 
   $_body = @{
-    type = 'pdf'
+    type             = 'pdf'
     document_content = $HtmlContent
-    async = $true
+    async            = $true
   }
 
   if ($PdfProfile) { $_body.prince_options = @{ profile = $PdfProfile } }

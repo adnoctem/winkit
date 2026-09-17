@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
 
 <#
 .SYNOPSIS
@@ -85,8 +85,8 @@ Import-Module PSFoundation -Force
 # execution order and its dependency rules live further down; this table only
 # says where each step's script is found.
 $BootstrapScripts = @{
-  WinGet = 'Software/Install-WinGet'
-  PowerShellCore = 'Software/Install-PowerShellCore'
+  WinGet             = 'Software/Install-WinGet'
+  PowerShellCore     = 'Software/Install-PowerShellCore'
   VCRedistributables = 'Software/Install-VCRedistributables'
 }
 

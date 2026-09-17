@@ -100,7 +100,7 @@ foreach ($_name in $LogName) {
     continue
   }
   $_targets += [pscustomobject]@{
-    Name = $_name
+    Name        = $_name
     RecordCount = [long]$_log.RecordCount
   }
 }

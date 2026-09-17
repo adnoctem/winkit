@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
 
 <#
 .SYNOPSIS
@@ -191,35 +191,6 @@ if ((Get-OSBuildNumber) -lt $minSupportedBuild) {
 }
 
 # ---- Helpers ----------------------------------------------------------------
-
-function Get-WingetInstallError {
-  <#
-    Translates known winget/DISM/AppX error codes to actionable guidance.
-    Codes marked Benign indicate "already installed" states that should not
-    be reported as failures.
-  #>
-  [CmdletBinding()]
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$Message
-  )
-
-  $translationTable = @(
-    @{ Code = '0x80073D06'; Benign = $true; Detail = 'A newer version is already installed.' }
-    @{ Code = '0x80073CF0'; Benign = $true; Detail = 'The same version is already installed.' }
-    @{ Code = '0x80073D02'; Benign = $false; Detail = 'Resources are in use (commonly Windows Terminal holding a lock). Close Windows Terminal and retry.' }
-    @{ Code = '0x80073CF3'; Benign = $false; Detail = 'A prerequisite was not detected. Retry - this is usually transient.' }
-    @{ Code = '0x80073CF9'; Benign = $false; Detail = 'Registration failed under the SYSTEM account. Use an Administrator account instead.' }
-  )
-
-  foreach ($entry in $translationTable) {
-    if ($Message -match $entry.Code) {
-      return [pscustomobject]@{ Known = $true; Benign = $entry.Benign; Detail = $entry.Detail }
-    }
-  }
-
-  [pscustomobject]@{ Known = $false; Benign = $false; Detail = $null }
-}
 
 function Find-WinGet {
   <#
@@ -427,12 +398,12 @@ function Get-WingetHealth {
   $sourcePackagePresent = ($null -ne $sourcePackage)
 
   [pscustomobject]@{
-    WingetPresent = ($null -ne $wingetCommand)
-    Version = $version
-    SourcesOk = $sourcesOk
-    SourceError = $sourceError
+    WingetPresent        = ($null -ne $wingetCommand)
+    Version              = $version
+    SourcesOk            = $sourcesOk
+    SourceError          = $sourceError
     SourcePackagePresent = $sourcePackagePresent
-    Healthy = (($null -ne $wingetCommand) -and $version -and ($sourcesOk -eq $true) -and $sourcePackagePresent)
+    Healthy              = (($null -ne $wingetCommand) -and $version -and ($sourcesOk -eq $true) -and $sourcePackagePresent)
   }
 }
 
@@ -471,8 +442,8 @@ function Invoke-WingetRepair {
     Add-OperationResult -Results $_results -Target 'WinGet' -Source 'Winget' -Action 'Repair' -Status 'Completed' -Detail 'Repair-WinGetPackageManager completed.'
   }
   catch {
-    $translated = Get-WingetInstallError -Message $_.Exception.Message
-    $detail = if ($translated.Known) { $translated.Detail } else { $_.Exception.Message }
+    $translated = Get-ErrorTranslation -ErrorRecord $_
+    $detail = if ($translated) { "$($translated.Detail) ($($translated.Code))" } else { $_.Exception.Message }
     Add-OperationResult -Results $_results -Target 'WinGet' -Source 'Winget' -Action 'Repair' -Status 'Failed' -Detail "Repair-WinGetPackageManager failed: $detail"
   }
 
@@ -496,8 +467,8 @@ function Invoke-WingetRepair {
     Add-OperationResult -Results $_results -Target 'Microsoft.Winget.Source' -Source 'Winget' -Action 'Repair' -Status 'Completed' -Detail 'Source package reinstalled from cdn.winget.microsoft.com (issue #4799 fix).'
   }
   catch {
-    $translated = Get-WingetInstallError -Message $_.Exception.Message
-    $detail = if ($translated.Known) { $translated.Detail } else { $_.Exception.Message }
+    $translated = Get-ErrorTranslation -ErrorRecord $_
+    $detail = if ($translated) { "$($translated.Detail) ($($translated.Code))" } else { $_.Exception.Message }
     Add-OperationResult -Results $_results -Target 'Microsoft.Winget.Source' -Source 'Winget' -Action 'Repair' -Status 'Failed' -Detail "Source package reinstall failed: $detail"
   }
 
@@ -619,8 +590,8 @@ if (-not $ForceManual) {
       Add-OperationResult -Results $_results -Target 'WinGet' -Source 'Winget' -Action 'Install' -Status 'Skipped' -Detail 'Repair path completed but winget not on PATH; falling back to manual.'
     }
     catch {
-      $translated = Get-WingetInstallError -Message $_.Exception.Message
-      $detail = if ($translated.Known) { $translated.Detail } else { $_.Exception.Message }
+      $translated = Get-ErrorTranslation -ErrorRecord $_
+      $detail = if ($translated) { "$($translated.Detail) ($($translated.Code))" } else { $_.Exception.Message }
       Write-Log -Message "  -> Module path failed ($detail); falling back to manual download." -Color Yellow
       Add-OperationResult -Results $_results -Target 'WinGet' -Source 'Winget' -Action 'Install' -Status 'Failed' -Detail $detail
     }
@@ -765,8 +736,8 @@ try {
           Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe -ErrorAction Stop
         }
         catch {
-          $translated = Get-WingetInstallError -Message $_.Exception.Message
-          $detail = if ($translated.Known) { $translated.Detail } else { $_.Exception.Message }
+          $translated = Get-ErrorTranslation -ErrorRecord $_
+          $detail = if ($translated) { "$($translated.Detail) ($($translated.Code))" } else { $_.Exception.Message }
           Write-Log -Message "Per-user registration step skipped: $detail" -Color Yellow
         }
       }
@@ -786,13 +757,15 @@ try {
   }
 }
 catch {
-  $translated = Get-WingetInstallError -Message $_.Exception.Message
-  if ($translated.Benign) {
-    Write-Log -Message "  -> $($translated.Detail)" -Color Green
-    Add-OperationResult -Results $_results -Target 'WinGet' -Source 'Winget' -Action 'Install' -Status 'Skipped' -Detail $translated.Detail
+  $translated = Get-ErrorTranslation -ErrorRecord $_
+  $detail = if ($translated) { "$($translated.Detail) ($($translated.Code))" } else { $_.Exception.Message }
+  # A recognized code is not success on its own (0x80073D06: a newer version is
+  # installed) - what decides it is whether winget is usable now.
+  if (($translated -and $translated.Benign) -or (Test-WinGetDetected)) {
+    Write-Log -Message "  -> winget is available; the manual install step reported: $detail" -Color Green
+    Add-OperationResult -Results $_results -Target 'WinGet' -Source 'Winget' -Action 'Install' -Status 'Skipped' -Detail "winget is available despite: $detail"
   }
   else {
-    $detail = if ($translated.Known) { $translated.Detail } else { $_.Exception.Message }
     Write-Log -Message "  -> FAILED - manual install: $detail" -Color Red
     Add-OperationResult -Results $_results -Target 'WinGet' -Source 'Winget' -Action 'Install' -Status 'Failed' -Detail $detail
   }

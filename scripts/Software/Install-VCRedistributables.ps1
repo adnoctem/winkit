@@ -115,8 +115,8 @@ if (Test-Path -LiteralPath $regPath) {
 
 $urls = @{
   '14.0' = @{
-    x64 = 'https://aka.ms/vc14/vc_redist.x64.exe'
-    x86 = 'https://aka.ms/vc14/vc_redist.x86.exe'
+    x64   = 'https://aka.ms/vc14/vc_redist.x64.exe'
+    x86   = 'https://aka.ms/vc14/vc_redist.x86.exe'
     arm64 = 'https://aka.ms/vc14/vc_redist.arm64.exe'
   }
   '12.0' = @{
@@ -131,11 +131,11 @@ $urls = @{
     x64 = 'https://download.microsoft.com/download/A/8/0/A80747C3-41BD-45DF-B505-E9710D2744E0/vcredist_x64.exe'
     x86 = 'https://download.microsoft.com/download/C/6/D/C6D0FD4E-9E53-4897-9B91-836EBA2FA716/vcredist_x86.exe'
   }
-  '9.0' = @{
+  '9.0'  = @{
     x64 = 'https://download.microsoft.com/download/5/D/8/5D8C65CB-C849-4025-8E95-C3966CAFD8AE/vcredist_x64.exe'
     x86 = 'https://download.microsoft.com/download/5/D/8/5D8C65CB-C849-4025-8E95-C3966CAFD8AE/vcredist_x86.exe'
   }
-  '8.0' = @{
+  '8.0'  = @{
     x64 = 'https://download.microsoft.com/download/8/B/4/8B42259F-5D70-43F4-AC2E-4B208FD8D66A/vcredist_x64.EXE'
     x86 = 'https://download.microsoft.com/download/8/B/4/8B42259F-5D70-43F4-AC2E-4B208FD8D66A/vcredist_x86.EXE'
   }

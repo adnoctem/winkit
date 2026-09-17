@@ -1,70 +1,68 @@
 ﻿@{
-  Severity = @('Error', 'Warning')
+  Severity            = @('Error', 'Warning')
   IncludeDefaultRules = $true
   # ExcludeRules = @(
   #   # Project convention: Merge-ObjectArrays describes a two-array merge helper.
   #   'PSUseSingularNouns'
   # )
 
-  Rules = @{
-    PSUseCompatibleSyntax = @{
-      Enable = $true
-      TargetVersions = @('5.0', '5.1', '7.0')
-    }
-
-    PSPlaceOpenBrace = @{
-      Enable = $true
-      OnSameLine = $true
-      NewLineAfter = $true
+  Rules               = @{
+    PSPlaceOpenBrace               = @{
+      Enable             = $true
+      OnSameLine         = $true
+      NewLineAfter       = $true
       IgnoreOneLineBlock = $true
     }
 
-    PSPlaceCloseBrace = @{
-      Enable = $true
-      NewLineAfter = $true
+    PSPlaceCloseBrace              = @{
+      Enable             = $true
+      NewLineAfter       = $true
       IgnoreOneLineBlock = $true
-      NoEmptyLineBefore = $false
+      NoEmptyLineBefore  = $false
     }
 
-    PSUseConsistentIndentation = @{
-      Enable = $true
-      Kind = 'space'
-      IndentationSize = 2
+    PSUseConsistentIndentation     = @{
+      Enable              = $true
+      Kind                = 'space'
+      IndentationSize     = 2
       PipelineIndentation = 'IncreaseIndentationForFirstPipeline'
     }
 
-    PSUseConsistentWhitespace = @{
-      Enable = $true
-      CheckInnerBrace = $true
-      CheckOpenBrace = $true
-      CheckOpenParen = $true
-      CheckOperator = $true
-      CheckPipe = $true
-      CheckPipeForRedundantWhitespace = $false
-      CheckSeparator = $true
-      CheckParameter = $false
-      IgnoreAssignmentOperatorInsideHashTable = $false
+    PSUseConsistentWhitespace      = @{
+      Enable                                  = $true
+      CheckInnerBrace                         = $true
+      CheckOpenBrace                          = $true
+      CheckOpenParen                          = $true
+      CheckOperator                           = $true
+      CheckPipe                               = $true
+      CheckPipeForRedundantWhitespace         = $false
+      CheckSeparator                          = $true
+      CheckParameter                          = $false
+      IgnoreAssignmentOperatorInsideHashTable = $true
     }
 
-    PSUseCorrectCasing = @{
+    PSAlignAssignmentStatement     = @{
+      Enable         = $true
+      CheckHashtable = $true
+    }
+
+    PSUseCorrectCasing             = @{
       Enable = $true
     }
 
-    PSUseSingularNouns = @{
-      Enable = $true
+    PSUseSingularNouns             = @{
+      Enable        = $true
       NounAllowList = @(
-        # PSFoundation data.ps1 + scripts/Administration/Update-AutoDNSZones.ps1
+        # lib/data.ps1 + scripts/Update-AutoDNSZones.ps1
         'Arrays',
-        # PSFoundation system.ps1
+        # lib/system.ps1
         'Paths',
-        # scripts/Administration/Update-AutoDNSZones.ps1
+        # scripts/Update-AutoDNSZones.ps1
         'Records',
-        # scripts/Diagnostics/Find-OffHoursActivity.ps1
+        # scripts/Find-OffHoursActivity.ps1
         'Profiles',
-        # scripts/Software/Remove-Bloatware.ps1
-        'Policies',
-        # scripts/Features/Enable-RemoteDesktopServices.ps1
-        'RemoteDesktopServices'
+        # scripts/Remove-Bloatware.ps1
+        'Policies'
       )
     }
 

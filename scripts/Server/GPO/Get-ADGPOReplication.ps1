@@ -97,11 +97,11 @@ foreach ($dc in $domainControllers) {
     }
     $report += [pscustomobject]@{
       DomainController = $dc.Name
-      GpoName = $gpo.DisplayName
-      GpoId = $gpo.Id
-      DSVersion = $gpo.DSVersion
-      SysVolVersion = $gpo.SysVolVersion
-      InSync = $inSync
+      GpoName          = $gpo.DisplayName
+      GpoId            = $gpo.Id
+      DSVersion        = $gpo.DSVersion
+      SysVolVersion    = $gpo.SysVolVersion
+      InSync           = $inSync
     }
   }
 }

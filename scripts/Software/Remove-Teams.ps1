@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.1.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
 
 <#
 .SYNOPSIS
@@ -208,36 +208,6 @@ function Invoke-TeamsUninstaller {
   }
 }
 
-function Get-AppxRemovalError {
-  <#
-    Translates known AppX/package error codes to actionable guidance. Codes
-    marked Benign indicate "already installed/removed" states that should not
-    be reported as failures. Same table as Install-WinGet's
-    Get-WingetInstallError.
-  #>
-  [CmdletBinding()]
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$Message
-  )
-
-  $translationTable = @(
-    @{ Code = '0x80073D06'; Benign = $true; Detail = 'A newer version is already installed.' }
-    @{ Code = '0x80073CF0'; Benign = $true; Detail = 'The same version is already installed.' }
-    @{ Code = '0x80073D02'; Benign = $false; Detail = 'Resources are in use (commonly Windows Terminal holding a lock). Close Windows Terminal and retry.' }
-    @{ Code = '0x80073CF3'; Benign = $false; Detail = 'A prerequisite was not detected. Retry - this is usually transient.' }
-    @{ Code = '0x80073CF9'; Benign = $false; Detail = 'Registration failed under the SYSTEM account. Use an Administrator account instead.' }
-  )
-
-  foreach ($entry in $translationTable) {
-    if ($Message -match $entry.Code) {
-      return [pscustomobject]@{ Known = $true; Benign = $entry.Benign; Detail = $entry.Detail }
-    }
-  }
-
-  [pscustomobject]@{ Known = $false; Benign = $false; Detail = $null }
-}
-
 function Remove-TeamsAppxPackage {
   [CmdletBinding(SupportsShouldProcess = $true)]
   param([System.Collections.ArrayList]$Results)
@@ -263,8 +233,8 @@ function Remove-TeamsAppxPackage {
           Add-OperationResult -Results $Results -Target $_target -Action 'RemoveAppxPackage' -Status 'Removed' -Detail 'Teams Appx package removed.'
         }
         catch {
-          $translated = Get-AppxRemovalError -Message $_.Exception.Message
-          $detail = if ($translated.Known) { $translated.Detail } else { $_.Exception.Message }
+          $translated = Get-ErrorTranslation -ErrorRecord $_ -Domain Appx
+          $detail = if ($translated) { "$($translated.Detail) ($($translated.Code))" } else { $_.Exception.Message }
           Add-OperationResult -Results $Results -Target $_target -Action 'RemoveAppxPackage' -Status 'Failed' -Detail $detail
         }
       }
@@ -423,26 +393,26 @@ function Set-TeamsPolicy {
   if ($ChatWidget) {
     $_settings += @(
       @{
-        Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Chat'
-        Name = 'ChatIcon'
+        Path  = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Chat'
+        Name  = 'ChatIcon'
         Value = 3
-        Type = 'DWord'
+        Type  = 'DWord'
       },
       @{
-        Path = 'HKCU:\SOFTWARE\Policies\Microsoft\Windows\Windows Chat'
-        Name = 'ChatIcon'
+        Path  = 'HKCU:\SOFTWARE\Policies\Microsoft\Windows\Windows Chat'
+        Name  = 'ChatIcon'
         Value = 3
-        Type = 'DWord'
+        Type  = 'DWord'
       }
     )
   }
   if ($OfficeTeamsInstall) {
     $_settings += @(
       @{
-        Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Common\OfficeUpdate'
-        Name = 'PreventTeamsInstall'
+        Path  = 'HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Common\OfficeUpdate'
+        Name  = 'PreventTeamsInstall'
         Value = 1
-        Type = 'DWord'
+        Type  = 'DWord'
       }
     )
   }

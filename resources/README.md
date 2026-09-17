@@ -38,9 +38,12 @@ both.
 ```text
 resources/
   policies/                        # AUTHORITATIVE — hand-authored, committed
-    00-example.txt                 # example policy source
+    00-example.txt                 # example policy source (never compiled)
     01-telemetry.txt               # (planned) telemetry restraint policies
     ...
+    skeleton/                      # GPO backup templates with {{Placeholder}} fields
+      Backup.xml
+      bkupInfo.xml
   metadata/                        # ISO control mapping, justifications, owner
     00-example.psd1                # example metadata file
     01-telemetry.psd1              # (planned)
@@ -50,7 +53,8 @@ resources/
 dist/                              # GENERATED — gitignored wholesale
   GP/
     local/                         # compiled Registry.pol for direct LGPO apply
-    gpo-backups/                   # GPO backup folders for domain Import-GPO
+    gpo-backups/                   # GPO backups from Build-GroupPolicyBackup, plus manifest.xml
+    exports/                       # Export-LocalPolicy captures awaiting review
 ```
 
 `resources/policies/` and `resources/metadata/` are committed to git, reviewed, and audited. Everything under `dist/` is build output —
@@ -65,8 +69,7 @@ compatibility, and avoids confusion with a proprietary extension.
 
 ## Policy source file format (`.txt`)
 
-The native LGPO input format. Plaintext, diff-friendly, supports comments via `;`. Each policy entry is exactly four non-empty, non-comment
-lines:
+The native LGPO input format. Plaintext, diff-friendly, supports comments via `;`. Each policy entry is exactly four lines:
 
 ```text
 ; Header — version and ISO control mapping
@@ -94,11 +97,37 @@ DELETE
 
 The four lines per entry are:
 
-1. `Computer` or `User` — which hive scope the value lives in.
+1. `Computer` or `User` — which hive scope the value lives in (case-insensitive).
 2. Registry subkey path (no hive prefix — the scope above determines that).
-3. Value name.
-4. Value type and data: `DWORD:n`, `SZ:"string"`, `EXSZ:"expand-string"`, `MULTISZ:"a","b","c"`, `QWORD:n`, or `DELETE` / `DELETEALLVALUES`
-   / `CLEAR`.
+3. Value name. Leave the line **empty** for a key's `(Default)` value; use `*` for `DELETEALLVALUES` and `CREATEKEY`.
+4. The action, which is **case-sensitive**:
+
+| Action                  | Result                                                                     |
+| ----------------------- | -------------------------------------------------------------------------- |
+| `DWORD:n` / `QWORD:n`   | Integer; decimal, `0x` hexadecimal, or negative (two's complement)         |
+| `SZ:text` / `EXSZ:text` | String / expandable string, written **without quotes** — quotes are stored |
+| `MULTISZ:one\0two`      | Multi-string; `\0` separates the strings                                   |
+| `BINARY:de,ad,be,ef`    | Bytes as comma-separated hex                                               |
+| `DELETE`                | Deletes the named value                                                    |
+| `DELETEALLVALUES`       | Deletes every value in the key (value name `*`)                            |
+| `CREATEKEY`             | Creates the key (value name `*`)                                           |
+| `DELETEKEYS`            | Deletes the subkeys listed, `;`-separated, on the value-name line          |
+| `CLEAR`                 | Marks the value not configured; a built `registry.pol` simply omits it     |
+
+### Escaping, encoding, and whitespace
+
+These rules were verified against LGPO 3.0 and are enforced by `Build-GroupPolicyBackup.ps1`. Where LGPO silently stores something other
+than what was written, the build fails instead.
+
+- **Backslashes:** in string data, `\\` is one backslash and `\0` is a NUL character. Any other backslash sequence is literal, so
+  `SZ:C:\path` works — but `SZ:C:\0data` would store a NUL and is rejected; write `C:\\0data`.
+- **Encoding:** LGPO reads a file **without a byte-order mark as ANSI**, corrupting non-ASCII values. Save sources as UTF-8 with BOM (the
+  `.editorconfig` does this for `resources/policies/*.txt`). BOM-less files are accepted only when non-ASCII appears in comments alone.
+- **Whitespace is data:** trailing spaces in a value line are stored. The pre-commit `trailing-whitespace` hook is disabled for policy
+  sources for that reason. Whitespace-only lines and indented comments are LGPO format errors; comments start in column 0.
+- **Integer range:** LGPO wraps out-of-range values (`DWORD:4294967296` becomes `0`); the build rejects them.
+- **No text form:** the `**DeleteValues`, `**SecureKey` and `**soft.` directives, registry types other than those above, and strings with
+  line breaks cannot be expressed. `Export-LocalPolicy.ps1` writes them as commented-out blocks and reports each one.
 
 ### Recommended header conventions
 
@@ -147,33 +176,52 @@ Sidecar metadata for each policy source. Auditor-facing documentation that doesn
 The policy text files are **value-level** domain compatible — the registry paths (`Software\Policies\...`) are identical whether applied
 locally or by a domain GPO. The _delivery_ differs:
 
-- **Local apply:** `LGPO.exe /t source.txt` writes directly to local `Registry.pol`.
-- **Domain apply:** the same source is compiled to a `Registry.pol`, wrapped in a GPO backup folder structure (`Backup.xml`, `bkupInfo.xml`,
-  `gpreport.xml`, `DomainSysvol/GPO/Machine|User/registry.pol`), and imported into AD via `Import-GPO -BackupGpoName ...`.
+- **Local apply:** `LGPO.exe /t source.txt` writes directly to local `Registry.pol`, or import a built backup with
+  `Import-GroupPolicyBackup.ps1`.
+- **Domain apply:** the same sources are compiled into a GPO backup (`Backup.xml`, `bkupInfo.xml`,
+  `DomainSysvol/GPO/Machine|User/registry.pol`) and imported with `Import-GroupPolicyBackup.ps1 -Target Domain`.
 
-### Domain build pipeline — `Build-GroupPolicyBackup.ps1`
+### Lifecycle — `scripts/Policy/`
 
-The domain apply side is handled by `scripts/Policy/Build-GroupPolicyBackup.ps1`, a work-in-progress "compiler" that converts policy text
-sources into domain-importable GPO backup folders.
+```text
+golden image (gpedit)
+      |  Export-LocalPolicy.ps1         local policy -> dist/GP/exports/*.txt   (review, prune, complete the header)
+      v
+resources/policies/*.txt
+      |  Build-GroupPolicyBackup.ps1    sources -> dist/GP/gpo-backups/{BackupId}
+      v
+GPO backup
+      |  Import-GroupPolicyBackup.ps1   -> local Group Policy (LGPO /g), or -> a domain GPO (Import-GPO)
+      v
+applied policy
+```
 
-At a high level, the pipeline works as follows:
+**Export** reads `Machine\registry.pol` and `User\registry.pol` with PSFoundation's `ConvertFrom-RegistryPolicy`. It captures everything in
+local policy — including settings that did not come from the golden-image configuration — groups entries under their top-most captured
+registry key, and reports every group so nothing enters a baseline unnoticed. The metadata header is emitted as a TODO stub.
 
-1. **Skeleton copy.** A vendored reference GPO backup skeleton (created once in GPMC from an empty GPO, then committed under
-   `resources/policies/skeleton/`) provides valid `Backup.xml`, `bkupInfo.xml`, and `gpreport.xml` stubs. The build script copies this
-   skeleton into a staging area and assigns a fresh GUID.
+**Build** compiles the sources with `ConvertTo-RegistryPolicy` and needs no LGPO.exe. (It cannot delegate to `LGPO.exe /r`, which ignores
+the `Computer`/`User` scope and writes both into one file.) The GPO backup is stamped from the templates in `resources/policies/skeleton/`:
 
-2. **Registry.pol generation.** LGPO.exe compiles the policy text sources (`.txt` files under `resources/policies/`) into
-   `Machine\registry.pol` and `User\registry.pol` binaries, which are placed into the copied skeleton's directory structure.
+- Every build gets a fresh GPO GUID and backup ID and is added to `manifest.xml`; existing backups are kept.
+- The Registry client-side extension is registered for each side that carries settings. Without that registration, clients silently ignore a
+  GPO's `registry.pol`.
+- Domain provenance fields use synthetic values under the reserved `.invalid` TLD. `Import-GPO` imports into whichever domain it targets, so
+  they are informational — the vendored templates carry no real domain data.
+- `gpreport.xml` is not produced (LGPO's own `/b` backups omit it too); an empty report would misrepresent the backup when previewed in
+  GPMC.
+- `*-example.txt` sources are skipped. Sources are validated and the backup is assembled in a staging folder first — nothing is written if
+  any source fails to compile.
 
-3. **Metadata rewrite.** The skeleton's XML metadata is rewritten with the correct display name, GUID, and timestamp for this build.
+**Import** validates the backup before applying it: readable `registry.pol` files, and the Registry extension registered for every side with
+settings. With several backups present it requires `-BackupId` rather than guessing.
 
-4. **Output.** The completed GPO backup folder is placed in `dist/GP/gpo-backups/` (top-level, gitignored). From there, a per-company AD
-   deployment repo picks it up and runs `Import-GPO`, `New-GPLink`, and security filtering.
+- `-Target Local` (default) runs `LGPO.exe /g` elevated. LGPO.exe must carry a valid Microsoft Authenticode signature.
+- `-Target Domain` runs `Import-GPO`, which **replaces all settings** in the target GPO; `-DisplayName`, `-Domain`, `-Server`,
+  `-CreateIfNeeded`, and `-LinkTarget` carry the per-domain values. Afterwards it warns when no principal holds the Apply Group Policy
+  permission — such a GPO applies to no computer or user.
 
-The script is currently stubbed — both TODO(1) (skeleton copy) and TODO(2) (LGPO compilation + metadata rewrite) throw intentionally.
-Implementation is planned as the next phase after the local-apply LGPO functions are validated end-to-end.
-
-The local apply is implemented now via `Invoke-LGPO`; domain build is in progress via `Build-GroupPolicyBackup.ps1`.
+All three support `-DryRun` and `-PassThru`; `tests/Policy/PolicyPipeline.Tests.ps1` covers them without elevation, a domain, or LGPO.exe.
 
 ### Platform notes
 
@@ -185,9 +233,11 @@ The local apply is implemented now via `Invoke-LGPO`; domain build is in progres
 
 ## Policy authoring workflow
 
-1. Author or modify a `.txt` file in `resources/policies/`. Include the version comment in the header.
+1. Author or modify a `.txt` file in `resources/policies/` — by hand, or from a configured golden image via `Export-LocalPolicy.ps1`.
+   Include the version comment in the header.
 2. Author or update the matching `resources/metadata/*.psd1` with the ISO control mapping.
-3. Test in a VM via `Invoke-LGPO -PolicyPath <file>`.
+3. Validate with `Build-GroupPolicyBackup.ps1 -DryRun`, then test in a VM via `Invoke-LGPO -PolicyPath <file>` or
+   `Import-GroupPolicyBackup.ps1`.
 4. Verify the apply with `gpresult /h gpresult.html` and inspect the relevant section. The values from your policy source should appear in
    the report.
 5. Commit both files in the same change. Reviewer checks both.

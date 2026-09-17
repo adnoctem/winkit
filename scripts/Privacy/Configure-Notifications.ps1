@@ -105,67 +105,67 @@ $regHive = if ($SysPrep) { 'Registry::HKEY_USERS\DefaultUser' } else { 'HKCU:' }
 
 $notificationSettings = @(
   @{
-    Path = "$regHive\Software\Microsoft\Windows\CurrentVersion\PushNotifications"
-    Name = 'ToastEnabled'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = "$regHive\Software\Microsoft\Windows\CurrentVersion\PushNotifications"
+    Name        = 'ToastEnabled'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Toast notifications: off (0), on (1).'
   }
   @{
-    Path = "HKLM:\Software\Policies\Microsoft\Windows\CloudContent"
-    Name = 'DisableSoftLanding'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
+    Path        = "HKLM:\Software\Policies\Microsoft\Windows\CloudContent"
+    Name        = 'DisableSoftLanding'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable Windows welcome experience prompts.'
   }
   @{
-    Path = "HKLM:\Software\Policies\Microsoft\Windows\CloudContent"
-    Name = 'DisableWindowsConsumerFeatures'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
+    Path        = "HKLM:\Software\Policies\Microsoft\Windows\CloudContent"
+    Name        = 'DisableWindowsConsumerFeatures'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable consumer feature suggestions.'
   }
   @{
-    Path = "$regHive\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
-    Name = 'SubscribedContent-338389Enabled'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = "$regHive\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+    Name        = 'SubscribedContent-338389Enabled'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Disable suggested content in Settings.'
   }
   @{
-    Path = "$regHive\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
-    Name = 'SubscribedContent-338393Enabled'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = "$regHive\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+    Name        = 'SubscribedContent-338393Enabled'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Disable tips and suggestions on the lock screen.'
   }
   @{
-    Path = "$regHive\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
-    Name = 'SubscribedContent-353696Enabled'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = "$regHive\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+    Name        = 'SubscribedContent-353696Enabled'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Disable lock screen facts and tips.'
   }
   @{
-    Path = "$regHive\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings"
-    Name = 'NOC_GLOBAL_SETTING_ALLOW_CRITICAL_TOASTS_ABOVE_LOCK'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = "$regHive\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings"
+    Name        = 'NOC_GLOBAL_SETTING_ALLOW_CRITICAL_TOASTS_ABOVE_LOCK'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Disable critical notifications above the lock screen.'
   }
   @{
-    Path = "$regHive\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.BackgroundAccess"
-    Name = 'Enabled'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = "$regHive\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.BackgroundAccess"
+    Name        = 'Enabled'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Disable background access toast prompts.'
   }
 )

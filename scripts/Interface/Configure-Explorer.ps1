@@ -230,562 +230,562 @@ $currentBuild = Get-OSBuildNumber
 $explorerSettings = @(
   # -- General tab --
   @{
-    Path = $explorerKey
-    Name = 'LaunchTo'
-    Preferred = 2
-    Default = 1
-    Type = 'DWord'
+    Path        = $explorerKey
+    Name        = 'LaunchTo'
+    Preferred   = 2
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Open File Explorer to: Home'
   }
   @{
-    Path = $advancedKey
-    Name = 'SeparateProcess'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'SeparateProcess'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Browse folders: Open each folder in the same window'
   }
   @{
-    Path = $explorerKey
-    Name = 'ShowRecent'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = $explorerKey
+    Name        = 'ShowRecent'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Privacy: Hide recently used files in Quick Access'
   }
   @{
-    Path = $explorerKey
-    Name = 'ShowFrequent'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = $explorerKey
+    Name        = 'ShowFrequent'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Privacy: Hide frequently used folders in Quick Access'
   }
 
   # -- View tab --
   @{
-    Path = $advancedKey
-    Name = 'IconsOnly'
-    Preferred = 0
-    Default = 0
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'IconsOnly'
+    Preferred   = 0
+    Default     = 0
+    Type        = 'DWord'
     Description = 'Always show icons, never thumbnails: OFF'
   }
   @{
-    Path = $advancedKey
-    Name = 'ShowTypeOverlay'
-    Preferred = 1
-    Default = 1
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'ShowTypeOverlay'
+    Preferred   = 1
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Display file icon on thumbnails: ON'
   }
   @{
-    Path = $cabinetStateKey
-    Name = 'FullPath'
-    Preferred = 1
-    Default = 0
-    Type = 'DWord'
+    Path        = $cabinetStateKey
+    Name        = 'FullPath'
+    Preferred   = 1
+    Default     = 0
+    Type        = 'DWord'
     Description = 'Display the full path in the title bar: ON'
   }
   @{
-    Path = $advancedKey
-    Name = 'Hidden'
-    Preferred = 1
-    Default = 2
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'Hidden'
+    Preferred   = 1
+    Default     = 2
+    Type        = 'DWord'
     Description = 'Show hidden files, folders, and drives'
   }
   @{
-    Path = $advancedKey
-    Name = 'HideDrivesWithNoMedia'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'HideDrivesWithNoMedia'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Hide empty drives: OFF'
   }
   @{
-    Path = $advancedKey
-    Name = 'HideFileExt'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'HideFileExt'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Hide extensions for known file types: OFF'
   }
   @{
-    Path = $advancedKey
-    Name = 'ShowSuperHidden'
-    Preferred = 0
-    Default = 0
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'ShowSuperHidden'
+    Preferred   = 0
+    Default     = 0
+    Type        = 'DWord'
     Description = 'Hide protected operating system files: ON'
   }
   @{
-    Path = $advancedKey
-    Name = 'ShowCompColor'
-    Preferred = 0
-    Default = 0
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'ShowCompColor'
+    Preferred   = 0
+    Default     = 0
+    Type        = 'DWord'
     Description = 'Show encrypted or compressed NTFS files in color: OFF'
   }
   @{
-    Path = $advancedKey
-    Name = 'ShowInfoTip'
-    Preferred = 1
-    Default = 1
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'ShowInfoTip'
+    Preferred   = 1
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Show pop-up description for folder and desktop items: ON'
   }
   @{
-    Path = $advancedKey
-    Name = 'ShowStatusBar'
-    Preferred = 1
-    Default = 1
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'ShowStatusBar'
+    Preferred   = 1
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Show status bar: ON'
   }
   @{
-    Path = $advancedKey
-    Name = 'AutoCheckSelect'
-    Preferred = 0
-    Default = 0
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'AutoCheckSelect'
+    Preferred   = 0
+    Default     = 0
+    Type        = 'DWord'
     Description = 'Use check boxes to select items: OFF'
   }
   @{
-    Path = $advancedKey
-    Name = 'UseCompactMode'
-    Preferred = 0
-    Default = 0
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'UseCompactMode'
+    Preferred   = 0
+    Default     = 0
+    Type        = 'DWord'
     Description = 'Decrease space between items (compact view): OFF'
   }
   @{
-    Path = $advancedKey
-    Name = 'FolderContentsInfoTip'
-    Preferred = 1
-    Default = 1
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'FolderContentsInfoTip'
+    Preferred   = 1
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Display file size information in folder tips: ON'
   }
   @{
-    Path = $advancedKey
-    Name = 'HideMergeConflicts'
-    Preferred = 1
-    Default = 1
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'HideMergeConflicts'
+    Preferred   = 1
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Hide folder merge conflicts: ON'
   }
   @{
-    Path = $advancedKey
-    Name = 'ShowSyncProviderNotifications'
-    Preferred = 1
-    Default = 1
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'ShowSyncProviderNotifications'
+    Preferred   = 1
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Show sync provider notifications: ON'
   }
   @{
-    Path = $advancedKey
-    Name = 'ShowPreviewHandlers'
-    Preferred = 1
-    Default = 1
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'ShowPreviewHandlers'
+    Preferred   = 1
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Show preview handlers in preview pane: ON'
   }
   @{
-    Path = $advancedKey
-    Name = 'SharingWizardOn'
-    Preferred = 1
-    Default = 1
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'SharingWizardOn'
+    Preferred   = 1
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Use Sharing Wizard: ON'
   }
   @{
-    Path = $advancedKey
-    Name = 'PersistBrowsers'
-    Preferred = 0
-    Default = 0
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'PersistBrowsers'
+    Preferred   = 0
+    Default     = 0
+    Type        = 'DWord'
     Description = 'Restore previous folder windows at logon: OFF'
   }
   @{
-    Path = $advancedKey
-    Name = 'TypeAhead'
-    Preferred = 1
-    Default = 1
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'TypeAhead'
+    Preferred   = 1
+    Default     = 1
+    Type        = 'DWord'
     Description = 'When typing into list view: Select the typed item'
   }
 
   # -- Navigation pane --
   @{
-    Path = $advancedKey
-    Name = 'NavPaneExpandToCurrentFolder'
-    Preferred = 0
-    Default = 0
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'NavPaneExpandToCurrentFolder'
+    Preferred   = 0
+    Default     = 0
+    Type        = 'DWord'
     Description = 'Expand to open folder: OFF'
   }
   @{
-    Path = $advancedKey
-    Name = 'NavPaneShowAllFolders'
-    Preferred = 0
-    Default = 0
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'NavPaneShowAllFolders'
+    Preferred   = 0
+    Default     = 0
+    Type        = 'DWord'
     Description = 'Show all folders: OFF'
   }
   @{
-    Path = $explorerKey
-    Name = 'ShowDriveLettersFirst'
-    Preferred = 4
-    Default = 0
-    Type = 'DWord'
+    Path        = $explorerKey
+    Name        = 'ShowDriveLettersFirst'
+    Preferred   = 4
+    Default     = 0
+    Type        = 'DWord'
     Description = 'Show drive letters before drive labels'
   }
   @{
-    Path = $galleryUserKey
-    Name = 'System.IsPinnedToNameSpaceTree'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
+    Path        = $galleryUserKey
+    Name        = 'System.IsPinnedToNameSpaceTree'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
     Description = 'Hide Gallery from the navigation pane'
   }
   @{
-    Path = $navPaneGalleryKey
-    Name = 'CheckedValue'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
+    Path        = $navPaneGalleryKey
+    Name        = 'CheckedValue'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
     Description = 'Gallery nav pane option metadata: checked value'
   }
   @{
-    Path = $navPaneGalleryKey
-    Name = 'DefaultValue'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
+    Path        = $navPaneGalleryKey
+    Name        = 'DefaultValue'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
     Description = 'Gallery nav pane option metadata: default value'
   }
   @{
-    Path = $navPaneGalleryKey
-    Name = 'HKeyRoot'
-    Preferred = 2147483649
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
+    Path        = $navPaneGalleryKey
+    Name        = 'HKeyRoot'
+    Preferred   = 2147483649
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
     Description = 'Gallery nav pane option metadata: HKCU root'
   }
   @{
-    Path = $navPaneGalleryKey
-    Name = 'Id'
-    Preferred = 13
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
+    Path        = $navPaneGalleryKey
+    Name        = 'Id'
+    Preferred   = 13
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
     Description = 'Gallery nav pane option metadata: id'
   }
   @{
-    Path = $navPaneGalleryKey
-    Name = 'RegPath'
-    Preferred = 'Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}'
-    Default = $null
-    Type = 'String'
-    MinBuild = 22000
+    Path        = $navPaneGalleryKey
+    Name        = 'RegPath'
+    Preferred   = 'Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}'
+    Default     = $null
+    Type        = 'String'
+    MinBuild    = 22000
     Description = 'Gallery nav pane option metadata: registry path'
   }
   @{
-    Path = $navPaneGalleryKey
-    Name = 'Text'
-    Preferred = 'Show Gallery'
-    Default = $null
-    Type = 'String'
-    MinBuild = 22000
+    Path        = $navPaneGalleryKey
+    Name        = 'Text'
+    Preferred   = 'Show Gallery'
+    Default     = $null
+    Type        = 'String'
+    MinBuild    = 22000
     Description = 'Gallery nav pane option metadata: display text'
   }
   @{
-    Path = $navPaneGalleryKey
-    Name = 'Type'
-    Preferred = 'checkbox'
-    Default = $null
-    Type = 'String'
-    MinBuild = 22000
+    Path        = $navPaneGalleryKey
+    Name        = 'Type'
+    Preferred   = 'checkbox'
+    Default     = $null
+    Type        = 'String'
+    MinBuild    = 22000
     Description = 'Gallery nav pane option metadata: option type'
   }
   @{
-    Path = $navPaneGalleryKey
-    Name = 'UncheckedValue'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
+    Path        = $navPaneGalleryKey
+    Name        = 'UncheckedValue'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
     Description = 'Gallery nav pane option metadata: unchecked value'
   }
   @{
-    Path = $navPaneGalleryKey
-    Name = 'ValueName'
-    Preferred = 'System.IsPinnedToNameSpaceTree'
-    Default = $null
-    Type = 'String'
-    MinBuild = 22000
+    Path        = $navPaneGalleryKey
+    Name        = 'ValueName'
+    Preferred   = 'System.IsPinnedToNameSpaceTree'
+    Default     = $null
+    Type        = 'String'
+    MinBuild    = 22000
     Description = 'Gallery nav pane option metadata: value name'
   }
   @{
-    Path = $homeUserKey
-    Name = ''
-    Preferred = 'CLSID_MSGraphHomeFolder'
-    Default = $null
-    Type = 'String'
-    MinBuild = 22000
+    Path        = $homeUserKey
+    Name        = ''
+    Preferred   = 'CLSID_MSGraphHomeFolder'
+    Default     = $null
+    Type        = 'String'
+    MinBuild    = 22000
     Description = 'Home navigation CLSID label'
   }
   @{
-    Path = $homeUserKey
-    Name = 'System.IsPinnedToNameSpaceTree'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
+    Path        = $homeUserKey
+    Name        = 'System.IsPinnedToNameSpaceTree'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
     Description = 'Hide Home from the navigation pane'
   }
   @{
-    Path = $navPaneHomeKey
-    Name = 'CheckedValue'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
+    Path        = $navPaneHomeKey
+    Name        = 'CheckedValue'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
     Description = 'Home nav pane option metadata: checked value'
   }
   @{
-    Path = $navPaneHomeKey
-    Name = 'DefaultValue'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
+    Path        = $navPaneHomeKey
+    Name        = 'DefaultValue'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
     Description = 'Home nav pane option metadata: default value'
   }
   @{
-    Path = $navPaneHomeKey
-    Name = 'HKeyRoot'
-    Preferred = 2147483649
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
+    Path        = $navPaneHomeKey
+    Name        = 'HKeyRoot'
+    Preferred   = 2147483649
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
     Description = 'Home nav pane option metadata: HKCU root'
   }
   @{
-    Path = $navPaneHomeKey
-    Name = 'Id'
-    Preferred = 13
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
+    Path        = $navPaneHomeKey
+    Name        = 'Id'
+    Preferred   = 13
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
     Description = 'Home nav pane option metadata: id'
   }
   @{
-    Path = $navPaneHomeKey
-    Name = 'RegPath'
-    Preferred = 'Software\\Classes\\CLSID\\{f874310e-b6b7-47dc-bc84-b9e6b38f5903}'
-    Default = $null
-    Type = 'String'
-    MinBuild = 22000
+    Path        = $navPaneHomeKey
+    Name        = 'RegPath'
+    Preferred   = 'Software\\Classes\\CLSID\\{f874310e-b6b7-47dc-bc84-b9e6b38f5903}'
+    Default     = $null
+    Type        = 'String'
+    MinBuild    = 22000
     Description = 'Home nav pane option metadata: registry path'
   }
   @{
-    Path = $navPaneHomeKey
-    Name = 'Text'
-    Preferred = 'Show Home'
-    Default = $null
-    Type = 'String'
-    MinBuild = 22000
+    Path        = $navPaneHomeKey
+    Name        = 'Text'
+    Preferred   = 'Show Home'
+    Default     = $null
+    Type        = 'String'
+    MinBuild    = 22000
     Description = 'Home nav pane option metadata: display text'
   }
   @{
-    Path = $navPaneHomeKey
-    Name = 'Type'
-    Preferred = 'checkbox'
-    Default = $null
-    Type = 'String'
-    MinBuild = 22000
+    Path        = $navPaneHomeKey
+    Name        = 'Type'
+    Preferred   = 'checkbox'
+    Default     = $null
+    Type        = 'String'
+    MinBuild    = 22000
     Description = 'Home nav pane option metadata: option type'
   }
   @{
-    Path = $navPaneHomeKey
-    Name = 'UncheckedValue'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22000
+    Path        = $navPaneHomeKey
+    Name        = 'UncheckedValue'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22000
     Description = 'Home nav pane option metadata: unchecked value'
   }
   @{
-    Path = $navPaneHomeKey
-    Name = 'ValueName'
-    Preferred = 'System.IsPinnedToNameSpaceTree'
-    Default = $null
-    Type = 'String'
-    MinBuild = 22000
+    Path        = $navPaneHomeKey
+    Name        = 'ValueName'
+    Preferred   = 'System.IsPinnedToNameSpaceTree'
+    Default     = $null
+    Type        = 'String'
+    MinBuild    = 22000
     Description = 'Home nav pane option metadata: value name'
   }
   @{
-    Path = $oneDriveUserKey
-    Name = 'System.IsPinnedToNameSpaceTree'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = $oneDriveUserKey
+    Name        = 'System.IsPinnedToNameSpaceTree'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Hide OneDrive from the navigation pane'
   }
   @{
-    Path = $navPaneOneDriveKey
-    Name = 'CheckedValue'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
+    Path        = $navPaneOneDriveKey
+    Name        = 'CheckedValue'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
     Description = 'OneDrive nav pane option metadata: checked value'
   }
   @{
-    Path = $navPaneOneDriveKey
-    Name = 'DefaultValue'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = $navPaneOneDriveKey
+    Name        = 'DefaultValue'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'OneDrive nav pane option metadata: default value'
   }
   @{
-    Path = $navPaneOneDriveKey
-    Name = 'HKeyRoot'
-    Preferred = 2147483649
-    Default = $null
-    Type = 'DWord'
+    Path        = $navPaneOneDriveKey
+    Name        = 'HKeyRoot'
+    Preferred   = 2147483649
+    Default     = $null
+    Type        = 'DWord'
     Description = 'OneDrive nav pane option metadata: HKCU root'
   }
   @{
-    Path = $navPaneOneDriveKey
-    Name = 'Id'
-    Preferred = 13
-    Default = $null
-    Type = 'DWord'
+    Path        = $navPaneOneDriveKey
+    Name        = 'Id'
+    Preferred   = 13
+    Default     = $null
+    Type        = 'DWord'
     Description = 'OneDrive nav pane option metadata: id'
   }
   @{
-    Path = $navPaneOneDriveKey
-    Name = 'RegPath'
-    Preferred = 'Software\\Classes\\CLSID\\{018D5C66-4533-4307-9B53-224DE2ED1FE6}'
-    Default = $null
-    Type = 'String'
+    Path        = $navPaneOneDriveKey
+    Name        = 'RegPath'
+    Preferred   = 'Software\\Classes\\CLSID\\{018D5C66-4533-4307-9B53-224DE2ED1FE6}'
+    Default     = $null
+    Type        = 'String'
     Description = 'OneDrive nav pane option metadata: registry path'
   }
   @{
-    Path = $navPaneOneDriveKey
-    Name = 'Text'
-    Preferred = 'Show OneDrive'
-    Default = $null
-    Type = 'String'
+    Path        = $navPaneOneDriveKey
+    Name        = 'Text'
+    Preferred   = 'Show OneDrive'
+    Default     = $null
+    Type        = 'String'
     Description = 'OneDrive nav pane option metadata: display text'
   }
   @{
-    Path = $navPaneOneDriveKey
-    Name = 'Type'
-    Preferred = 'checkbox'
-    Default = $null
-    Type = 'String'
+    Path        = $navPaneOneDriveKey
+    Name        = 'Type'
+    Preferred   = 'checkbox'
+    Default     = $null
+    Type        = 'String'
     Description = 'OneDrive nav pane option metadata: option type'
   }
   @{
-    Path = $navPaneOneDriveKey
-    Name = 'UncheckedValue'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = $navPaneOneDriveKey
+    Name        = 'UncheckedValue'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'OneDrive nav pane option metadata: unchecked value'
   }
   @{
-    Path = $navPaneOneDriveKey
-    Name = 'ValueName'
-    Preferred = 'System.IsPinnedToNameSpaceTree'
-    Default = $null
-    Type = 'String'
+    Path        = $navPaneOneDriveKey
+    Name        = 'ValueName'
+    Preferred   = 'System.IsPinnedToNameSpaceTree'
+    Default     = $null
+    Type        = 'String'
     Description = 'OneDrive nav pane option metadata: value name'
   }
 
   # -- Search tab --
   @{
-    Path = $searchPrefKey
-    Name = 'WholeFileSystem'
-    Preferred = 0
-    Default = 0
-    Type = 'DWord'
+    Path        = $searchPrefKey
+    Name        = 'WholeFileSystem'
+    Preferred   = 0
+    Default     = 0
+    Type        = 'DWord'
     Description = "Don't use index when searching system files: OFF"
   }
   @{
-    Path = $searchPrefKey
-    Name = 'SystemFolders'
-    Preferred = 1
-    Default = 1
-    Type = 'DWord'
+    Path        = $searchPrefKey
+    Name        = 'SystemFolders'
+    Preferred   = 1
+    Default     = 1
+    Type        = 'DWord'
     Description = 'Include system directories in non-indexed searches: ON'
   }
   @{
-    Path = $searchPrefKey
-    Name = 'ArchivedFiles'
-    Preferred = 0
-    Default = 0
-    Type = 'DWord'
+    Path        = $searchPrefKey
+    Name        = 'ArchivedFiles'
+    Preferred   = 0
+    Default     = 0
+    Type        = 'DWord'
     Description = 'Include compressed files (ZIP, CAB): OFF'
   }
   @{
-    Path = $advancedKey
-    Name = 'Start_SearchFiles'
-    Preferred = 2
-    Default = 2
-    Type = 'DWord'
+    Path        = $advancedKey
+    Name        = 'Start_SearchFiles'
+    Preferred   = 2
+    Default     = 2
+    Type        = 'DWord'
     Description = 'Always search file names and contents: OFF'
   }
 
   # -- Navigation pane: context menu entries --
   @{
-    Path = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked'
-    Name = '{e2bf9676-5f8f-435c-97eb-11607a5bedf7}'
-    Preferred = ''
-    Default = $null
-    Type = 'String'
+    Path        = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked'
+    Name        = '{e2bf9676-5f8f-435c-97eb-11607a5bedf7}'
+    Preferred   = ''
+    Default     = $null
+    Type        = 'String'
     Description = 'Remove "Share" from the context menu (Win10/Win11).'
   }
   @{
-    Path = 'HKCU:\Software\Classes\CLSID\{e2bf9676-5f8f-435c-97eb-11607a5bedf7}'
-    Name = 'System.IsPinnedToNameSpaceTree'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKCU:\Software\Classes\CLSID\{e2bf9676-5f8f-435c-97eb-11607a5bedf7}'
+    Name        = 'System.IsPinnedToNameSpaceTree'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Hide Share entry from navigation pane.'
   }
   @{
-    Path = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked'
-    Name = '{3e22fe5c-40ed-41f4-b551-9c6a7b5b2e07}'
-    Preferred = ''
-    Default = $null
-    Type = 'String'
+    Path        = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked'
+    Name        = '{3e22fe5c-40ed-41f4-b551-9c6a7b5b2e07}'
+    Preferred   = ''
+    Default     = $null
+    Type        = 'String'
     Description = 'Remove "Include in library" from the context menu.'
   }
   @{
-    Path = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked'
-    Name = '{F81E9010-6EA4-11CE-A7FF-00AA003CA9F6}'
-    Preferred = ''
-    Default = $null
-    Type = 'String'
+    Path        = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked'
+    Name        = '{F81E9010-6EA4-11CE-A7FF-00AA003CA9F6}'
+    Preferred   = ''
+    Default     = $null
+    Type        = 'String'
     Description = 'Remove "Give access to" from the context menu.'
   }
 
   # -- Duplicate drive visibility --
   @{
-    Path = "$classesKey\CLSID\{F5FB2C77-0E2F-4A16-A381-3E560C68BC83}"
-    Name = 'System.IsPinnedToNameSpaceTree'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = "$classesKey\CLSID\{F5FB2C77-0E2F-4A16-A381-3E560C68BC83}"
+    Name        = 'System.IsPinnedToNameSpaceTree'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Hide duplicate removable drives from navigation pane.'
   }
 )

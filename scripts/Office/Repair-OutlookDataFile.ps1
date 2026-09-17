@@ -90,8 +90,8 @@ function Resolve-OutlookDataFileRepairTool {
     $_resolvedToolPath = (Resolve-Path -LiteralPath $RequestedToolPath).ProviderPath
     $_toolName = [System.IO.Path]::GetFileNameWithoutExtension($_resolvedToolPath)
     return [PSCustomObject]@{
-      Name = $_toolName
-      Path = $_resolvedToolPath
+      Name   = $_toolName
+      Path   = $_resolvedToolPath
       Detail = 'ExplicitToolPath'
     }
   }
@@ -113,8 +113,8 @@ function Resolve-OutlookDataFileRepairTool {
     $_tool = Find-OutlookRepairTool -Name $_toolName | Select-Object -First 1
     if ($_tool) {
       return [PSCustomObject]@{
-        Name = $_tool.Name
-        Path = $_tool.Path
+        Name   = $_tool.Name
+        Path   = $_tool.Path
         Detail = $_tool.InstallationPath
       }
     }
@@ -160,7 +160,7 @@ $_commandLine = "`"$_toolPath`" `"$_dataFilePath`""
 if ($DryRun) {
   Write-Log -Message "[DRY RUN] Would run: $_commandLine" -Color Yellow
   Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status 'Skipped' -Detail "DryRun: $_commandLine" -Property @{
-    Tool = $_toolName
+    Tool     = $_toolName
     ToolPath = $_toolPath
   }
 }
@@ -176,7 +176,7 @@ elseif ($PSCmdlet.ShouldProcess($_dataFilePath, "Repair with $_toolName")) {
 
     Write-Log -Message "Outlook data-file repair finished with exit code $($_process.ExitCode)." -Color $_color
     Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status $_status -Detail "Tool: $_toolName" -Property @{
-      Tool = $_toolName
+      Tool     = $_toolName
       ToolPath = $_toolPath
       ExitCode = $_process.ExitCode
     }
@@ -184,14 +184,14 @@ elseif ($PSCmdlet.ShouldProcess($_dataFilePath, "Repair with $_toolName")) {
   catch {
     Write-Log -Message "FAILED - could not start ${_toolName}: $($_.Exception.Message)" -Color Red
     Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status 'Failed' -Detail $_.Exception.Message -Property @{
-      Tool = $_toolName
+      Tool     = $_toolName
       ToolPath = $_toolPath
     }
   }
 }
 else {
   Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status 'Skipped' -Detail 'WhatIf' -Property @{
-    Tool = $_toolName
+    Tool     = $_toolName
     ToolPath = $_toolPath
   }
 }

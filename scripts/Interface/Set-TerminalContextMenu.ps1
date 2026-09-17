@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', 'Read-JsonFileWithComments', Justification = 'The helper intentionally strips multiple JSON comment lines.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', 'Get-TerminalProfileEntries', Justification = 'The helper returns context-menu entries, not a single Terminal profile object.')]
@@ -313,10 +313,10 @@ function ConvertTo-TerminalProfileConfig {
     if ([string]::IsNullOrWhiteSpace($_name)) { continue }
 
     [void]$_entries.Add([PSCustomObject]@{
-        Guid = $_guid
-        Name = $_name
-        Label = $_name
-        Icon = ''
+        Guid   = $_guid
+        Name   = $_name
+        Label  = $_name
+        Icon   = ''
         Hidden = $_hidden
       })
   }
@@ -400,9 +400,9 @@ function Get-TerminalProfileEntries {
     $_icon = Resolve-ContextMenuIcon -Icon $_iconValue -ConfigRoot $ConfigRootPath -Fallback $DefaultIcon
 
     [void]$_entries.Add([PSCustomObject]@{
-        Name = $_name
+        Name  = $_name
         Label = $_label
-        Icon = $_icon
+        Icon  = $_icon
       })
   }
 

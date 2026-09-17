@@ -152,183 +152,183 @@ $windowsStorePolicyKey = 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore'
 
 $contentDeliverySettings = @(
   @{
-    Path = $contentDeliveryKey
-    Name = 'FeatureManagementEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ContentDelivery'
+    Path        = $contentDeliveryKey
+    Name        = 'FeatureManagementEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ContentDelivery'
     Description = 'Disable Content Delivery feature management for suggested app provisioning.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'ContentDeliveryAllowed'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ContentDelivery'
+    Path        = $contentDeliveryKey
+    Name        = 'ContentDeliveryAllowed'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ContentDelivery'
     Description = 'Disable Content Delivery suggested app provisioning.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'OemPreInstalledAppsEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ContentDelivery'
+    Path        = $contentDeliveryKey
+    Name        = 'OemPreInstalledAppsEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ContentDelivery'
     Description = 'Disable OEM suggested app provisioning.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'PreInstalledAppsEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ContentDelivery'
+    Path        = $contentDeliveryKey
+    Name        = 'PreInstalledAppsEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ContentDelivery'
     Description = 'Disable preinstalled suggested app provisioning.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'PreInstalledAppsEverEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ContentDelivery'
+    Path        = $contentDeliveryKey
+    Name        = 'PreInstalledAppsEverEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ContentDelivery'
     Description = 'Disable preinstalled suggested app reprovisioning state.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'SubscribedContentEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ContentDelivery'
+    Path        = $contentDeliveryKey
+    Name        = 'SubscribedContentEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ContentDelivery'
     Description = 'Disable generic subscribed content provisioning.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'SubscribedContent-310093Enabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SubscribedContent'
+    Path        = $contentDeliveryKey
+    Name        = 'SubscribedContent-310093Enabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SubscribedContent'
     Description = 'Disable suggested content subscription 310093.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'SubscribedContent-338387Enabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SubscribedContent'
+    Path        = $contentDeliveryKey
+    Name        = 'SubscribedContent-338387Enabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SubscribedContent'
     Description = 'Disable lock screen tips subscription.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'SubscribedContent-338388Enabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SubscribedContent'
+    Path        = $contentDeliveryKey
+    Name        = 'SubscribedContent-338388Enabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SubscribedContent'
     Description = 'Disable suggested content subscription 338388.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'SubscribedContent-338389Enabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SubscribedContent'
+    Path        = $contentDeliveryKey
+    Name        = 'SubscribedContent-338389Enabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SubscribedContent'
     Description = 'Disable suggested content subscription 338389.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'SubscribedContent-338393Enabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SubscribedContent'
+    Path        = $contentDeliveryKey
+    Name        = 'SubscribedContent-338393Enabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SubscribedContent'
     Description = 'Disable suggested content subscription 338393.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'SubscribedContent-353694Enabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SubscribedContent'
+    Path        = $contentDeliveryKey
+    Name        = 'SubscribedContent-353694Enabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SubscribedContent'
     Description = 'Disable suggested content subscription 353694.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'SubscribedContent-353696Enabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SubscribedContent'
+    Path        = $contentDeliveryKey
+    Name        = 'SubscribedContent-353696Enabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SubscribedContent'
     Description = 'Disable suggested content subscription 353696.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'SubscribedContent-353698Enabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SubscribedContent'
+    Path        = $contentDeliveryKey
+    Name        = 'SubscribedContent-353698Enabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SubscribedContent'
     Description = 'Disable suggested content subscription 353698.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'SilentInstalledAppsEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ContentDelivery'
+    Path        = $contentDeliveryKey
+    Name        = 'SilentInstalledAppsEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ContentDelivery'
     Description = 'Disable silent suggested app installs.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'SystemPaneSuggestionsEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ContentDelivery'
+    Path        = $contentDeliveryKey
+    Name        = 'SystemPaneSuggestionsEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ContentDelivery'
     Description = 'Disable Settings/System pane suggestions.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'SoftLandingEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ContentDelivery'
+    Path        = $contentDeliveryKey
+    Name        = 'SoftLandingEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ContentDelivery'
     Description = 'Disable soft landing tips.'
   }
   @{
-    Path = $contentDeliveryKey
-    Name = 'RotatingLockScreenOverlayEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ContentDelivery'
+    Path        = $contentDeliveryKey
+    Name        = 'RotatingLockScreenOverlayEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ContentDelivery'
     Description = 'Disable rotating lock screen overlay.'
   }
   @{
-    Path = $cloudContentKey
-    Name = 'DisableWindowsConsumerFeatures'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'Policy'
+    Path        = $cloudContentKey
+    Name        = 'DisableWindowsConsumerFeatures'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Policy'
     Description = 'Disable Windows consumer feature suggestions.'
   }
   @{
-    Path = $windowsStorePolicyKey
-    Name = 'AutoDownload'
-    Preferred = 2
-    Default = $null
-    Type = 'DWord'
-    Group = 'Policy'
+    Path        = $windowsStorePolicyKey
+    Name        = 'AutoDownload'
+    Preferred   = 2
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Policy'
     Description = 'Disable automatic Store app downloads through policy.'
   }
 )

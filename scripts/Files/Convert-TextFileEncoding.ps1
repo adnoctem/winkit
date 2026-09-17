@@ -165,8 +165,8 @@ $outputEncoding = Get-TextEncoding -Name $OutputFormat
 
 $searchParams = @{
   LiteralPath = $Path
-  File = $true
-  Include = $Include
+  File        = $true
+  Include     = $Include
 }
 
 if (-not $NoRecurse) {

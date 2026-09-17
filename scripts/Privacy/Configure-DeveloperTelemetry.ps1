@@ -120,156 +120,156 @@ $regHive = if ($SysPrep) { 'Registry::HKEY_USERS\DefaultUser' } else { 'HKCU:' }
 
 $developerSettings = @(
   @{
-    Path = "$regHive\SOFTWARE\Policies\Microsoft\Office\16.0\OSM"
-    Name = 'EnableLogging'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'OfficePolicy'
+    Path        = "$regHive\SOFTWARE\Policies\Microsoft\Office\16.0\OSM"
+    Name        = 'EnableLogging'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'OfficePolicy'
     Description = 'Disable Office 16.0 OSM logging policy.'
   }
   @{
-    Path = "$regHive\SOFTWARE\Policies\Microsoft\Office\16.0\OSM"
-    Name = 'EnableUpload'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'OfficePolicy'
+    Path        = "$regHive\SOFTWARE\Policies\Microsoft\Office\16.0\OSM"
+    Name        = 'EnableUpload'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'OfficePolicy'
     Description = 'Disable Office 16.0 OSM upload policy.'
   }
   @{
-    Path = "$regHive\SOFTWARE\Microsoft\Office\16.0\Common\ClientTelemetry"
-    Name = 'DisableTelemetry'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'OfficePreferenceOptional'
+    Path        = "$regHive\SOFTWARE\Microsoft\Office\16.0\Common\ClientTelemetry"
+    Name        = 'DisableTelemetry'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'OfficePreferenceOptional'
     Description = 'Optional: disable Office client telemetry preference.'
   }
   @{
-    Path = "$regHive\SOFTWARE\Microsoft\Office\16.0\Common\ClientTelemetry"
-    Name = 'VerboseLogging'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'OfficePreferenceOptional'
+    Path        = "$regHive\SOFTWARE\Microsoft\Office\16.0\Common\ClientTelemetry"
+    Name        = 'VerboseLogging'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'OfficePreferenceOptional'
     Description = 'Optional: disable Office verbose telemetry logging.'
   }
   @{
-    Path = "$regHive\SOFTWARE\Microsoft\Office\16.0\Common\Feedback"
-    Name = 'Enabled'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'OfficePreferenceOptional'
+    Path        = "$regHive\SOFTWARE\Microsoft\Office\16.0\Common\Feedback"
+    Name        = 'Enabled'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'OfficePreferenceOptional'
     Description = 'Optional: disable Office feedback.'
   }
   @{
-    Path = "$regHive\SOFTWARE\Microsoft\Office\16.0\Common"
-    Name = 'QMEnable'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'OfficePreferenceOptional'
+    Path        = "$regHive\SOFTWARE\Microsoft\Office\16.0\Common"
+    Name        = 'QMEnable'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'OfficePreferenceOptional'
     Description = 'Optional: disable Office quality monitoring.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\Feedback'
-    Name = 'DisableFeedbackDialog'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'VisualStudioPolicy'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\Feedback'
+    Name        = 'DisableFeedbackDialog'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'VisualStudioPolicy'
     Description = 'Disable Visual Studio feedback dialog.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\Feedback'
-    Name = 'DisableEmailInput'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'VisualStudioPolicy'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\Feedback'
+    Name        = 'DisableEmailInput'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'VisualStudioPolicy'
     Description = 'Disable Visual Studio feedback email input.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\Feedback'
-    Name = 'DisableScreenshotCapture'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'VisualStudioPolicy'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\Feedback'
+    Name        = 'DisableScreenshotCapture'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'VisualStudioPolicy'
     Description = 'Disable Visual Studio feedback screenshot capture.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\SQM'
-    Name = 'OptIn'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'VisualStudioPolicy'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\SQM'
+    Name        = 'OptIn'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'VisualStudioPolicy'
     Description = 'Disable Visual Studio SQM opt-in policy.'
   }
   @{
-    Path = "$regHive\Software\Microsoft\VisualStudio\Telemetry"
-    Name = 'TurnOffSwitch'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'VisualStudioPreferenceOptional'
+    Path        = "$regHive\Software\Microsoft\VisualStudio\Telemetry"
+    Name        = 'TurnOffSwitch'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'VisualStudioPreferenceOptional'
     Description = 'Optional: disable current-user Visual Studio telemetry switch.'
   }
   @{
-    Path = 'HKLM:\Software\Microsoft\VSCommon\16.0\SQM'
-    Name = 'OptIn'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'VisualStudioPreferenceOptional'
+    Path        = 'HKLM:\Software\Microsoft\VSCommon\16.0\SQM'
+    Name        = 'OptIn'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'VisualStudioPreferenceOptional'
     Description = 'Optional: disable VSCommon 16.0 SQM opt-in.'
   }
   @{
-    Path = 'HKLM:\Software\Wow6432Node\Microsoft\VSCommon\16.0\SQM'
-    Name = 'OptIn'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'VisualStudioPreferenceOptional'
+    Path        = 'HKLM:\Software\Wow6432Node\Microsoft\VSCommon\16.0\SQM'
+    Name        = 'OptIn'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'VisualStudioPreferenceOptional'
     Description = 'Optional: disable Wow6432Node VSCommon 16.0 SQM opt-in.'
   }
   @{
-    Path = 'HKLM:\Software\NVIDIA Corporation\Global\FTS'
-    Name = 'EnableRID44231'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'NvidiaOptional'
+    Path        = 'HKLM:\Software\NVIDIA Corporation\Global\FTS'
+    Name        = 'EnableRID44231'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'NvidiaOptional'
     Description = 'Optional: disable NVIDIA telemetry RID44231.'
   }
   @{
-    Path = 'HKLM:\Software\NVIDIA Corporation\Global\FTS'
-    Name = 'EnableRID64640'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'NvidiaOptional'
+    Path        = 'HKLM:\Software\NVIDIA Corporation\Global\FTS'
+    Name        = 'EnableRID64640'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'NvidiaOptional'
     Description = 'Optional: disable NVIDIA telemetry RID64640.'
   }
   @{
-    Path = 'HKLM:\Software\NVIDIA Corporation\Global\FTS'
-    Name = 'EnableRID66610'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'NvidiaOptional'
+    Path        = 'HKLM:\Software\NVIDIA Corporation\Global\FTS'
+    Name        = 'EnableRID66610'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'NvidiaOptional'
     Description = 'Optional: disable NVIDIA telemetry RID66610.'
   }
   @{
-    Path = 'HKLM:\Software\NVIDIA Corporation\NvControlPanel2\Client'
-    Name = 'OptInOrOutPreference'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'NvidiaOptional'
+    Path        = 'HKLM:\Software\NVIDIA Corporation\NvControlPanel2\Client'
+    Name        = 'OptInOrOutPreference'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'NvidiaOptional'
     Description = 'Optional: opt out of NVIDIA Control Panel telemetry.'
   }
 )

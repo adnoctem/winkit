@@ -3,11 +3,11 @@
 #>
 
 @{
-  PSFoundation = '1.3.0'
-  Pester = '5.5.0'
+  PSFoundation     = '1.4.0'
+  Pester           = '5.5.0'
   PSScriptAnalyzer = '1.22.0'
-  PSWindowsUpdate = '2.2.1.5'
-  PSWritePDF = '0.0.20'
-  PSWriteOffice = '0.2.0'
-  Transferetto = '1.0.0'
+  PSWindowsUpdate  = '2.2.1.5'
+  PSWritePDF       = '0.0.20'
+  PSWriteOffice    = '0.2.0'
+  Transferetto     = '1.0.0'
 }

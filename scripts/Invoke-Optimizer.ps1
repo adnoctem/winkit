@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
 
 <#
 .SYNOPSIS
@@ -136,13 +136,13 @@ $profileSets = @{
     'Software/Remove-OneDrive'
     'Interface/Set-TerminalExperienceDefaults'
   )
-  Server = $Common + @(
+  Server  = $Common + @(
     'Privacy/Disable-ContentDelivery'
     'Privacy/Set-AppPermissionDefaults'
     'Privacy/Configure-BrowserPolicies'
     'System/Configure-System'
   )
-  DC = $Common
+  DC      = $Common
 }
 
 # ---- Profile resolution / auto-detection -------------------------------------

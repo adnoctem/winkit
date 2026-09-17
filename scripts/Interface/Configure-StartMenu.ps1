@@ -137,127 +137,127 @@ $machinePolicyEducationKey = 'HKLM:\SOFTWARE\Microsoft\PolicyManager\current\dev
 
 $startMenuSettings = @(
   @{
-    Path = $userExplorerPolicyKey
-    Name = 'DisableSearchBoxSuggestions'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'SearchWeb'
+    Path        = $userExplorerPolicyKey
+    Name        = 'DisableSearchBoxSuggestions'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SearchWeb'
     Description = 'Disable Bing web suggestions in Start/Search.'
   }
   @{
-    Path = $machineSearchPolicyKey
-    Name = 'AllowCortana'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SearchWeb'
+    Path        = $machineSearchPolicyKey
+    Name        = 'AllowCortana'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SearchWeb'
     Description = 'Disable Cortana through Windows Search policy.'
   }
   @{
-    Path = $machineSearchPolicyKey
-    Name = 'CortanaConsent'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SearchWeb'
+    Path        = $machineSearchPolicyKey
+    Name        = 'CortanaConsent'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SearchWeb'
     Description = 'Deny Cortana consent through policy.'
   }
   @{
-    Path = $machineSearchPolicyKey
-    Name = 'ConnectedSearchUseWeb'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SearchWeb'
+    Path        = $machineSearchPolicyKey
+    Name        = 'ConnectedSearchUseWeb'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SearchWeb'
     Description = 'Disable connected web search usage.'
   }
   @{
-    Path = $machineSearchPolicyKey
-    Name = 'AllowSearchToUseLocation'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SearchWeb'
+    Path        = $machineSearchPolicyKey
+    Name        = 'AllowSearchToUseLocation'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SearchWeb'
     Description = 'Prevent Search from using location.'
   }
   @{
-    Path = $userSearchSettingsKey
-    Name = 'IsDeviceSearchHistoryEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SearchHistory'
+    Path        = $userSearchSettingsKey
+    Name        = 'IsDeviceSearchHistoryEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SearchHistory'
     Description = 'Disable local device search history.'
   }
   @{
-    Path = $userSearchSettingsKey
-    Name = 'IsDynamicSearchBoxEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
-    Group = 'SearchHighlights'
+    Path        = $userSearchSettingsKey
+    Name        = 'IsDynamicSearchBoxEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
+    Group       = 'SearchHighlights'
     Description = 'Disable Search Highlights.'
   }
   @{
-    Path = $userStartCompanionKey
-    Name = 'IsEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
-    Group = 'StartCompanions'
+    Path        = $userStartCompanionKey
+    Name        = 'IsEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
+    Group       = 'StartCompanions'
     Description = 'Disable Phone Link Start menu companion.'
   }
   @{
-    Path = $userPoliciesExplorerKey
-    Name = 'NoStartMenuMorePrograms'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 26200
-    Group = 'StartCompanions'
+    Path        = $userPoliciesExplorerKey
+    Name        = 'NoStartMenuMorePrograms'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 26200
+    Group       = 'StartCompanions'
     Description = 'Hide All Apps section in Start menu.'
   }
   @{
-    Path = $machineExplorerPolicyKey
-    Name = 'HideRecommendedSection'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
-    Group = 'StartRecommended'
+    Path        = $machineExplorerPolicyKey
+    Name        = 'HideRecommendedSection'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
+    Group       = 'StartRecommended'
     Description = 'Hide Recommended section through Explorer policy.'
   }
   @{
-    Path = $machinePolicyStartKey
-    Name = 'HideRecommendedSection'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
-    Group = 'StartRecommended'
+    Path        = $machinePolicyStartKey
+    Name        = 'HideRecommendedSection'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
+    Group       = 'StartRecommended'
     Description = 'Hide Recommended section through PolicyManager Start CSP.'
   }
   @{
-    Path = $machinePolicyEducationKey
-    Name = 'IsEducationEnvironment'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
-    Group = 'StartRecommended'
+    Path        = $machinePolicyEducationKey
+    Name        = 'IsEducationEnvironment'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
+    Group       = 'StartRecommended'
     Description = 'Use education environment mode to suppress Recommended content.'
   }
   @{
-    Path = $userExplorerAdvancedKey
-    Name = 'Start_Layout'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
-    Group = 'StartRecommended'
+    Path        = $userExplorerAdvancedKey
+    Name        = 'Start_Layout'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
+    Group       = 'StartRecommended'
     Description = 'Use more pins / less recommendations Start layout.'
   }
 )

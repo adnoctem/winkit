@@ -63,7 +63,7 @@ param (
 Import-Module ActiveDirectory -Force
 
 $properties = [PSCustomObject]@{
-  Users = @(
+  Users     = @(
     # Windows AD specific
     "sAMAccountName",
     "userPrincipalName",
@@ -108,7 +108,7 @@ $properties = [PSCustomObject]@{
     "operatingSystemVersion"
   )
 
-  Groups = @(
+  Groups    = @(
     # Windows AD specific
     "cn",
     "name",
@@ -128,16 +128,16 @@ $fmt = (Get-Culture).TextInfo
 # Distinguish between PowerShell 3 and later versions since [PSCustomObject] is not available in PS2
 if ($PSVersionTable.PSVersion.Major -ge 3) {
   $obj = [PSCustomObject]@{
-    Users = $null
+    Users     = $null
     Computers = $null
-    Groups = $null
+    Groups    = $null
   }
 }
 else {
   $obj = New-Object PSObject -Property @{
-    Users = $null
+    Users     = $null
     Computers = $null
-    Groups = $null
+    Groups    = $null
   }
 }
 

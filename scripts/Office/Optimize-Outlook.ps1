@@ -156,7 +156,7 @@ function Add-OutlookItemResult {
   try { $_received = $Item.ReceivedTime } catch { $_received = $null }
 
   $_property = @{
-    Received = $_received
+    Received  = $_received
     MessageId = $MessageId
   }
 

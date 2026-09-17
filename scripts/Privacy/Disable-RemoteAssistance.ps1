@@ -60,27 +60,27 @@ if ($DryRun) {
 
 $raSettings = @(
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services'
-    Name = 'fAllowUnsolicited'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services'
+    Name        = 'fAllowUnsolicited'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disallow unsolicited Remote Assistance requests.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services'
-    Name = 'fAllowToGetHelp'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services'
+    Name        = 'fAllowToGetHelp'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disallow Get Help / Quick Assist remote control.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services'
-    Name = 'fAllowFullControl'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services'
+    Name        = 'fAllowFullControl'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disallow full-control Remote Assistance sessions.'
   }
 )

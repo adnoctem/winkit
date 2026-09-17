@@ -62,35 +62,35 @@ if ($DryRun) {
 
 $werSettings = @(
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows\Windows Error Reporting'
-    Name = 'Disabled'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows\Windows Error Reporting'
+    Name        = 'Disabled'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable Windows Error Reporting.'
   }
   @{
-    Path = 'HKLM:\Software\Microsoft\Windows\Windows Error Reporting'
-    Name = 'Disabled'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Microsoft\Windows\Windows Error Reporting'
+    Name        = 'Disabled'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable Windows Error Reporting user override.'
   }
   @{
-    Path = 'HKLM:\Software\Microsoft\Windows\Windows Error Reporting'
-    Name = 'DontShowUI'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Microsoft\Windows\Windows Error Reporting'
+    Name        = 'DontShowUI'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Suppress error-reporting UI prompts.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\PCHealth\ErrorReporting'
-    Name = 'DoReport'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
+    Path        = 'HKLM:\Software\Policies\Microsoft\PCHealth\ErrorReporting'
+    Name        = 'DoReport'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
     Description = 'Disable PCHealth error reporting.'
   }
 )

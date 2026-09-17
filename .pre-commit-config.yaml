@@ -8,6 +8,8 @@ repos:
       - id: check-yaml
       - id: end-of-file-fixer
       - id: trailing-whitespace
+        # Trailing whitespace is significant in LGPO text policy values.
+        exclude: ^resources/policies/.*\.txt$
       - id: mixed-line-ending
         args: [--fix=crlf]
 
@@ -35,10 +37,13 @@ repos:
           - ".github/linters/zizmor.yaml"
 
   - repo: https://github.com/crate-ci/typos
-    rev: v1.24.6
+    rev: v1.50.2
     hooks:
       - id: typos
         exclude: (.*\.yaml|^CHANGELOG.md$)
+        args:
+          - "--config"
+          - ".github/linters/.typos.toml"
 
   # Local hooks
   - repo: local

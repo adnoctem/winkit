@@ -162,225 +162,225 @@ $paintPolicyKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Pain
 
 $aiSettings = @(
   @{
-    Path = $aiServiceKey
-    Name = 'Start'
-    Preferred = 3
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $aiServiceKey
+    Name        = 'Start'
+    Preferred   = 3
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableAISvcAutoStart: Set Windows AI service to manual start'
   }
 
   @{
-    Path = $aiUserPolicyKey
-    Name = 'DisableClickToDo'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $aiUserPolicyKey
+    Name        = 'DisableClickToDo'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableClickToDo: Disable Click To Do for the current/default user'
   }
   @{
-    Path = $aiMachinePolicyKey
-    Name = 'DisableClickToDo'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $aiMachinePolicyKey
+    Name        = 'DisableClickToDo'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableClickToDo: Disable Click To Do machine-wide'
   }
 
   @{
-    Path = $copilotUserExplorerKey
-    Name = 'ShowCopilotButton'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $copilotUserExplorerKey
+    Name        = 'ShowCopilotButton'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableCopilot: Hide Copilot button in Explorer/taskbar UI'
   }
   @{
-    Path = $copilotUserPolicyKey
-    Name = 'TurnOffWindowsCopilot'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $copilotUserPolicyKey
+    Name        = 'TurnOffWindowsCopilot'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableCopilot: Turn off Copilot for the current/default user'
   }
   @{
-    Path = $copilotMachinePolicyKey
-    Name = 'TurnOffWindowsCopilot'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $copilotMachinePolicyKey
+    Name        = 'TurnOffWindowsCopilot'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableCopilot: Turn off Copilot machine-wide'
   }
 
   @{
-    Path = $edgePolicyKey
-    Name = 'CopilotCDPPageContext'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $edgePolicyKey
+    Name        = 'CopilotCDPPageContext'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableEdgeAI: Disable Copilot CDP page context'
   }
   @{
-    Path = $edgePolicyKey
-    Name = 'CopilotPageContext'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $edgePolicyKey
+    Name        = 'CopilotPageContext'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableEdgeAI: Disable Copilot page context'
   }
   @{
-    Path = $edgePolicyKey
-    Name = 'HubsSidebarEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $edgePolicyKey
+    Name        = 'HubsSidebarEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableEdgeAI: Disable Edge hubs sidebar'
   }
   @{
-    Path = $edgePolicyKey
-    Name = 'EdgeEntraCopilotPageContext'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $edgePolicyKey
+    Name        = 'EdgeEntraCopilotPageContext'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableEdgeAI: Disable Entra Copilot page context'
   }
   @{
-    Path = $edgePolicyKey
-    Name = 'EdgeHistoryAISearchEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $edgePolicyKey
+    Name        = 'EdgeHistoryAISearchEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableEdgeAI: Disable AI history search'
   }
   @{
-    Path = $edgePolicyKey
-    Name = 'ComposeInlineEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $edgePolicyKey
+    Name        = 'ComposeInlineEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableEdgeAI: Disable inline compose'
   }
   @{
-    Path = $edgePolicyKey
-    Name = 'GenAILocalFoundationalModelSettings'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $edgePolicyKey
+    Name        = 'GenAILocalFoundationalModelSettings'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableEdgeAI: Restrict local generative AI model settings'
   }
   @{
-    Path = $edgePolicyKey
-    Name = 'NewTabPageBingChatEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $edgePolicyKey
+    Name        = 'NewTabPageBingChatEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableEdgeAI: Disable Bing Chat on new tab page'
   }
 
   @{
-    Path = $notepadPolicyKey
-    Name = 'DisableAIFeatures'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $notepadPolicyKey
+    Name        = 'DisableAIFeatures'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableNotepadAI: Disable Notepad AI features'
   }
 
   @{
-    Path = $paintPolicyKey
-    Name = 'DisableCocreator'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $paintPolicyKey
+    Name        = 'DisableCocreator'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisablePaintAI: Disable Cocreator'
   }
   @{
-    Path = $paintPolicyKey
-    Name = 'DisableGenerativeFill'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $paintPolicyKey
+    Name        = 'DisableGenerativeFill'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisablePaintAI: Disable Generative Fill'
   }
   @{
-    Path = $paintPolicyKey
-    Name = 'DisableImageCreator'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $paintPolicyKey
+    Name        = 'DisableImageCreator'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisablePaintAI: Disable Image Creator'
   }
   @{
-    Path = $paintPolicyKey
-    Name = 'DisableGenerativeErase'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $paintPolicyKey
+    Name        = 'DisableGenerativeErase'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisablePaintAI: Disable Generative Erase'
   }
   @{
-    Path = $paintPolicyKey
-    Name = 'DisableRemoveBackground'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $paintPolicyKey
+    Name        = 'DisableRemoveBackground'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisablePaintAI: Disable Remove Background'
   }
 
   @{
-    Path = $aiUserPolicyKey
-    Name = 'DisableAIDataAnalysis'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $aiUserPolicyKey
+    Name        = 'DisableAIDataAnalysis'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableRecall: Disable AI data analysis for the current/default user'
   }
   @{
-    Path = $aiMachinePolicyKey
-    Name = 'DisableAIDataAnalysis'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $aiMachinePolicyKey
+    Name        = 'DisableAIDataAnalysis'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableRecall: Disable AI data analysis machine-wide'
   }
   @{
-    Path = $aiMachinePolicyKey
-    Name = 'AllowRecallEnablement'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $aiMachinePolicyKey
+    Name        = 'AllowRecallEnablement'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableRecall: Prevent Recall enablement'
   }
   @{
-    Path = $aiMachinePolicyKey
-    Name = 'TurnOffSavingSnapshots'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    MinBuild = 22621
+    Path        = $aiMachinePolicyKey
+    Name        = 'TurnOffSavingSnapshots'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    MinBuild    = 22621
     Description = 'DisableRecall: Turn off saving snapshots'
   }
 )

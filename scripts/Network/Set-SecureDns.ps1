@@ -104,34 +104,34 @@ if ($DryRun) {
 $_results = New-Object System.Collections.ArrayList
 
 $_dnsPresets = @{
-  'Google' = @{
-    IPv4 = @('8.8.8.8', '8.8.4.4')
-    IPv6 = @('2001:4860:4860::8888', '2001:4860:4860::8844')
+  'Google'     = @{
+    IPv4        = @('8.8.8.8', '8.8.4.4')
+    IPv6        = @('2001:4860:4860::8888', '2001:4860:4860::8844')
     DoHTemplate = 'https://dns.google/dns-query'
   }
   'Cloudflare' = @{
-    IPv4 = @('1.1.1.1', '1.0.0.1')
-    IPv6 = @('2606:4700:4700::1111', '2606:4700:4700::1001')
+    IPv4        = @('1.1.1.1', '1.0.0.1')
+    IPv6        = @('2606:4700:4700::1111', '2606:4700:4700::1001')
     DoHTemplate = 'https://cloudflare-dns.com/dns-query'
   }
-  'Quad9' = @{
-    IPv4 = @('9.9.9.9', '149.112.112.112')
-    IPv6 = @('2620:fe::fe', '2620:fe::9')
+  'Quad9'      = @{
+    IPv4        = @('9.9.9.9', '149.112.112.112')
+    IPv6        = @('2620:fe::fe', '2620:fe::9')
     DoHTemplate = 'https://dns.quad9.net/dns-query'
   }
-  'AdGuard' = @{
-    IPv4 = @('94.140.14.14', '94.140.15.15')
-    IPv6 = @('2a10:50c0::ad1:ff', '2a10:50c0::ad2:ff')
+  'AdGuard'    = @{
+    IPv4        = @('94.140.14.14', '94.140.15.15')
+    IPv6        = @('2a10:50c0::ad1:ff', '2a10:50c0::ad2:ff')
     DoHTemplate = 'https://dns.adguard-dns.com/dns-query'
   }
-  'Mullvad' = @{
-    IPv4 = @('194.242.2.2', '194.242.2.3')
-    IPv6 = @('2a07:e340::2', '2a07:e340::3')
+  'Mullvad'    = @{
+    IPv4        = @('194.242.2.2', '194.242.2.3')
+    IPv6        = @('2a07:e340::2', '2a07:e340::3')
     DoHTemplate = 'https://dns.mullvad.net/dns-query'
   }
-  'OpenDNS' = @{
-    IPv4 = @('208.67.222.222', '208.67.220.220')
-    IPv6 = @('2620:119:35::35', '2620:119:53::53')
+  'OpenDNS'    = @{
+    IPv4        = @('208.67.222.222', '208.67.220.220')
+    IPv6        = @('2620:119:35::35', '2620:119:53::53')
     DoHTemplate = 'https://doh.opendns.com/dns-query'
   }
 }

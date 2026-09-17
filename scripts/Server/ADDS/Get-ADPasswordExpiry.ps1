@@ -97,11 +97,11 @@ foreach ($user in $users) {
   }
 
   $report += [pscustomobject]@{
-    SamAccountName = $user.SamAccountName
-    DisplayName = $user.DisplayName
-    Mail = $user.Mail
+    SamAccountName  = $user.SamAccountName
+    DisplayName     = $user.DisplayName
+    Mail            = $user.Mail
     PasswordLastSet = $user.PasswordLastSet
-    ExpiryDate = $expiryDate
+    ExpiryDate      = $expiryDate
     DaysUntilExpiry = [math]::Round(($expiryDate - $now).TotalDays, 1)
   }
 }

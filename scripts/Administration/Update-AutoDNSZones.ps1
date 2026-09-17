@@ -132,12 +132,12 @@ function Invoke-AutoDNSRequest {
   $encodedCreds = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pair))
 
   $params = @{
-    Uri = "$baseUrl$Path"
-    Method = $Method
-    Headers = @{
-      Authorization = "Basic $encodedCreds"
+    Uri         = "$baseUrl$Path"
+    Method      = $Method
+    Headers     = @{
+      Authorization           = "Basic $encodedCreds"
       'X-Domainrobot-Context' = $Context
-      'User-Agent' = 'winkit/1.0'
+      'User-Agent'            = 'winkit/1.0'
     }
     ContentType = 'application/json'
   }
@@ -289,7 +289,7 @@ function Compare-ZoneState {
     if ([string]::IsNullOrEmpty($desiredMain)) {
       if (-not [string]::IsNullOrEmpty($currentMain)) {
         $changes += @{
-          Field = 'main'
+          Field   = 'main'
           Current = $currentMain
           Desired = '(cleared)'
         }
@@ -297,7 +297,7 @@ function Compare-ZoneState {
     }
     elseif ($currentMain -ne $desiredMain) {
       $changes += @{
-        Field = 'main'
+        Field   = 'main'
         Current = if ([string]::IsNullOrEmpty($currentMain)) { '(none)' } else { $currentMain }
         Desired = $desiredMain
       }
@@ -308,7 +308,7 @@ function Compare-ZoneState {
   $desiredWww = if ($Desired.PSObject.Properties.Name -contains 'wwwInclude') { $Desired.wwwInclude } else { $null }
   if ($null -ne $desiredWww -and $currentWww -ne $desiredWww) {
     $changes += @{
-      Field = 'wwwInclude'
+      Field   = 'wwwInclude'
       Current = $currentWww
       Desired = $desiredWww
     }
@@ -318,7 +318,7 @@ function Compare-ZoneState {
   $desiredDnssec = if ($Desired.PSObject.Properties.Name -contains 'dnssec') { $Desired.dnssec } else { $null }
   if ($null -ne $desiredDnssec -and $currentDnssec -ne $desiredDnssec) {
     $changes += @{
-      Field = 'zone dnssec'
+      Field   = 'zone dnssec'
       Current = $currentDnssec
       Desired = $desiredDnssec
     }
@@ -330,9 +330,9 @@ function Compare-ZoneState {
     $recordsMatch = Compare-RecordArrays -Current $currentRecords -Desired $desiredRecords
     if (-not $recordsMatch) {
       $changes += @{
-        Field = 'records'
-        Current = "($($currentRecords.Count) existing)"
-        Desired = "($($desiredRecords.Count) desired)"
+        Field      = 'records'
+        Current    = "($($currentRecords.Count) existing)"
+        Desired    = "($($desiredRecords.Count) desired)"
         ReplaceAll = $true
       }
     }
@@ -357,7 +357,7 @@ function Compare-DomainState {
       $currentNsNames = ($currentNs | ForEach-Object { $_.name }) -join ', '
       $desiredNsNames = ($Desired.nameServers | ForEach-Object { $_.name }) -join ', '
       $changes += @{
-        Field = 'nameServers'
+        Field   = 'nameServers'
         Current = $currentNsNames
         Desired = $desiredNsNames
       }
@@ -372,7 +372,7 @@ function Compare-DomainState {
       $desiredVal = [bool]$dnssecCfg.enabled
       if ($currentVal -ne $desiredVal) {
         $changes += @{
-          Field = 'dnssec enabled'
+          Field   = 'dnssec enabled'
           Current = $currentVal
           Desired = $desiredVal
         }
@@ -383,7 +383,7 @@ function Compare-DomainState {
       $desiredVal = [bool]$dnssecCfg.auto
       if ($currentVal -ne $desiredVal) {
         $changes += @{
-          Field = 'dnssec auto'
+          Field   = 'dnssec auto'
           Current = $currentVal
           Desired = $desiredVal
         }
@@ -404,7 +404,7 @@ function Compare-DomainState {
       }
       if (-not $keysMatch) {
         $changes += @{
-          Field = 'dnssec keys'
+          Field   = 'dnssec keys'
           Current = "($($currentKeys.Count) key(s))"
           Desired = "($($desiredKeys.Count) key(s))"
         }
@@ -412,7 +412,7 @@ function Compare-DomainState {
     }
     if ($dnssecCfg.PSObject.Properties.Name -contains 'keyRollover' -and [bool]$dnssecCfg.keyRollover) {
       $changes += @{
-        Field = 'dnssec key rollover'
+        Field   = 'dnssec key rollover'
         Current = 'inactive'
         Desired = 'triggered'
       }
@@ -509,26 +509,26 @@ function Format-ChangeSummary {
 # ---- Example config for -ExportTemplate ---------------------------------------
 $exampleConfig = @(
   [PSCustomObject]@{
-    origin = 'example.com'
-    domain = [PSCustomObject]@{
+    origin     = 'example.com'
+    domain     = [PSCustomObject]@{
       nameServers = @(
         [PSCustomObject]@{ name = 'ns1.example.com' }
         [PSCustomObject]@{ name = 'ns2.example.com' }
       )
-      dnssec = [PSCustomObject]@{
-        enabled = $true
-        auto = $false
-        keys = @(
+      dnssec      = [PSCustomObject]@{
+        enabled     = $true
+        auto        = $false
+        keys        = @(
           [PSCustomObject]@{
             algorithm = 13
-            flags = 257
-            protocol = 3
+            flags     = 257
+            protocol  = 3
             publicKey = 'base64-ksk-key'
           }
           [PSCustomObject]@{
             algorithm = 13
-            flags = 256
-            protocol = 3
+            flags     = 256
+            protocol  = 3
             publicKey = 'base64-zsk-key'
           }
         )
@@ -536,31 +536,31 @@ $exampleConfig = @(
       }
     }
     wwwInclude = $true
-    records = @(
+    records    = @(
       [PSCustomObject]@{
-        name = '@'
-        type = 'A'
+        name  = '@'
+        type  = 'A'
         value = '203.0.113.10'
-        ttl = 3600
+        ttl   = 3600
       }
       [PSCustomObject]@{
-        name = 'www'
-        type = 'A'
+        name  = 'www'
+        type  = 'A'
         value = '203.0.113.10'
-        ttl = 3600
+        ttl   = 3600
       }
       [PSCustomObject]@{
-        name = 'mail'
-        type = 'MX'
+        name  = 'mail'
+        type  = 'MX'
         value = 'mail.example.com'
-        pref = 10
-        ttl = 3600
+        pref  = 10
+        ttl   = 3600
       }
       [PSCustomObject]@{
-        name = '@'
-        type = 'TXT'
+        name  = '@'
+        type  = 'TXT'
         value = 'v=spf1 mx ~all'
-        ttl = 3600
+        ttl   = 3600
       }
     )
   }
@@ -848,18 +848,18 @@ foreach ($entry in $configEntries) {
   $hasRecordReplace = ($zoneChanges | Where-Object { $_.Field -eq 'records' -and $_.ReplaceAll }).Count -gt 0
 
   $changePlan += @{
-    Origin = $origin
-    Vns = $vns
-    CurrentDomain = $currentDomain
-    CurrentZone = $currentZone
-    DesiredPayload = $desiredPayload
-    DomainChanges = @($domainChanges)
-    ZoneChanges = @($zoneChanges)
+    Origin           = $origin
+    Vns              = $vns
+    CurrentDomain    = $currentDomain
+    CurrentZone      = $currentZone
+    DesiredPayload   = $desiredPayload
+    DomainChanges    = @($domainChanges)
+    ZoneChanges      = @($zoneChanges)
     HasRecordReplace = $hasRecordReplace
-    HighTtlRecords = $highTtlRecords
-    HasDomainBlock = $hasDomainBlock
-    HasZoneFields = $hasZoneFields
-    DomainConfig = if ($hasDomainBlock) { $entry.domain } else { $null }
+    HighTtlRecords   = $highTtlRecords
+    HasDomainBlock   = $hasDomainBlock
+    HasZoneFields    = $hasZoneFields
+    DomainConfig     = if ($hasDomainBlock) { $entry.domain } else { $null }
   }
 }
 
@@ -1080,14 +1080,14 @@ foreach ($plan in $confirmedPlans) {
     $zoneNameServers = @($plan.CurrentZone.nameServers)
 
     $putBody = @{
-      origin = $origin
+      origin            = $origin
       virtualNameServer = $vns
-      main = if ($plan.DesiredPayload.Contains('main')) { $plan.DesiredPayload.main } else { $plan.CurrentZone.main }
-      wwwInclude = if ($plan.DesiredPayload.Contains('wwwInclude')) { $plan.DesiredPayload.wwwInclude } else { [bool]$plan.CurrentZone.wwwInclude }
-      dnssec = if ($plan.DesiredPayload.Contains('dnssec')) { $plan.DesiredPayload.dnssec } else { [bool]$plan.CurrentZone.dnssec }
-      resourceRecords = $zoneRecords
-      nameServers = $zoneNameServers
-      soa = $plan.CurrentZone.soa
+      main              = if ($plan.DesiredPayload.Contains('main')) { $plan.DesiredPayload.main } else { $plan.CurrentZone.main }
+      wwwInclude        = if ($plan.DesiredPayload.Contains('wwwInclude')) { $plan.DesiredPayload.wwwInclude } else { [bool]$plan.CurrentZone.wwwInclude }
+      dnssec            = if ($plan.DesiredPayload.Contains('dnssec')) { $plan.DesiredPayload.dnssec } else { [bool]$plan.CurrentZone.dnssec }
+      resourceRecords   = $zoneRecords
+      nameServers       = $zoneNameServers
+      soa               = $plan.CurrentZone.soa
     }
 
     if ($DryRun) {
@@ -1123,10 +1123,10 @@ foreach ($plan in $confirmedPlans) {
   # -- Record consolidated result for this entry --
   $entryStatus = if ($entryFailed) { 'Failed' } elseif ($DryRun) { 'DryRun' } else { 'Updated' }
   $results += [PSCustomObject]@{
-    Origin = $origin
-    Status = $entryStatus
+    Origin  = $origin
+    Status  = $entryStatus
     Changes = Format-ChangeSummary $entryChanges
-    Error = $entryError
+    Error   = $entryError
   }
 }
 

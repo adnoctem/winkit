@@ -108,66 +108,66 @@ if ($DryRun) { $WhatIfPreference = $true; Write-Log -Message "DRY RUN - no chang
 
 $diagnosticSettings = @(
   @{
-    Path = 'HKLM:\SYSTEM\CurrentControlSet\Services\DiagTrack'
-    Name = 'Start'
-    Preferred = 4
-    Default = $null
-    Type = 'DWord'
-    Group = 'Services'
+    Path        = 'HKLM:\SYSTEM\CurrentControlSet\Services\DiagTrack'
+    Name        = 'Start'
+    Preferred   = 4
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Services'
     Description = 'Disable Diagnostic Tracking service (DiagTrack).'
   }
   @{
-    Path = 'HKLM:\SYSTEM\CurrentControlSet\Services\dmwappushsvc'
-    Name = 'Start'
-    Preferred = 4
-    Default = $null
-    Type = 'DWord'
-    Group = 'Services'
+    Path        = 'HKLM:\SYSTEM\CurrentControlSet\Services\dmwappushsvc'
+    Name        = 'Start'
+    Preferred   = 4
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Services'
     Description = 'Disable dmwappushsvc telemetry service.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection'
-    Name = 'AllowTelemetry'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'DataCollection'
+    Path        = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection'
+    Name        = 'AllowTelemetry'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'DataCollection'
     Description = 'Set telemetry collection to Security/Off where supported.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection'
-    Name = 'AllowTelemetry'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'DataCollection'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection'
+    Name        = 'AllowTelemetry'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'DataCollection'
     Description = 'Set policy telemetry collection to Security/Off where supported.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection'
-    Name = 'MaxTelemetryAllowed'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'DataCollection'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection'
+    Name        = 'MaxTelemetryAllowed'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'DataCollection'
     Description = 'Set maximum telemetry allowed to zero.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Policies\Microsoft\SQMClient\Windows'
-    Name = 'CEIPEnable'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'CustomerExperience'
+    Path        = 'HKLM:\SOFTWARE\Policies\Microsoft\SQMClient\Windows'
+    Name        = 'CEIPEnable'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'CustomerExperience'
     Description = 'Disable Windows Customer Experience Improvement Program.'
   }
   @{
-    Path = 'HKLM:\SOFTWARE\Microsoft\SQMClient\Windows'
-    Name = 'CEIPEnable'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'CustomerExperience'
+    Path        = 'HKLM:\SOFTWARE\Microsoft\SQMClient\Windows'
+    Name        = 'CEIPEnable'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'CustomerExperience'
     Description = 'Disable local CEIP preference.'
   }
 )

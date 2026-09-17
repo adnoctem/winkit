@@ -146,325 +146,325 @@ $appPrivacyKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy'
 
 $privacySettings = @(
   @{
-    Path = $advertisingKey
-    Name = 'Enabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'Advertising'
+    Path        = $advertisingKey
+    Name        = 'Enabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Advertising'
     Description = 'Disable advertising ID for the current/default user.'
   }
   @{
-    Path = $privacyKey
-    Name = 'TailoredExperiencesWithDiagnosticDataEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'Advertising'
+    Path        = $privacyKey
+    Name        = 'TailoredExperiencesWithDiagnosticDataEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Advertising'
     Description = 'Disable tailored experiences with diagnostic data.'
   }
   @{
-    Path = $cloudContentKey
-    Name = 'DisableConsumerAccountStateContent'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'Advertising'
+    Path        = $cloudContentKey
+    Name        = 'DisableConsumerAccountStateContent'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Advertising'
     Description = 'Hide Microsoft account / 365 promotional state content.'
   }
   @{
-    Path = $cloudContentKey
-    Name = 'DisableThirdPartySuggestions'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'Advertising'
+    Path        = $cloudContentKey
+    Name        = 'DisableThirdPartySuggestions'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Advertising'
     Description = 'Disable third-party suggestions.'
   }
 
   @{
-    Path = $accountNotificationsKey
-    Name = 'EnableAccountNotifications'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SuggestedContent'
+    Path        = $accountNotificationsKey
+    Name        = 'EnableAccountNotifications'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SuggestedContent'
     Description = 'Disable account notifications in Settings.'
   }
   @{
-    Path = $userProfileEngagementKey
-    Name = 'ScoobeSystemSettingEnabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SuggestedContent'
+    Path        = $userProfileEngagementKey
+    Name        = 'ScoobeSystemSettingEnabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SuggestedContent'
     Description = 'Disable SCoobe / welcome engagement prompts.'
   }
   @{
-    Path = $explorerAdvancedKey
-    Name = 'ShowSyncProviderNotifications'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SuggestedContent'
+    Path        = $explorerAdvancedKey
+    Name        = 'ShowSyncProviderNotifications'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SuggestedContent'
     Description = 'Disable sync provider notifications in Explorer.'
   }
   @{
-    Path = $suggestedToastKey
-    Name = 'Enabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SuggestedContent'
+    Path        = $suggestedToastKey
+    Name        = 'Enabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SuggestedContent'
     Description = 'Disable suggested system toast notifications.'
   }
   @{
-    Path = $backupToastKey
-    Name = 'Enabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SuggestedContent'
+    Path        = $backupToastKey
+    Name        = 'Enabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SuggestedContent'
     Description = 'Disable backup reminder toast notifications.'
   }
   @{
-    Path = $mobilityKey
-    Name = 'OptedIn'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SuggestedContent'
+    Path        = $mobilityKey
+    Name        = 'OptedIn'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SuggestedContent'
     Description = 'Disable mobility suggestion opt-in.'
   }
   @{
-    Path = $explorerAdvancedKey
-    Name = 'Start_IrisRecommendations'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SuggestedContent'
+    Path        = $explorerAdvancedKey
+    Name        = 'Start_IrisRecommendations'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SuggestedContent'
     Description = 'Disable Start Iris recommendations.'
   }
   @{
-    Path = $explorerAdvancedKey
-    Name = 'Start_AccountNotifications'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'SuggestedContent'
+    Path        = $explorerAdvancedKey
+    Name        = 'Start_AccountNotifications'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'SuggestedContent'
     Description = 'Disable Start account notifications.'
   }
 
   @{
-    Path = $siufRulesKey
-    Name = 'NumberOfSIUFInPeriod'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'Feedback'
+    Path        = $siufRulesKey
+    Name        = 'NumberOfSIUFInPeriod'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Feedback'
     Description = 'Disable feedback prompt frequency.'
   }
   @{
-    Path = $siufRulesKey
-    Name = 'PeriodInNanoSeconds'
-    Preferred = $null
-    Default = $null
-    Type = 'DWord'
-    Group = 'Feedback'
+    Path        = $siufRulesKey
+    Name        = 'PeriodInNanoSeconds'
+    Preferred   = $null
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Feedback'
     Description = 'Remove feedback prompt period.'
   }
 
   @{
-    Path = $activityPolicyKey
-    Name = 'PublishUserActivities'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ActivityHistory'
+    Path        = $activityPolicyKey
+    Name        = 'PublishUserActivities'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ActivityHistory'
     Description = 'Disable publishing user activities.'
   }
   @{
-    Path = $activityPolicyKey
-    Name = 'UploadUserActivities'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ActivityHistory'
+    Path        = $activityPolicyKey
+    Name        = 'UploadUserActivities'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ActivityHistory'
     Description = 'Disable uploading user activities.'
   }
   @{
-    Path = $activityPolicyKey
-    Name = 'EnableActivityFeed'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ActivityHistory'
+    Path        = $activityPolicyKey
+    Name        = 'EnableActivityFeed'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ActivityHistory'
     Description = 'Disable activity feed.'
   }
   @{
-    Path = $clipboardPolicyKey
-    Name = 'AllowClipboardHistory'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ClipboardAndCDP'
+    Path        = $clipboardPolicyKey
+    Name        = 'AllowClipboardHistory'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ClipboardAndCDP'
     Description = 'Disable clipboard history.'
   }
   @{
-    Path = $clipboardPolicyKey
-    Name = 'AllowCrossDeviceClipboard'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ClipboardAndCDP'
+    Path        = $clipboardPolicyKey
+    Name        = 'AllowCrossDeviceClipboard'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ClipboardAndCDP'
     Description = 'Disable cross-device clipboard.'
   }
   @{
-    Path = $clipboardPolicyKey
-    Name = 'CdpEnableMmx'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'ClipboardAndCDP'
+    Path        = $clipboardPolicyKey
+    Name        = 'CdpEnableMmx'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'ClipboardAndCDP'
     Description = 'Disable CDP cross-device shared experiences.'
   }
 
   @{
-    Path = $speechKey
-    Name = 'HasAccepted'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'InputPersonalization'
+    Path        = $speechKey
+    Name        = 'HasAccepted'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'InputPersonalization'
     Description = 'Disable online speech privacy acceptance.'
   }
   @{
-    Path = $inputTipcKey
-    Name = 'Enabled'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'InputPersonalization'
+    Path        = $inputTipcKey
+    Name        = 'Enabled'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'InputPersonalization'
     Description = 'Disable typing personalization collection.'
   }
   @{
-    Path = $inputPersonalizationKey
-    Name = 'RestrictImplicitInkCollection'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'InputPersonalization'
+    Path        = $inputPersonalizationKey
+    Name        = 'RestrictImplicitInkCollection'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'InputPersonalization'
     Description = 'Restrict implicit ink collection.'
   }
   @{
-    Path = $inputPersonalizationKey
-    Name = 'RestrictImplicitTextCollection'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'InputPersonalization'
+    Path        = $inputPersonalizationKey
+    Name        = 'RestrictImplicitTextCollection'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'InputPersonalization'
     Description = 'Restrict implicit text collection.'
   }
   @{
-    Path = $trainedDataKey
-    Name = 'HarvestContacts'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'InputPersonalization'
+    Path        = $trainedDataKey
+    Name        = 'HarvestContacts'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'InputPersonalization'
     Description = 'Disable contact harvesting for trained data.'
   }
   @{
-    Path = $personalizationKey
-    Name = 'AcceptedPrivacyPolicy'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'InputPersonalization'
+    Path        = $personalizationKey
+    Name        = 'AcceptedPrivacyPolicy'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'InputPersonalization'
     Description = 'Disable input personalization privacy acceptance.'
   }
 
   @{
-    Path = $locationPolicyKey
-    Name = 'DisableLocation'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'Location'
+    Path        = $locationPolicyKey
+    Name        = 'DisableLocation'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'Location'
     Description = 'Disable Windows location services through policy.'
   }
   @{
-    Path = $appPrivacyKey
-    Name = 'LetAppsRunInBackground'
-    Preferred = 2
-    Default = $null
-    Type = 'DWord'
-    Group = 'AppBackground'
+    Path        = $appPrivacyKey
+    Name        = 'LetAppsRunInBackground'
+    Preferred   = 2
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'AppBackground'
     Description = 'Deny default background app access.'
   }
 
   # -- Legacy privacy toggles --
   @{
-    Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
-    Name = 'DisallowRunExecutionFromZipFile'
-    Preferred = 1
-    Default = 0
-    Type = 'DWord'
-    Group = 'LegacyPrivacy'
+    Path        = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+    Name        = 'DisallowRunExecutionFromZipFile'
+    Preferred   = 1
+    Default     = 0
+    Type        = 'DWord'
+    Group       = 'LegacyPrivacy'
     Description = 'Disallow running executables directly from ZIP files.'
   }
   @{
-    Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
-    Name = 'DisallowRunExecutionFromZipFile\Unblock'
-    Preferred = 1
-    Default = 0
-    Type = 'DWord'
-    Group = 'LegacyPrivacy'
+    Path        = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+    Name        = 'DisallowRunExecutionFromZipFile\Unblock'
+    Preferred   = 1
+    Default     = 0
+    Type        = 'DWord'
+    Group       = 'LegacyPrivacy'
     Description = 'Disallow unblocking ZIP-executed files via Mark-of-the-Web removal.'
   }
   @{
-    Path = 'HKCU:\Software\Microsoft\MediaPlayer\Preferences'
-    Name = 'UsageTracking'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
-    Group = 'LegacyPrivacy'
+    Path        = 'HKCU:\Software\Microsoft\MediaPlayer\Preferences'
+    Name        = 'UsageTracking'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
+    Group       = 'LegacyPrivacy'
     Description = 'Disable Windows Media Player usage tracking.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\WindowsMediaDRM'
-    Name = 'DisableOnline'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'LegacyPrivacy'
+    Path        = 'HKLM:\Software\Policies\Microsoft\WindowsMediaDRM'
+    Name        = 'DisableOnline'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'LegacyPrivacy'
     Description = 'Disable WMDRM online feature access.'
   }
   @{
-    Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
-    Name = 'EnableBalloonTips'
-    Preferred = 0
-    Default = 1
-    Type = 'DWord'
-    Group = 'LegacyPrivacy'
+    Path        = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+    Name        = 'EnableBalloonTips'
+    Preferred   = 0
+    Default     = 1
+    Type        = 'DWord'
+    Group       = 'LegacyPrivacy'
     Description = 'Disable balloon tip notifications.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows\System'
-    Name = 'DisableCredUI'
-    Preferred = 1
-    Default = $null
-    Type = 'DWord'
-    Group = 'LegacyPrivacy'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows\System'
+    Name        = 'DisableCredUI'
+    Preferred   = 1
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'LegacyPrivacy'
     Description = 'Disable credential password reveal UI.'
   }
   @{
-    Path = 'HKLM:\Software\Policies\Microsoft\Windows\FindMyDevice'
-    Name = 'AllowFindMyDevice'
-    Preferred = 0
-    Default = $null
-    Type = 'DWord'
-    Group = 'LegacyPrivacy'
+    Path        = 'HKLM:\Software\Policies\Microsoft\Windows\FindMyDevice'
+    Name        = 'AllowFindMyDevice'
+    Preferred   = 0
+    Default     = $null
+    Type        = 'DWord'
+    Group       = 'LegacyPrivacy'
     Description = 'Disable Find My Device feature.'
   }
 )

@@ -109,11 +109,11 @@ catch {
 $report = @()
 foreach ($update in $updates) {
   $report += [pscustomobject]@{
-    Title = $update.Title
-    Classification = $update.Classification
-    Status = $update.Status
+    Title                = $update.Title
+    Classification       = $update.Classification
+    Status               = $update.Status
     KnowledgeBaseArticle = $update.KnowledgeBaseArticle
-    ReleaseDate = $update.ReleaseDate
+    ReleaseDate          = $update.ReleaseDate
   }
 }
 

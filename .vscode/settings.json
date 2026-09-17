@@ -1,4 +1,0 @@
-{
-  "powershell.scriptAnalysis.enable": true,
-  "powershell.scriptAnalysis.settingsPath": "${workspaceFolder}/PSScriptAnalyzerSettings.psd1"
-}

@@ -602,15 +602,15 @@ ORDER  BY v.visit_time DESC;
     if (-not $_isOffHours) { continue }
 
     [void]$_hits.Add([PSCustomObject]@{
-        Browser = $Browser
-        Profile = $ProfileName
-        VisitTime = $_localTime
-        DayOfWeek = $_dayAbbrev
-        Hour = $_localTime.Hour
-        Url = $_row.url
-        Title = $_row.title
+        Browser    = $Browser
+        Profile    = $ProfileName
+        VisitTime  = $_localTime
+        DayOfWeek  = $_dayAbbrev
+        Hour       = $_localTime.Hour
+        Url        = $_row.url
+        Title      = $_row.title
         VisitCount = $_row.visit_count
-        FromVisit = $_row.from_visit
+        FromVisit  = $_row.from_visit
         Transition = $_row.transition
       })
   }
