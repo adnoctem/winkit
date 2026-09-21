@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+﻿#Requires -Version 5.0
 #Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
 
 <#
@@ -109,8 +109,8 @@ if ($DryRun) {
 # olMailItem class; PR_TRANSPORT_MESSAGE_HEADERS (Unicode then ANSI) and
 # PR_MESSAGE_DELIVERY_TIME.
 $script:OL_MAIL = 0
-$script:HDR_TAG_UNICODE = 'http://schemas.microsoft.com/mapi/proptag/0x007D001E'
-$script:HDR_TAG_ANSI = 'http://schemas.microsoft.com/mapi/proptag/0x007D001F'
+$script:HDR_TAG_UNICODE = 'http://schemas.microsoft.com/mapi/proptag/0x007D001F'
+$script:HDR_TAG_ANSI = 'http://schemas.microsoft.com/mapi/proptag/0x007D001E'
 $script:RECEIVED_TAG = 'http://schemas.microsoft.com/mapi/proptag/0x0E060040'
 
 $_results = New-Object System.Collections.ArrayList
@@ -197,32 +197,38 @@ function Add-TestOutlookMessageObjectModel {
   )
 
   if (-not $PSCmdlet.ShouldProcess($Subject, 'Create synthetic Outlook message')) {
-    return $false
+    return $null
   }
 
-  $_item = $Folder.Items.Add($script:OL_MAIL)
-  $_injected = $false
+  $_items = $Folder.Items
+  $_item = $null
+  $_accessor = $null
+  $_movedItem = $null
+  $_receivedInjected = $false
+  $_headersInjected = $false
   try {
+    $_item = $_items.Add($script:OL_MAIL)
+    $_accessor = $_item.PropertyAccessor
     $_item.Subject = $Subject
     $_item.Body = $Body
 
     try {
-      $_item.PropertyAccessor.SetProperty($script:RECEIVED_TAG, $Received)
-      $_injected = $true
+      $_accessor.SetProperty($script:RECEIVED_TAG, $Received.ToUniversalTime())
+      $_receivedInjected = $true
     }
     catch { }
 
     try {
-      $_item.PropertyAccessor.SetProperty($script:HDR_TAG_UNICODE, $HeaderText)
+      $_accessor.SetProperty($script:HDR_TAG_UNICODE, $HeaderText)
+      $_headersInjected = $true
     }
     catch {
-      $_injected = $false
       try {
-        $_item.PropertyAccessor.SetProperty($script:HDR_TAG_ANSI, $HeaderText)
-        $_injected = $true
+        $_accessor.SetProperty($script:HDR_TAG_ANSI, $HeaderText)
+        $_headersInjected = $true
       }
       catch {
-        $_injected = $false
+        $_headersInjected = $false
       }
     }
 
@@ -231,11 +237,11 @@ function Add-TestOutlookMessageObjectModel {
     # Items created via Items.Add persist to the default store's Drafts on
     # Save, not to the originating folder. Move the item into the target
     # folder explicitly so fixtures land where they are expected.
-    $null = $_item.Move($Folder)
-    return $_injected
+    $_movedItem = $_item.Move($Folder)
+    return ($_receivedInjected -and $_headersInjected)
   }
   finally {
-    Remove-ComObject $_item
+    Remove-ComObject $_movedItem $_accessor $_item $_items
   }
 }
 
@@ -259,11 +265,13 @@ function Add-TestOutlookMessageRedemption {
   )
 
   if (-not $PSCmdlet.ShouldProcess($Subject, 'Create synthetic Outlook message')) {
-    return $false
+    return $null
   }
 
-  $_item = $RdoFolder.Items.Add($script:OL_MAIL)
+  $_items = $RdoFolder.Items
+  $_item = $null
   try {
+    $_item = $_items.Add('IPM.Note')
     $_item.Subject = $Subject
     $_item.Body = $Body
     $_item.Fields[$script:RECEIVED_TAG] = $Received
@@ -272,7 +280,7 @@ function Add-TestOutlookMessageRedemption {
     return $true
   }
   finally {
-    Remove-ComObject $_item
+    Remove-ComObject $_item $_items
   }
 }
 
@@ -283,6 +291,7 @@ $_rdoSession = $null
 $_rdoFolder = $null
 
 try {
+  if ($StartDate -and $EndDate -and $StartDate -gt $EndDate) { throw 'StartDate is after EndDate.' }
   $_context = Connect-Outlook
 
   $_outlookMajor = [int](($_context.App.Version -split '\.')[0])
@@ -290,16 +299,40 @@ try {
     throw "Outlook 2007 (version 12) or later is required. Detected Outlook version: $($_context.App.Version)"
   }
 
-  $_storeRoot = Get-OutlookStoreRoot -Namespace $_context.Namespace -Name $StoreName
+  # PSFoundation 1.3.0 checks Store.IsDefault, which Outlook does not expose.
+  # Resolve the default via Namespace.DefaultStore and reject ambiguous names.
+  if ([string]::IsNullOrWhiteSpace($StoreName)) {
+    $_selectedStore = $_context.Namespace.DefaultStore
+    try { $_storeRoot = $_selectedStore.GetRootFolder() }
+    finally { Remove-ComObject $_selectedStore }
+  }
+  else {
+    $_stores = $_context.Namespace.Stores
+    $_matches = 0
+    try {
+      for ($_storeIndex = 1; $_storeIndex -le $_stores.Count; $_storeIndex++) {
+        $_store = $_stores.Item($_storeIndex)
+        try {
+          Write-Verbose "Store: $($_store.DisplayName) | $($_store.FilePath)"
+          if ($_store.DisplayName -eq $StoreName) { $_matches++ }
+        }
+        finally { Remove-ComObject $_store }
+      }
+    }
+    finally { Remove-ComObject $_stores }
+    if ($_matches -ne 1) { throw "StoreName '$StoreName' matches $_matches stores. Use a unique display name." }
+    $_storeRoot = Get-OutlookStoreRoot -Namespace $_context.Namespace -Name $StoreName
+  }
   Write-Verbose "Store root: $($_storeRoot.FolderPath)"
 
   if (-not $WhatIfPreference) {
+    if (-not $PSCmdlet.ShouldProcess($_storeRoot.FolderPath, "Create $Count synthetic messages in '$TargetFolderName'")) { return }
     $_targetFolder = Get-OutlookSubFolder -ParentFolder $_storeRoot -Name $TargetFolderName -Create
 
     if ($UseRedemption) {
       try {
         $_rdoSession = New-Object -ComObject Redemption.RDOSession
-        $_rdoSession.Logon()
+        $_rdoSession.MAPIOBJECT = $_context.Namespace.MAPIOBJECT
       }
       catch {
         throw 'Redemption is not registered. Install the free-for-personal-use Redemption component or run without -UseRedemption.'
@@ -311,6 +344,7 @@ try {
 
   $_duplicates = [int][Math]::Floor($Count * $DuplicateRatio)
   $_unique = [Math]::Max(1, $Count - $_duplicates)
+  $_duplicates = $Count - $_unique
   Write-Verbose "Planning $Count items: $_unique unique Message-IDs, $_duplicates duplicates."
 
   $_dateBounds = @{}
@@ -335,13 +369,14 @@ try {
 
     try {
       $_injected = if ($_rdoFolder) {
-        Add-TestOutlookMessageRedemption -RdoFolder $_rdoFolder -Subject $_subject -Body $_body -Received $_received -HeaderText $_headerText -WhatIf:$WhatIfPreference
+        Add-TestOutlookMessageRedemption -RdoFolder $_rdoFolder -Subject $_subject -Body $_body -Received $_received -HeaderText $_headerText -WhatIf:$WhatIfPreference -Confirm:$false
       }
       else {
-        Add-TestOutlookMessageObjectModel -Folder $_targetFolder -Subject $_subject -Body $_body -Received $_received -HeaderText $_headerText -WhatIf:$WhatIfPreference
+        Add-TestOutlookMessageObjectModel -Folder $_targetFolder -Subject $_subject -Body $_body -Received $_received -HeaderText $_headerText -WhatIf:$WhatIfPreference -Confirm:$false
       }
 
-      Add-OperationResult -Results $_results -Target $_subject -Source 'Outlook' -Scope $TargetFolderName -Action 'Create' -Status 'Created' -Property @{
+      $_status = if ($null -eq $_injected) { 'Skipped' } else { 'Created' }
+      Add-OperationResult -Results $_results -Target $_subject -Source 'Outlook' -Scope $TargetFolderName -Action 'Create' -Status $_status -Property @{
         Received       = $_received
         MessageId      = $_messageId
         HeaderInjected = $_injected
@@ -353,12 +388,17 @@ try {
     }
   }
 }
+catch {
+  Add-OperationResult -Results $_results -Target $TargetFolderName -Source 'Outlook' -Action 'Create' -Status 'Failed' -Detail $_.Exception.Message
+  Write-Warning $_.Exception.Message
+}
 finally {
   Remove-ComObject $_rdoFolder
 
   if ($_rdoSession) {
     try {
-      $_rdoSession.Logoff()
+      # The MAPI session belongs to Outlook; do not log off the user's session.
+      $_rdoSession.MAPIOBJECT = $null
     }
     catch {
       Write-Verbose "Could not log off Redemption session: $($_.Exception.Message)"
@@ -372,7 +412,7 @@ finally {
 
   if ($_context) {
     try {
-      if ($QuitOutlook) {
+      if ($QuitOutlook -and -not $WhatIfPreference) {
         $_context.App.Quit()
       }
     }

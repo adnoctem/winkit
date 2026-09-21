@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+﻿#Requires -Version 5.0
 #Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.3.0' }
 
 <#
@@ -186,12 +186,14 @@ function Optimize-OutlookFolder {
 
   $_folderPath = $Folder.FolderPath
   $_items = $Folder.Items
-  $_seen = @{}
+  $_seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
 
   try {
     for ($_index = $_items.Count; $_index -ge 1; $_index--) {
-      $_item = $_items.Item($_index)
+      $_item = $null
+      $_movedItem = $null
       try {
+        $_item = $_items.Item($_index)
         if ($_item.Class -ne $script:OL_MAIL) { continue }
 
         $_messageId = Get-MessageId -Item $_item
@@ -200,27 +202,29 @@ function Optimize-OutlookFolder {
           continue
         }
 
-        if ($_seen.ContainsKey($_messageId)) {
-          $_status = if ($WhatIfPreference) { 'Skipped' } else { 'Moved' }
-          $_detail = if ($WhatIfPreference) { 'DryRun' } else { 'Duplicate moved to review folder.' }
-          Add-OutlookItemResult -Results $Results -Action 'MoveDuplicate' -Status $_status -Folder $_folderPath -Item $_item -MessageId $_messageId -Detail $_detail
-
+        if ($_seen.Contains($_messageId)) {
+          $_metadata = [PSCustomObject]@{ Subject = $_item.Subject; ReceivedTime = $_item.ReceivedTime }
           $_reviewPath = if ($ReviewFolder) { $ReviewFolder.FolderPath } else { $ReviewFolderName }
           if ($PSCmdlet.ShouldProcess("$_folderPath | $([string]$_item.Subject)", "Move duplicate to $_reviewPath")) {
-            $null = $_item.Move($ReviewFolder)
+            $_movedItem = $_item.Move($ReviewFolder)
+            Add-OutlookItemResult -Results $Results -Action 'MoveDuplicate' -Status 'Moved' -Folder $_folderPath -Item $_metadata -MessageId $_messageId -Detail "Duplicate moved to $_reviewPath"
+          }
+          else {
+            $_detail = if ($WhatIfPreference) { 'DryRun' } else { 'Declined' }
+            Add-OutlookItemResult -Results $Results -Action 'MoveDuplicate' -Status 'Skipped' -Folder $_folderPath -Item $_metadata -MessageId $_messageId -Detail $_detail
           }
         }
         else {
-          $_seen[$_messageId] = $true
+          $null = $_seen.Add($_messageId)
           Add-OutlookItemResult -Results $Results -Action 'Deduplicate' -Status 'Kept' -Folder $_folderPath -Item $_item -MessageId $_messageId -Detail 'First item with Message-ID in folder.'
         }
       }
       catch {
         Add-OperationResult -Results $Results -Target $_folderPath -Source 'Outlook' -Action 'Deduplicate' -Status 'Failed' -Detail $_.Exception.Message
-        Write-Warning "Item $_index in '$_folderPath': $($_.Exception.Message)"
+        throw "Deduplication stopped at item $_index in '$_folderPath': $($_.Exception.Message)"
       }
       finally {
-        Remove-ComObject $_item
+        Remove-ComObject $_movedItem $_item
       }
     }
   }
@@ -252,10 +256,17 @@ function Invoke-OutlookFolderTree {
 
   if ($Exclude -contains $Folder.Name) {
     Write-Verbose "Skipping excluded folder: $($Folder.Name)"
+    return
   }
   else {
     Write-Verbose "Processing: $($Folder.FolderPath)"
-    Optimize-OutlookFolder -Folder $Folder -ReviewFolder $ReviewFolder -Results $Results -WhatIf:$WhatIfPreference
+    $_accessor = $Folder.PropertyAccessor
+    try {
+      if ($_accessor.GetProperty('http://schemas.microsoft.com/mapi/proptag/0x36010003') -eq 2) { return }
+    }
+    finally { Remove-ComObject $_accessor }
+    if ($Folder.DefaultItemType -ne 0) { return }
+    Optimize-OutlookFolder -Folder $Folder -ReviewFolder $ReviewFolder -Results $Results -WhatIf:$WhatIfPreference -Confirm:$false
   }
 
   $_folders = $Folder.Folders
@@ -263,7 +274,7 @@ function Invoke-OutlookFolderTree {
     for ($_index = 1; $_index -le $_folders.Count; $_index++) {
       $_child = $_folders.Item($_index)
       try {
-        Invoke-OutlookFolderTree -Folder $_child -ReviewFolder $ReviewFolder -ReviewName $ReviewName -Exclude $Exclude -Results $Results -WhatIf:$WhatIfPreference
+        Invoke-OutlookFolderTree -Folder $_child -ReviewFolder $ReviewFolder -ReviewName $ReviewName -Exclude $Exclude -Results $Results -WhatIf:$WhatIfPreference -Confirm:$false
       }
       finally {
         Remove-ComObject $_child
@@ -287,10 +298,34 @@ try {
     throw "Outlook 2007 (version 12) or later is required. Detected Outlook version: $($_context.App.Version)"
   }
 
-  $_storeRoot = Get-OutlookStoreRoot -Namespace $_context.Namespace -Name $StoreName
+  # PSFoundation 1.3.0 checks Store.IsDefault, which Outlook does not expose.
+  # Resolve the default via Namespace.DefaultStore and reject ambiguous names.
+  if ([string]::IsNullOrWhiteSpace($StoreName)) {
+    $_selectedStore = $_context.Namespace.DefaultStore
+    try { $_storeRoot = $_selectedStore.GetRootFolder() }
+    finally { Remove-ComObject $_selectedStore }
+  }
+  else {
+    $_stores = $_context.Namespace.Stores
+    $_matches = 0
+    try {
+      for ($_storeIndex = 1; $_storeIndex -le $_stores.Count; $_storeIndex++) {
+        $_store = $_stores.Item($_storeIndex)
+        try {
+          Write-Verbose "Store: $($_store.DisplayName) | $($_store.FilePath)"
+          if ($_store.DisplayName -eq $StoreName) { $_matches++ }
+        }
+        finally { Remove-ComObject $_store }
+      }
+    }
+    finally { Remove-ComObject $_stores }
+    if ($_matches -ne 1) { throw "StoreName '$StoreName' matches $_matches stores. Use a unique display name." }
+    $_storeRoot = Get-OutlookStoreRoot -Namespace $_context.Namespace -Name $StoreName
+  }
   Write-Verbose "Store root: $($_storeRoot.FolderPath)"
 
   if (-not $WhatIfPreference) {
+    if (-not $PSCmdlet.ShouldProcess($_storeRoot.FolderPath, "Move suspected duplicates to '$ReviewFolderName' for review")) { return }
     $_reviewFolder = Get-OutlookSubFolder -ParentFolder $_storeRoot -Name $ReviewFolderName -Create
   }
 
@@ -299,7 +334,7 @@ try {
     for ($_index = 1; $_index -le $_folders.Count; $_index++) {
       $_child = $_folders.Item($_index)
       try {
-        Invoke-OutlookFolderTree -Folder $_child -ReviewFolder $_reviewFolder -ReviewName $ReviewFolderName -Exclude $ExcludeFolders -Results $_results -WhatIf:$WhatIfPreference
+        Invoke-OutlookFolderTree -Folder $_child -ReviewFolder $_reviewFolder -ReviewName $ReviewFolderName -Exclude $ExcludeFolders -Results $_results -WhatIf:$WhatIfPreference -Confirm:$false
       }
       finally {
         Remove-ComObject $_child
@@ -310,13 +345,17 @@ try {
     Remove-ComObject $_folders
   }
 }
+catch {
+  Add-OperationResult -Results $_results -Target $StoreName -Source 'Outlook' -Action 'Deduplicate' -Status 'Failed' -Detail $_.Exception.Message
+  Write-Warning $_.Exception.Message
+}
 finally {
   Remove-ComObject $_reviewFolder
   Remove-ComObject $_storeRoot
 
   if ($_context) {
     try {
-      if ($QuitOutlook) {
+      if ($QuitOutlook -and -not $WhatIfPreference) {
         $_context.App.Quit()
       }
     }

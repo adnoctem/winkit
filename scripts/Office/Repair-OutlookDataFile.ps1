@@ -24,7 +24,7 @@
 .PARAMETER PassThru
   Return structured operation results.
 .EXAMPLE
-  PS> .\Repair-OutlookDataFile.ps1 -Path C:\Users\User\Documents\Outlook Files\archive.pst
+  PS> .\Repair-OutlookDataFile.ps1 -Path 'C:\Users\User\Documents\Outlook Files\archive.pst'
 .EXAMPLE
   PS> .\Repair-OutlookDataFile.ps1 -Path C:\Users\User\AppData\Local\Microsoft\Outlook\mail.ost -Tool ScanOST
 .EXAMPLE
@@ -35,7 +35,7 @@
   Author: MVProwess <info@mvprowess.com>
   License: MIT
   Server Core: not applicable - Outlook data files are a desktop client concern.
-  SYSTEM-account execution: works for launching the repair tool; the tool itself may require interactive confirmation.
+  SYSTEM-account execution: not supported - repair requires an interactive desktop.
   Outlook version: 2007 (version 12) or later - ScanPST.exe/ScanOST.exe are discovered from Office 12 installations onward.
 #>
 
@@ -170,11 +170,16 @@ elseif ($PSCmdlet.ShouldProcess($_dataFilePath, "Repair with $_toolName")) {
   Write-Log -Message "  Tool: $_toolPath" -Color Gray
 
   try {
-    $_process = Start-Process -FilePath $_toolPath -ArgumentList @($_dataFilePath) -Wait -PassThru -ErrorAction Stop
-    $_status = if ($_process.ExitCode -eq 0) { 'Completed' } else { "ExitCode:$($_process.ExitCode)" }
+    if (Get-Process -Name OUTLOOK -ErrorAction SilentlyContinue) { throw 'Close Outlook before launching the repair tool.' }
+    # Fail before opening repair UI when any process still holds the data file.
+    $_lock = [IO.File]::Open($_dataFilePath, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    $_lock.Dispose()
+    # Start-Process joins array arguments without preserving their quoting.
+    $_process = Start-Process -FilePath $_toolPath -ArgumentList "`"$_dataFilePath`"" -Wait -PassThru -ErrorAction Stop
+    $_status = if ($_process.ExitCode -eq 0) { 'Completed' } else { 'Failed' }
     $_color = if ($_process.ExitCode -eq 0) { 'Green' } else { 'Yellow' }
 
-    Write-Log -Message "Outlook data-file repair finished with exit code $($_process.ExitCode)." -Color $_color
+    Write-Log -Message "Repair tool exited with code $($_process.ExitCode). Confirm the scan/repair outcome in the tool's log; tool exit alone does not verify PST health." -Color $_color
     Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status $_status -Detail "Tool: $_toolName" -Property @{
       Tool     = $_toolName
       ToolPath = $_toolPath

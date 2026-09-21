@@ -33,21 +33,17 @@ BeforeAll {
   $script:Archiver = Join-Path -Path $script:OfficeScripts -ChildPath 'New-OutlookArchive.ps1'
   $script:Repairer = Join-Path -Path $script:OfficeScripts -ChildPath 'Repair-OutlookDataFile.ps1'
 
-  $script:TempRoot = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath 'winkit-outlook-test'
+  $script:RunId = [guid]::NewGuid().ToString('N')
+  $script:TempRoot = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "winkit-outlook-test-$script:RunId"
   $null = New-Item -Path $script:TempRoot -ItemType Directory -Force
   $script:TestStorePst = Join-Path -Path $script:TempRoot -ChildPath 'winkit-test-store.pst'
   $script:ArchiveCopyPst = Join-Path -Path $script:TempRoot -ChildPath 'winkit-test-archive-copy.pst'
   $script:ArchiveMovePst = Join-Path -Path $script:TempRoot -ChildPath 'winkit-test-archive-move.pst'
 
-  foreach ($_file in @($script:TestStorePst, $script:ArchiveCopyPst, $script:ArchiveMovePst)) {
-    if (Test-Path -LiteralPath $_file) {
-      Remove-Item -LiteralPath $_file -Force
-    }
-  }
-
   $script:RedemptionAvailable = $false
   try {
-    $null = New-Object -ComObject Redemption.RDOSession
+    $_redemption = New-Object -ComObject Redemption.RDOSession
+    Remove-ComObject $_redemption
     $script:RedemptionAvailable = $true
   }
   catch {
@@ -66,7 +62,29 @@ BeforeAll {
 
   $script:Context = Connect-Outlook
   $script:StoreRoot = Add-OutlookStoreRoot -Namespace $script:Context.Namespace -Path $script:TestStorePst
+  $script:StoreRoot.Name = "WinkitTest-$script:RunId"
   $script:StoreName = $script:StoreRoot.Name
+
+  function Get-TestMailCount {
+    param ([object]$Folder)
+    $_count = 0
+    $_items = $Folder.Items
+    $_children = $Folder.Folders
+    try {
+      for ($_i = 1; $_i -le $_items.Count; $_i++) {
+        $_mail = $_items.Item($_i)
+        try { if ($_mail.Class -eq 43) { $_count++ } }
+        finally { Remove-ComObject $_mail }
+      }
+      for ($_i = 1; $_i -le $_children.Count; $_i++) {
+        $_child = $_children.Item($_i)
+        try { $_count += Get-TestMailCount -Folder $_child }
+        finally { Remove-ComObject $_child }
+      }
+    }
+    finally { Remove-ComObject $_children $_items }
+    return $_count
+  }
 }
 
 Describe 'New-TestOutlookMessage' {
@@ -214,9 +232,17 @@ Describe 'New-OutlookArchive' {
   }
 
   It 'copies the generated mail into the archive PST' {
+    $_before = Get-TestMailCount -Folder $script:StoreRoot
     $_results = & $script:Archiver -ArchivePath $script:ArchiveCopyPst -StoreName $script:StoreName -Mode Copy -PassThru
-    @($_results | Where-Object { $_.Status -eq 'Copied' }).Count | Should -BeGreaterThan 0
+    @($_results | Where-Object { $_.Status -eq 'Copied' }).Count | Should -Be $_before
+    Get-TestMailCount -Folder $script:StoreRoot | Should -Be $_before
     Test-Path -LiteralPath $script:ArchiveCopyPst | Should -BeTrue
+    $_archive = Add-OutlookStoreRoot -Namespace $script:Context.Namespace -Path $script:ArchiveCopyPst
+    try { Get-TestMailCount -Folder $_archive | Should -Be $_before }
+    finally {
+      $script:Context.Namespace.RemoveStore($_archive)
+      Remove-ComObject $_archive
+    }
   }
 
   It 'honours StartDate bounds when ReceivedTime was injected' {
@@ -239,14 +265,23 @@ Describe 'New-OutlookArchive' {
       return
     }
 
-    $_results = & $script:Archiver -ArchivePath $script:ArchiveCopyPst -StoreName $script:StoreName -Mode Copy -StartDate '2024-07-01' -EndDate '2024-12-31' -PassThru
+    $_datedArchive = Join-Path $script:TempRoot 'dated-archive.pst'
+    $_results = & $script:Archiver -ArchivePath $_datedArchive -StoreName $script:StoreName -Mode Copy -StartDate '2024-07-01' -EndBefore '2025-01-01' -PassThru
     @($_results | Where-Object { $_.Status -eq 'Copied' }).Count | Should -Be 5
   }
 
   It 'moves the generated mail into the archive PST' {
+    $_before = Get-TestMailCount -Folder $script:StoreRoot
     $_results = & $script:Archiver -ArchivePath $script:ArchiveMovePst -StoreName $script:StoreName -Mode Move -PassThru
-    @($_results | Where-Object { $_.Status -eq 'Moved' }).Count | Should -BeGreaterThan 0
+    @($_results | Where-Object { $_.Status -eq 'Moved' }).Count | Should -Be $_before
+    Get-TestMailCount -Folder $script:StoreRoot | Should -Be 0
     Test-Path -LiteralPath $script:ArchiveMovePst | Should -BeTrue
+    $_archive = Add-OutlookStoreRoot -Namespace $script:Context.Namespace -Path $script:ArchiveMovePst
+    try { Get-TestMailCount -Folder $_archive | Should -Be $_before }
+    finally {
+      $script:Context.Namespace.RemoveStore($_archive)
+      Remove-ComObject $_archive
+    }
   }
 }
 
@@ -279,5 +314,7 @@ AfterAll {
 
   Invoke-ComGarbageCollection
 
-  Remove-Item -LiteralPath $script:TempRoot -Recurse -Force -ErrorAction SilentlyContinue
+  # Keep the unique scratch directory for inspection. Never recursively delete
+  # a reused temp location, especially if Outlook still has a PST attached.
+  Write-Information "Outlook test artifacts retained at: $script:TempRoot" -InformationAction Continue
 }
