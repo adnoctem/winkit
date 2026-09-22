@@ -6,8 +6,9 @@
 
 .DESCRIPTION
   Creates a clean bundle containing the repository's scripts, bin, and
-  resources directories, preserving their relative layout so scripts and
-  launchers can be distributed and unpacked as a unit.
+  resources directories together with the runtime requirements and license,
+  preserving their relative layout so scripts and launchers can be distributed
+  and unpacked as a unit.
 
   Archives are written to the dist directory, which is created when it does not
   already exist. By default, the script builds both:
@@ -71,13 +72,13 @@ $zipPath = Join-Path -Path $outputPath -ChildPath "$Name.zip"
 $tarGzPath = Join-Path -Path $outputPath -ChildPath "$Name.tar.gz"
 $checksumPath = Join-Path -Path $outputPath -ChildPath 'CHECKSUMS_SHA256.txt'
 
-# The source directories that make up a bundle. Validated up front so a
-# missing directory fails before any archive work begins.
-$sourceDirs = 'scripts', 'bin', 'resources'
-$sourcePaths = foreach ($dir in $sourceDirs) {
-  $path = Join-Path -Path $repositoryRoot -ChildPath $dir
-  if (-not (Test-Path -LiteralPath $path -PathType Container)) {
-    throw "Required build source directory not found: $path"
+# The source items that make up a bundle. Validated up front so a missing item
+# fails before any archive work begins.
+$sourceItems = 'scripts', 'bin', 'resources', 'requirements.psd1', 'LICENSE'
+$sourcePaths = foreach ($item in $sourceItems) {
+  $path = Join-Path -Path $repositoryRoot -ChildPath $item
+  if (-not (Test-Path -LiteralPath $path)) {
+    throw "Required build source item not found: $path"
   }
   $path
 }
@@ -119,7 +120,7 @@ if ($Format -eq 'Both' -or $Format -eq 'TarGz') {
     # -C changes tar's working directory to the repo root before archiving, so
     # the stored paths are 'scripts/...' and 'bin/...' rather than absolute or
     # deeply-nested. No staging copy and no Push-Location needed.
-    & $tarCommand.Source -C $repositoryRoot -czf $tarGzPath $sourceDirs
+    & $tarCommand.Source -C $repositoryRoot -czf $tarGzPath $sourceItems
     if ($LASTEXITCODE -ne 0) {
       throw "tar exited with code $LASTEXITCODE while creating $tarGzPath."
     }

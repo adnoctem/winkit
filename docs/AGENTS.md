@@ -16,10 +16,12 @@ a symlink to this file — edit this one.
 
 ## Layout
 
-- `scripts/` — the product: executable admin scripts, filed by what they change. Root holds only the three `bin/`-launched entry points
-  (`Invoke-Bootstrap`, `Invoke-Optimizer`, `Invoke-InformationRetrieval`); everything else lives in `Privacy/`, `Interface/`, `System/`,
-  `Software/`, `Features/`, `Maintenance/`, `Diagnostics/`, `Network/`, `Administration/`, `Policy/`, `Files/`, `Office/`, and `Server/`
-  (role subfolders `ADDS/`, `GPO/`, `Exchange/`, `DHCP/`, `WSUS/`)
+- `install.ps1` — standalone, idempotent release installer/updater; it deliberately cannot depend on PSFoundation because it installs the
+  pinned runtime dependency
+- `scripts/` — the product: executable admin scripts, filed by what they change. The scripts root holds only the three `bin/`-launched entry
+  points (`Invoke-Bootstrap`, `Invoke-Optimizer`, `Invoke-InformationRetrieval`); everything else lives in `Privacy/`, `Interface/`,
+  `System/`, `Software/`, `Features/`, `Maintenance/`, `Diagnostics/`, `Network/`, `Administration/`, `Policy/`, `Files/`, `Office/`, and
+  `Server/` (role subfolders `ADDS/`, `GPO/`, `Exchange/`, `DHCP/`, `WSUS/`)
 - `bin/` — `.cmd` launchers for selected scripts
 - `tools/` — development tooling behind `winkit.ps1` (initialize, format, lint, test, dependencies, build)
 - `docs/` — contributor documentation; TODO.md is currently all-TBA
@@ -33,6 +35,7 @@ a symlink to this file — edit this one.
 
 - Every script opens with `#Requires -Version 5.0`, `#Requires -RunAsAdministrator` (when elevation is required), and
   `#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = 'x.y.z' }` — pin the lowest version that provides every cmdlet used
+- `install.ps1` is the sole PSFoundation exception: it must remain standalone so it can install the pinned dependency on a fresh machine
 - `Import-Module PSFoundation -Force` after the param block
 - Comment-based help with `.SYNOPSIS`/`.DESCRIPTION`/`.PARAMETER`/`.EXAMPLE`, plus a `.NOTES` block (Author, License, Server Core support,
   SYSTEM-account suitability)

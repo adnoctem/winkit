@@ -60,10 +60,51 @@ For more information on PowerShell itself, refer to Microsoft's official [PowerS
 also serve as implementation examples for composing new automation routines or reusing the shared functionality provided by the
 [`PSFoundation`][psfoundation] module.
 
+## 📦 Installation and updates
+
+Run the following command in PowerShell 5.0 or newer to install the latest stable release. Running the same command again updates an
+existing managed installation:
+
+```powershell
+irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 | iex
+```
+
+The default installation is per-user at `%LOCALAPPDATA%\Programs\winkit`. The installer verifies the release archive against its published
+SHA-256 checksum, installs the pinned `PSFoundation` runtime dependency, and adds winkit's `bin` directory to the user `PATH`.
+
+To pass installer options, invoke the downloaded script block directly:
+
+```powershell
+# custom destination
+& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1'))) -InstallPath 'D:\Tools\winkit'
+
+# machine-wide installation from an elevated PowerShell session
+& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1'))) -Scope AllUsers
+
+# unattended installation or update
+$env:WINKIT_NON_INTERACTIVE = '1'
+irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 | iex
+```
+
+Useful options include `-Version`, `-InstallPath`, `-Scope CurrentUser|AllUsers`, `-NoPath`, `-Force`, `-DryRun`, and `-PassThru`. The
+non-interactive setting applies only to installation; it never bypasses confirmations in winkit's operational scripts.
+
+The concise `irm | iex` form executes the current installer source directly. To inspect it before execution, download it first:
+
+```powershell
+$installer = Join-Path $env:TEMP 'install-winkit.ps1'
+irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 -OutFile $installer
+Get-Content $installer
+& $installer
+```
+
 ## ✨ TL;DR
 
 ```pwsh
-# initialize the project (download dependencies)
+# install or update winkit
+irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 | iex
+
+# repository development: initialize dependencies
 .\winkit.ps1 init
 # also: .\winkit.ps1 initialize | setup | bootstrap
 
