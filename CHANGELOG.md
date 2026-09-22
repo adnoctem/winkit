@@ -2,7 +2,8 @@
 
 ### Bug Fixes
 
-* **scripts:** harden Outlook archiving and migration safeguards ([2be946e](https://github.com/adnoctem/winkit/commit/2be946e231f87f8598f5ff10e201565e700c0f4f))
+- **scripts:** harden Outlook archiving and migration safeguards
+  ([2be946e](https://github.com/adnoctem/winkit/commit/2be946e231f87f8598f5ff10e201565e700c0f4f))
 
 ## [1.3.0](https://github.com/adnoctem/winkit/compare/v1.2.3...v1.3.0) (2026-09-17)
 
