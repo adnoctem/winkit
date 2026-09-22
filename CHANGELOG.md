@@ -1,3 +1,13 @@
+## [1.4.0](https://github.com/adnoctem/winkit/compare/v1.3.1...v1.4.0) (2026-09-22)
+
+### Features
+
+* **scripts:** add standalone release installer ([8a3a2e9](https://github.com/adnoctem/winkit/commit/8a3a2e92be5f0147db962dfbe7e8d8419704908e))
+
+### Bug Fixes
+
+* **config:** add `prepareCmd` to .releaserc ([e28ba79](https://github.com/adnoctem/winkit/commit/e28ba79e09d348cd2c3c16df71d23bc896286290))
+
 ## [1.3.1](https://github.com/adnoctem/winkit/compare/v1.3.0...v1.3.1) (2026-09-21)
 
 ### Bug Fixes
