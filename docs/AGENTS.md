@@ -24,7 +24,10 @@ a symlink to this file — edit this one.
   `Server/` (role subfolders `ADDS/`, `GPO/`, `Exchange/`, `DHCP/`, `WSUS/`)
 - `bin/` — `.cmd` launchers for selected scripts
 - `tools/` — development tooling behind `winkit.ps1` (initialize, format, lint, test, dependencies, build)
-- `docs/` — contributor documentation; TODO.md is currently all-TBA
+- `docs/` — repository-wide contributor and project documentation; TODO.md is currently all-TBA
+- `scripts/<Area>/README.md` — user documentation for that script family (for example, `scripts/Office/README.md`); keep domain-specific
+  guides here rather than in `docs/`. Describe current behavior, requirements, examples, and limitations without development history,
+  sketches, change narratives, or old review/test-run reports
 - `secrets/` — local-only scratch/backlog docs, **gitignored**: `PSFoundation.md` (next-version queue for the module),
   `01-reorganization.md`; completed trackers are archived under `secrets/Trash/`
 - `requirements.psd1` — exact module version pins (also a semantic-release commit asset); bump when adopting newer PSFoundation
@@ -44,6 +47,25 @@ a symlink to this file — edit this one.
 - PowerShell 5.0 compatibility: no ternary, `??`, or null-conditional operators (PSUseCompatibleSyntax targets 5.0/5.1/7.0)
 - Encoding: UTF-8 with BOM, CRLF (enforced by formatter and pre-commit `mixed-line-ending`); 2-space indentation
 - New plural nouns in function/script names must be added to the `PSUseSingularNouns` `NounAllowList` in `PSScriptAnalyzerSettings.psd1`
+
+## Code readability and structure (non-negotiable)
+
+Passing the formatter is necessary but does not establish readable structure. Follow the
+[contributor style guide](CONTRIBUTING.md#powershell-readability-and-structure) when writing or editing scripts:
+
+- Put each parameter's attributes, type, and variable/default on separate lines, with a blank line between parameters. Apply this to script
+  and helper-function parameter blocks. Expand long validation lists and arrays vertically
+- Write one statement per line; do not compress operations with semicolons. Expand operational conditionals, loops, `try`/`catch`/`finally`,
+  and resource cleanup into multiline blocks. Short, simple pipeline filters/selectors may remain inline
+- Separate meaningful steps with blank lines. Keep related assignments together; separate setup, validation, mutation, verification, and
+  reporting. Use concise section comments for substantial phases, not a comment or blank line for every statement
+- Expand multi-property hashtables/result objects and XML construction. Keep one property or method call per line. Wrap long commands using
+  splatting or the repository's aligned backtick continuations; put complex Boolean conditions and pipelines on readable lines
+- Keep `#Requires` directives together at the top, then help, binding/parameters, `Import-Module`, initialization, helpers, and the main
+  workflow. Maintain PowerShell 5.0 syntax, UTF-8 BOM/CRLF, and the existing safety boundaries while refactoring layout
+- Use `scripts/Office/Switch-OfficeVersion.ps1`, `New-OutlookArchive.ps1`, `Optimize-Outlook.ps1`, and `New-TestOutlookMessage.ps1` in the
+  same directory as layout references. Older compact code is not a precedent for new code
+- Run the formatter and inspect the result for semantic grouping; do not rely on it to expand compact statements or choose blank lines
 
 ## Security review rules (non-negotiable)
 

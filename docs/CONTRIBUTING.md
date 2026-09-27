@@ -59,6 +59,93 @@ To limit the scope, pass explicit paths:
 .\winkit.ps1 format -Path ./lib,./scripts
 ```
 
+### PowerShell readability and structure
+
+The formatter enforces mechanical consistency. Authors must also structure scripts so an operator can follow the sequence and review each
+state-changing step. These conventions apply to executable scripts and their local helper functions; a formatting pass alone does not
+enforce them.
+
+Keep the `#Requires` directives together at the start of the file, followed by comment-based help, binding attributes and parameters,
+`Import-Module`, initialization, helper functions, and the main workflow. Preserve the repository's script requirements in
+[AGENTS.md](AGENTS.md#script-conventions-non-negotiable), including PowerShell 5.0-compatible syntax, PSFoundation imports, preview support,
+and structured results. `winkit.ps1` remains the intentional exception to using `CmdletBinding`, because it forwards arguments.
+
+#### Parameters and collections
+
+Place attributes, the type, and the parameter name/default on separate lines. Separate parameters with one blank line, including helper
+parameters. Expand long `ValidateSet` values and arrays to one item per line. Keep short literal arrays readable on one line when they do
+not hide the structure of the parameter block.
+
+```powershell
+[CmdletBinding(SupportsShouldProcess = $true)]
+param (
+  [Parameter(Mandatory = $true)]
+  [ValidateSet('Check', 'Prepare', 'Migrate')]
+  [string]
+  $Mode,
+
+  [string]
+  $SourcePath,
+
+  [switch]
+  $DryRun,
+
+  [switch]
+  $PassThru
+)
+```
+
+#### Statements and workflow
+
+- Write one statement per line. Do not join assignments, method calls, cleanup, or error handling with semicolons.
+- Use multiline blocks for operational conditions, loops, and `try`/`catch`/`finally`. Keep short pipeline predicates and selectors inline
+  when their purpose is immediately clear, such as `Where-Object { $_.Status -eq 'Failed' }`.
+- Use blank lines to separate meaningful steps: input normalization, preflight checks, confirmation, mutation, verification, and results.
+  Keep related assignments together. Do not insert a blank line after every statement or directly inside every brace.
+- Use concise section comments to identify substantial workflow phases or groups of helpers. Explain intent and safety boundaries rather
+  than narrating obvious syntax. Add separator lines where they help navigate a long script.
+- Expand XML construction and other object-building code into individual calls. Expand multi-property hashtables and result objects to one
+  property per line; let the formatter align the assignments.
+- Wrap complex Boolean conditions after operators and pipelines after `|`, using PowerShell 5.0-compatible continuation. Prefer splatting
+  for long reusable argument sets, or aligned backtick continuations for a single call. Never put whitespace after a continuation backtick.
+
+```powershell
+if ($DryRun) {
+  $WhatIfPreference = $true
+}
+
+# Record the verified installation separately from its activation status.
+$_property = @{
+  Activation     = $_activation
+  RebootRequired = $_reboot
+  Inventory      = $_inventory
+}
+
+Add-OperationResult `
+  -Results $_results `
+  -Target $TargetProductId `
+  -Action Install `
+  -Status Completed `
+  -Property $_property
+```
+
+Use [Switch-OfficeVersion.ps1](../scripts/Office/Switch-OfficeVersion.ps1),
+[New-OutlookArchive.ps1](../scripts/Office/New-OutlookArchive.ps1), [Optimize-Outlook.ps1](../scripts/Office/Optimize-Outlook.ps1), and
+[New-TestOutlookMessage.ps1](../scripts/Office/New-TestOutlookMessage.ps1) as layout references. Older compact code does not override these
+conventions. After formatting, review the grouping and control flow manually. Layout refactors must preserve behavior, confirmation and
+preview boundaries, cleanup, and compatibility; run the existing tests appropriate to the affected scripts.
+
+### Documentation placement
+
+Keep repository-wide project and contributor documentation in `docs/`. Place user guides for a script family in `scripts/<Area>/README.md`,
+with a top-level area heading and subheadings for related applications or tasks. For example, [Office](../scripts/Office/README.md) contains
+Office migration and Outlook usage. Test-environment setup belongs alongside its tests and can be linked from the user guide.
+
+User documentation describes current requirements, behavior, examples, operational limits, and recovery. Do not include sketches,
+implementation-change narratives, review-machine details, or historical test-run reports. When consolidating guides, compare every source
+section against the destination, retain unique operational information and useful references, correct claims against the current code, and
+update incoming links before removing redundant files.
+
 ### Linting
 
 Run PSScriptAnalyzer against all PowerShell sources under the repository root (the `lib` and `scripts` directories, the `tools/` scripts,

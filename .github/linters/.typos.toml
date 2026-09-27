@@ -2,7 +2,8 @@
 extend-exclude = []
 
 [default]
-extend-ignore-identifiers-re = [".*fo*"]
+extend-ignore-identifiers-re = [".*MAK*", ".*mak*"]
 
 [default.extend-identifiers]
-fo = "fo"
+MAK = "MAK"
+mak = "mak"
