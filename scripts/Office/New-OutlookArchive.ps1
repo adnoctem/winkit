@@ -13,6 +13,8 @@
   duplicate archives. Contacts, calendars, tasks and search folders are skipped.
   Copy temporarily duplicates each message in its SOURCE store before moving
   the duplicate to the archive. Keep a closed-file backup and adequate headroom.
+  Shows folder and item progress and writes a JSON report, including previews.
+  Per-message results are stored in the report rather than printed to the console.
 .PARAMETER ArchivePath
   Full path of a new local .pst file. Existing files are refused.
 .PARAMETER StoreName
@@ -35,7 +37,16 @@
 .PARAMETER DryRun
   Preview changes without copying or moving messages.
 .PARAMETER PassThru
-  Return structured operation result objects.
+  Return one summary with counts and ReportPath. Per-message results are in
+  the JSON report's Results array. DryRun and WhatIf also return this summary.
+.PARAMETER ReportDirectory
+  Directory for uniquely named JSON reports. Defaults to
+  %LOCALAPPDATA%\winkit\reports\Outlook for the user running the script.
+  Created when needed, including during previews. Cannot be combined with ReportPath.
+.PARAMETER ReportPath
+  Exact filename for the JSON report. Relative paths resolve from the current
+  PowerShell location. Parent directories are created when needed, including
+  during previews. Existing files are refused. Cannot be combined with ReportDirectory.
 .PARAMETER QuitOutlook
   Quit the Outlook application object on exit. Leave off if Outlook was already
   open interactively.
@@ -43,6 +54,8 @@
   PS> .\New-OutlookArchive.ps1 -ArchivePath D:\Backups\user-snapshot.pst -StoreName 'user@example.com' -Mode Copy
 .EXAMPLE
   PS> .\New-OutlookArchive.ps1 -ArchivePath D:\Archive\user-2025.pst -StoreName 'user@example.com' -StartDate '2025-01-01' -EndBefore '2026-01-01' -Mode Move
+.EXAMPLE
+  PS> .\New-OutlookArchive.ps1 -ArchivePath D:\Archive\mail.pst -DryRun -ReportPath .\archive-report.json
 .LINK
   https://github.com/adnoctem/winkit
 .NOTES
@@ -88,6 +101,13 @@ param (
   [switch]
   $PassThru,
 
+  [string]
+  $ReportDirectory,
+
+  [ValidateNotNullOrEmpty()]
+  [string]
+  $ReportPath,
+
   [switch]
   $QuitOutlook
 )
@@ -104,6 +124,54 @@ if ($DryRun) {
 $_results = New-Object System.Collections.ArrayList
 $script:OutlookArchiveCopied = 0
 $script:OutlookArchiveMoved = 0
+$script:OutlookArchiveFoldersRead = 0
+$script:OutlookArchiveFoldersSkipped = 0
+$script:OutlookArchiveItemsRead = 0
+$script:OutlookArchiveItemsMatched = 0
+$script:OutlookArchiveProgressTimer = [Diagnostics.Stopwatch]::StartNew()
+$_startedAt = Get-Date
+
+function Write-OutlookArchiveProgress {
+  param (
+    [string]
+    $Phase,
+
+    [string]
+    $Folder,
+
+    [int]
+    $Current,
+
+    [int]
+    $Total,
+
+    [switch]
+    $Force
+  )
+
+  # Avoid repainting conhost for every COM item in a large folder.
+  if (-not $Force -and $script:OutlookArchiveProgressTimer.ElapsedMilliseconds -lt 200) {
+    return
+  }
+
+  $script:OutlookArchiveProgressTimer.Restart()
+  $_percent = if ($Total -gt 0) {
+    [int][math]::Min(100, (100.0 * $Current / $Total))
+  }
+  else {
+    -1
+  }
+
+  $_progress = @{
+    Id               = 0
+    Activity         = 'Outlook archive'
+    Status           = $Phase
+    CurrentOperation = "$Folder | $Current / $Total | Read: $script:OutlookArchiveItemsRead | Matched: $script:OutlookArchiveItemsMatched"
+    PercentComplete  = $_percent
+  }
+
+  Write-Progress @_progress
+}
 
 function Test-OutlookItemInRange {
   param (
@@ -111,8 +179,13 @@ function Test-OutlookItemInRange {
     $Item
   )
 
-  if ($Item.Class -ne 43) { return $false }
-  if (-not $StartDate -and -not $EndDate -and -not $EndBefore) { return $true }
+  if ($Item.Class -ne 43) {
+    return $false
+  }
+
+  if (-not $StartDate -and -not $EndDate -and -not $EndBefore) {
+    return $true
+  }
 
   $_receivedTime = $null
   try {
@@ -122,11 +195,21 @@ function Test-OutlookItemInRange {
     throw 'Cannot read ReceivedTime for a mail item; archive stopped.'
   }
 
-  if (-not $_receivedTime) { throw 'Mail item has no ReceivedTime; archive stopped.' }
+  if (-not $_receivedTime) {
+    throw 'Mail item has no ReceivedTime; archive stopped.'
+  }
 
-  if ($StartDate -and $_receivedTime -lt $StartDate) { return $false }
-  if ($EndDate -and $_receivedTime -gt $EndDate) { return $false }
-  if ($EndBefore -and $_receivedTime -ge $EndBefore) { return $false }
+  if ($StartDate -and $_receivedTime -lt $StartDate) {
+    return $false
+  }
+
+  if ($EndDate -and $_receivedTime -gt $EndDate) {
+    return $false
+  }
+
+  if ($EndBefore -and $_receivedTime -ge $EndBefore) {
+    return $false
+  }
 
   return $true
 }
@@ -154,8 +237,21 @@ function Add-OutlookArchiveResult {
 
   $_subject = ''
   $_received = $null
-  try { $_subject = [string]$Item.Subject } catch { $_subject = '' }
-  try { $_received = $Item.ReceivedTime } catch { $_received = $null }
+  try {
+    $_subject = [string]$Item.Subject
+  }
+  catch {
+    $_subject = ''
+  }
+
+  try {
+    if ($Item.ReceivedTime) {
+      $_received = ([datetime]$Item.ReceivedTime).ToString('o')
+    }
+  }
+  catch {
+    $_received = $null
+  }
 
   $_property = @{
     Received = $_received
@@ -191,21 +287,40 @@ function Copy-OutlookFolderItem {
   # Snapshot identifiers before Copy() changes the source Items collection.
   # Never follow a growing/reordered live collection or retain every COM item.
   $_ids = New-Object 'System.Collections.Generic.List[string]'
+  $_folderPath = [string]$SourceFolder.FolderPath
+  $script:OutlookArchiveFoldersRead++
+  Write-OutlookArchiveProgress -Phase 'Reading folder contents and applying date filters' -Folder $_folderPath -Force
   $_items = $SourceFolder.Items
   try {
-    for ($_index = 1; $_index -le $_items.Count; $_index++) {
+    $_itemCount = $_items.Count
+    for ($_index = 1; $_index -le $_itemCount; $_index++) {
       $_item = $null
       try {
         $_item = $_items.Item($_index)
+        $script:OutlookArchiveItemsRead++
         if (Test-OutlookItemInRange -Item $_item) {
-          if (-not $_item.EntryID) { throw 'Mail item has no EntryID.' }
+          if (-not $_item.EntryID) {
+            throw 'Mail item has no EntryID.'
+          }
+
           $_ids.Add([string]$_item.EntryID)
+          $script:OutlookArchiveItemsMatched++
         }
+
+        Write-OutlookArchiveProgress -Phase 'Reading folder contents and applying date filters' -Folder $_folderPath -Current $_index -Total $_itemCount
       }
-      finally { Remove-ComObject $_item }
+      finally {
+        Remove-ComObject $_item
+      }
     }
   }
-  finally { Remove-ComObject $_items }
+  finally {
+    Remove-ComObject $_items
+  }
+
+  $_phase = if ($WhatIfPreference) { 'Recording preview results' } else { "$ArchiveMode matching messages" }
+  $_processed = 0
+  Write-OutlookArchiveProgress -Phase $_phase -Folder $_folderPath -Total $_ids.Count -Force
 
   foreach ($_id in $_ids) {
     $_item = $null
@@ -214,9 +329,18 @@ function Copy-OutlookFolderItem {
     try {
       $_item = $_context.Namespace.GetItemFromID($_id, $SourceFolder.StoreID)
       # Move invalidates the original COM item. Capture audit fields first.
-      $_metadata = [PSCustomObject]@{ Subject = $_item.Subject; ReceivedTime = $_item.ReceivedTime }
+      $_metadata = [PSCustomObject]@{
+        Subject      = $_item.Subject
+        ReceivedTime = $_item.ReceivedTime
+      }
       $_destinationPath = if ($DestinationFolder) { $DestinationFolder.FolderPath } else { $_archivePath }
-      if ($PSCmdlet.ShouldProcess("$($SourceFolder.FolderPath) | $($_metadata.Subject)", "$ArchiveMode to $_destinationPath")) {
+
+      # Record previews directly: ShouldProcess would print one WhatIf line
+      # per message. Real transfers still require ShouldProcess approval.
+      if ($WhatIfPreference) {
+        Add-OutlookArchiveResult -Results $Results -Action $ArchiveMode -Status 'Skipped' -Folder $_folderPath -Item $_metadata -Detail 'DryRun'
+      }
+      elseif ($PSCmdlet.ShouldProcess("$_folderPath | $($_metadata.Subject)", "$ArchiveMode to $_destinationPath")) {
         if ($ArchiveMode -eq 'Move') {
           $_moved = $_item.Move($DestinationFolder)
           $script:OutlookArchiveMoved++
@@ -231,18 +355,25 @@ function Copy-OutlookFolderItem {
         Add-OutlookArchiveResult -Results $Results -Action $ArchiveMode -Status $_status -Folder $SourceFolder.FolderPath -Item $_metadata -Detail "$_status to $_destinationPath"
       }
       else {
-        $_detail = if ($WhatIfPreference) { 'DryRun' } else { 'Declined' }
-        Add-OutlookArchiveResult -Results $Results -Action $ArchiveMode -Status 'Skipped' -Folder $SourceFolder.FolderPath -Item $_metadata -Detail $_detail
+        Add-OutlookArchiveResult -Results $Results -Action $ArchiveMode -Status 'Skipped' -Folder $_folderPath -Item $_metadata -Detail 'Declined'
       }
+
+      $_processed++
+      Write-OutlookArchiveProgress -Phase $_phase -Folder $_folderPath -Current $_processed -Total $_ids.Count
     }
     catch {
       # A failed Copy().Move() can leave a duplicate in the source. Stop instead
       # of repeatedly filling a near-limit PST. Do not delete uncertain items.
       throw "Archive stopped in '$($SourceFolder.FolderPath)' at EntryID '$_id': $($_.Exception.Message). A failed copy may remain in the source; inspect before retrying."
     }
-    finally { Remove-ComObject $_moved $_copy $_item }
+    finally {
+      Remove-ComObject $_moved $_copy $_item
+    }
   }
+
+  Write-OutlookArchiveProgress -Phase $_phase -Folder $_folderPath -Current $_processed -Total $_ids.Count -Force
 }
+
 function Copy-OutlookFolderTree {
   [CmdletBinding(SupportsShouldProcess = $true)]
   param (
@@ -259,13 +390,22 @@ function Copy-OutlookFolderTree {
     $Results
   )
 
+  Write-OutlookArchiveProgress -Phase 'Inspecting folder' -Folder $SourceFolder.FolderPath -Force
+
   # Search folders are virtual views; processing them would archive mail twice.
   $_accessor = $SourceFolder.PropertyAccessor
   try {
-    if ($_accessor.GetProperty('http://schemas.microsoft.com/mapi/proptag/0x36010003') -eq 2) { return }
+    if ($_accessor.GetProperty('http://schemas.microsoft.com/mapi/proptag/0x36010003') -eq 2) {
+      $script:OutlookArchiveFoldersSkipped++
+      return
+    }
   }
-  finally { Remove-ComObject $_accessor }
+  finally {
+    Remove-ComObject $_accessor
+  }
+
   if ($SourceFolder.DefaultItemType -ne 0) {
+    $script:OutlookArchiveFoldersSkipped++
     Write-Verbose "Skipping non-mail folder: $($SourceFolder.FolderPath)"
     return
   }
@@ -281,6 +421,7 @@ function Copy-OutlookFolderTree {
   try {
     Copy-OutlookFolderItem -SourceFolder $SourceFolder -DestinationFolder $_destinationFolder -ArchiveMode $ArchiveMode -Results $Results -WhatIf:$WhatIfPreference -Confirm:$false
 
+    Write-OutlookArchiveProgress -Phase 'Enumerating subfolders' -Folder $SourceFolder.FolderPath -Force
     $_folders = $SourceFolder.Folders
     try {
       for ($_index = 1; $_index -le $_folders.Count; $_index++) {
@@ -306,21 +447,86 @@ $_context = $null
 $_sourceRoot = $null
 $_archiveRoot = $null
 $_archiveOwned = $false
-$_archivePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ArchivePath)
+$_archivePath = $ArchivePath
+$_sourcePath = $null
+$_reportPath = $null
+$_reportStream = $null
+$_declined = $false
 
 try {
-  if ([IO.Path]::GetExtension($_archivePath) -ne '.pst') { throw 'ArchivePath must end in .pst.' }
-  if (Test-Path -LiteralPath $_archivePath) { throw 'ArchivePath already exists. Use a new PST path for every run.' }
+  # Reports are intentional local writes even during WhatIf. Reserve a new
+  # file before opening Outlook so an unwritable destination stops real work.
+  if ($PSBoundParameters.ContainsKey('ReportPath') -and $PSBoundParameters.ContainsKey('ReportDirectory')) {
+    throw 'Use ReportPath or ReportDirectory, not both.'
+  }
+
+  $_archivePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ArchivePath)
+  if ($PSBoundParameters.ContainsKey('ReportPath')) {
+    if ([string]::IsNullOrWhiteSpace($ReportPath)) {
+      throw 'ReportPath must specify a report filename.'
+    }
+
+    $_reportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ReportPath)
+    $_reportDirectory = Split-Path -Path $_reportPath -Parent
+  }
+  else {
+    if ([string]::IsNullOrWhiteSpace($ReportDirectory)) {
+      $_localAppData = [Environment]::GetFolderPath('LocalApplicationData')
+      if ([string]::IsNullOrWhiteSpace($_localAppData)) {
+        throw 'LocalApplicationData is unavailable. Supply ReportDirectory or ReportPath.'
+      }
+
+      $ReportDirectory = Join-Path $_localAppData 'winkit\reports\Outlook'
+    }
+
+    $_reportDirectory = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ReportDirectory)
+    $_reportName = 'New-OutlookArchive-{0}-{1}.json' -f $_startedAt.ToString('yyyyMMdd-HHmmss-fff'), [guid]::NewGuid().ToString('N')
+    $_reportPath = Join-Path $_reportDirectory $_reportName
+  }
+
+  if ($_reportPath -eq $_archivePath) {
+    throw 'ReportPath and ArchivePath must be different files.'
+  }
+
+  if (Test-Path -LiteralPath $_reportPath) {
+    throw "Report path already exists: $_reportPath. Choose a new report filename."
+  }
+
+  $null = [IO.Directory]::CreateDirectory($_reportDirectory)
+  $_reportStream = [IO.File]::Open($_reportPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
+
+  if ([IO.Path]::GetExtension($_archivePath) -ne '.pst') {
+    throw 'ArchivePath must end in .pst.'
+  }
+
+  if (Test-Path -LiteralPath $_archivePath) {
+    throw 'ArchivePath already exists. Use a new PST path for every run.'
+  }
+
   $_drive = New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($_archivePath))
-  if ($_archivePath.StartsWith('\\') -or $_drive.DriveType -eq 'Network') { throw 'ArchivePath must be on a local drive.' }
-  if (-not (Test-Path -LiteralPath (Split-Path -Parent $_archivePath) -PathType Container)) { throw 'Archive parent directory must already exist.' }
-  if ($EndDate -and $EndBefore) { throw 'Use EndDate or EndBefore, not both.' }
+  if ($_archivePath.StartsWith('\\') -or $_drive.DriveType -eq 'Network') {
+    throw 'ArchivePath must be on a local drive.'
+  }
+
+  if (-not (Test-Path -LiteralPath (Split-Path -Parent $_archivePath) -PathType Container)) {
+    throw 'Archive parent directory must already exist.'
+  }
+
+  if ($EndDate -and $EndBefore) {
+    throw 'Use EndDate or EndBefore, not both.'
+  }
+
   if ($StartDate -and $EndDate -and $StartDate -gt $EndDate) {
     throw 'StartDate is after EndDate.'
   }
-  if ($StartDate -and $EndBefore -and $StartDate -ge $EndBefore) { throw 'StartDate must be before EndBefore.' }
+  if ($StartDate -and $EndBefore -and $StartDate -ge $EndBefore) {
+    throw 'StartDate must be before EndBefore.'
+  }
 
+  Write-Log -Message 'Connecting to Outlook and locating the source store...' -Color Cyan
+  Write-OutlookArchiveProgress -Phase 'Connecting to Outlook' -Force
   $_context = Connect-Outlook
+  Write-OutlookArchiveProgress -Phase 'Reading Outlook stores' -Force
 
   $_outlookMajor = [int](($_context.App.Version -split '\.')[0])
   if ($_outlookMajor -lt 12) {
@@ -331,8 +537,12 @@ try {
   # Resolve the default via Namespace.DefaultStore and reject ambiguous names.
   if ([string]::IsNullOrWhiteSpace($StoreName)) {
     $_selectedStore = $_context.Namespace.DefaultStore
-    try { $_sourceRoot = $_selectedStore.GetRootFolder() }
-    finally { Remove-ComObject $_selectedStore }
+    try {
+      $_sourceRoot = $_selectedStore.GetRootFolder()
+    }
+    finally {
+      Remove-ComObject $_selectedStore
+    }
   }
   else {
     $_stores = $_context.Namespace.Stores
@@ -342,21 +552,39 @@ try {
         $_store = $_stores.Item($_storeIndex)
         try {
           Write-Verbose "Store: $($_store.DisplayName) | $($_store.FilePath)"
-          if ($_store.DisplayName -eq $StoreName) { $_matches++ }
+          if ($_store.DisplayName -eq $StoreName) {
+            $_matches++
+          }
         }
-        finally { Remove-ComObject $_store }
+        finally {
+          Remove-ComObject $_store
+        }
       }
     }
-    finally { Remove-ComObject $_stores }
-    if ($_matches -ne 1) { throw "StoreName '$StoreName' matches $_matches stores. Use a unique display name." }
+    finally {
+      Remove-ComObject $_stores
+    }
+
+    if ($_matches -ne 1) {
+      throw "StoreName '$StoreName' matches $_matches stores. Use a unique display name."
+    }
+
     $_sourceRoot = Get-OutlookStoreRoot -Namespace $_context.Namespace -Name $StoreName
   }
   Write-Verbose "Source: $($_sourceRoot.FolderPath)"
+  $_sourcePath = [string]$_sourceRoot.FolderPath
 
   if (-not $WhatIfPreference) {
-    if (-not $PSCmdlet.ShouldProcess("$($_sourceRoot.FolderPath) -> $_archivePath", "Archive mail ($Mode) to a NEW PST")) { return }
+    $_declined = -not $PSCmdlet.ShouldProcess("$($_sourceRoot.FolderPath) -> $_archivePath", "Archive mail ($Mode) to a NEW PST")
+  }
+
+  if (-not $WhatIfPreference -and -not $_declined) {
+    Write-OutlookArchiveProgress -Phase 'Creating archive PST' -Folder $_archivePath -Force
     $_archiveRoot = Add-OutlookStoreRoot -Namespace $_context.Namespace -Path $_archivePath
-    if ($_archiveRoot.StoreID -eq $_sourceRoot.StoreID) { throw 'Source and archive must be different stores.' }
+    if ($_archiveRoot.StoreID -eq $_sourceRoot.StoreID) {
+      throw 'Source and archive must be different stores.'
+    }
+
     $_archiveOwned = $true
     try {
       $_archiveRoot.Name = $DisplayName
@@ -366,24 +594,27 @@ try {
     }
   }
 
-  Write-Verbose "Archive PST: $_archivePath"
+  if (-not $_declined) {
+    Write-Verbose "Archive PST: $_archivePath"
 
-  Copy-OutlookFolderItem -SourceFolder $_sourceRoot -DestinationFolder $_archiveRoot -ArchiveMode $Mode -Results $_results -WhatIf:$WhatIfPreference -Confirm:$false
+    Copy-OutlookFolderItem -SourceFolder $_sourceRoot -DestinationFolder $_archiveRoot -ArchiveMode $Mode -Results $_results -WhatIf:$WhatIfPreference -Confirm:$false
 
-  $_folders = $_sourceRoot.Folders
-  try {
-    for ($_index = 1; $_index -le $_folders.Count; $_index++) {
-      $_child = $_folders.Item($_index)
-      try {
-        Copy-OutlookFolderTree -SourceFolder $_child -DestinationParent $_archiveRoot -ArchiveMode $Mode -Results $_results -WhatIf:$WhatIfPreference -Confirm:$false
-      }
-      finally {
-        Remove-ComObject $_child
+    Write-OutlookArchiveProgress -Phase 'Enumerating subfolders' -Folder $_sourcePath -Force
+    $_folders = $_sourceRoot.Folders
+    try {
+      for ($_index = 1; $_index -le $_folders.Count; $_index++) {
+        $_child = $_folders.Item($_index)
+        try {
+          Copy-OutlookFolderTree -SourceFolder $_child -DestinationParent $_archiveRoot -ArchiveMode $Mode -Results $_results -WhatIf:$WhatIfPreference -Confirm:$false
+        }
+        finally {
+          Remove-ComObject $_child
+        }
       }
     }
-  }
-  finally {
-    Remove-ComObject $_folders
+    finally {
+      Remove-ComObject $_folders
+    }
   }
 }
 catch {
@@ -391,6 +622,7 @@ catch {
   Write-Warning $_.Exception.Message
 }
 finally {
+  Write-Progress -Id 0 -Activity 'Outlook archive' -Completed
   if ($DetachWhenDone -and $_archiveOwned -and $_context -and $_archiveRoot) {
     try {
       $_context.Namespace.RemoveStore($_archiveRoot)
@@ -420,23 +652,108 @@ finally {
 }
 
 $_failed = @($_results | Where-Object { $_.Status -eq 'Failed' }).Count
-if ($WhatIfPreference) {
-  $_planned = @($_results | Where-Object { $_.Detail -eq 'DryRun' }).Count
-  Write-Log -Message "Outlook archive preview complete. Items to process: $_planned | Failed: $_failed | PST: $_archivePath" -Color Yellow
+$_planned = @($_results | Where-Object { $_.Detail -eq 'DryRun' }).Count
+$_status = if ($_failed -gt 0) {
+  'Failed'
+}
+elseif ($_declined) {
+  'Skipped'
+}
+elseif ($WhatIfPreference) {
+  'Preview'
 }
 else {
-  Write-Log -Message "Outlook archive complete. Copied: $script:OutlookArchiveCopied | Moved: $script:OutlookArchiveMoved | Failed: $_failed | PST: $_archivePath" -Color $(if ($_failed -gt 0) { 'Yellow' } else { 'Green' })
+  'Completed'
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'New-OutlookArchive'
-if ($_operationLog) {
-  Write-Log -Message "Operation log: $_operationLog" -Color Gray
+$_detail = if ($_failed -gt 0) {
+  [string](@($_results | Where-Object { $_.Status -eq 'Failed' })[0].Detail)
+}
+else {
+  'Per-message results are available in the JSON report.'
 }
 
-if ($PassThru -or $DryRun) {
-  $_results
+if ($_declined) {
+  $_detail = 'Archive creation was declined.'
 }
 
-if ($_failed -gt 0) {
+$_summaryProperty = @{
+  Preview        = [bool]$WhatIfPreference
+  FoldersRead    = $script:OutlookArchiveFoldersRead
+  FoldersSkipped = $script:OutlookArchiveFoldersSkipped
+  ItemsRead      = $script:OutlookArchiveItemsRead
+  ItemsMatched   = $script:OutlookArchiveItemsMatched
+  Planned        = $_planned
+  Copied         = $script:OutlookArchiveCopied
+  Moved          = $script:OutlookArchiveMoved
+  Failed         = $_failed
+  ReportPath     = $_reportPath
+}
+
+$_summary = New-OperationResult -Target $_archivePath -Source 'Outlook' -Action 'Archive' -Status $_status -Detail $_detail -Property $_summaryProperty
+
+try {
+  if (-not $_reportStream) {
+    throw 'The report file could not be opened. No archive work was started.'
+  }
+
+  Write-OutlookArchiveProgress -Phase 'Writing JSON report' -Folder $_reportPath -Force
+  $_report = [ordered]@{
+    SchemaVersion = 1
+    Script        = 'New-OutlookArchive'
+    StartedAt     = $_startedAt.ToString('o')
+    FinishedAt    = (Get-Date).ToString('o')
+    Settings      = [ordered]@{
+      ArchivePath    = $_archivePath
+      StoreName      = $StoreName
+      SourceFolder   = $_sourcePath
+      Mode           = $Mode
+      StartDate      = if ($StartDate) { $StartDate.ToString('o') } else { $null }
+      EndDate        = if ($EndDate) { $EndDate.ToString('o') } else { $null }
+      EndBefore      = if ($EndBefore) { $EndBefore.ToString('o') } else { $null }
+      DetachWhenDone = $DetachWhenDone
+    }
+    Summary       = $_summary
+    Results       = @($_results.ToArray())
+  }
+
+  $_json = ConvertTo-Json -InputObject $_report -Depth 8 -ErrorAction Stop
+  $_encoding = New-Object Text.UTF8Encoding($true)
+  $_writer = New-Object IO.StreamWriter($_reportStream, $_encoding)
+  try {
+    $_writer.WriteLine($_json)
+  }
+  finally {
+    $_writer.Dispose()
+  }
+}
+catch {
+  $_summary.Status = 'Failed'
+  $_summary.Failed++
+  $_summary.ReportPath = $null
+  $_reportError = "JSON report could not be written: $($_.Exception.Message)"
+  $_summary.Detail = if ($_failed -gt 0) { "$_detail $_reportError" } else { $_reportError }
+  Write-Warning "$_reportError Archive counts below still describe work already performed; do not rerun blindly."
+}
+finally {
+  if ($_reportStream) {
+    $_reportStream.Dispose()
+  }
+
+  Write-Progress -Id 0 -Activity 'Outlook archive' -Completed
+}
+
+$_color = if ($_summary.Status -eq 'Failed' -or $WhatIfPreference -or $_declined) { 'Yellow' } else { 'Green' }
+Write-Log -Message "Outlook archive: $($_summary.Status) | Read: $($_summary.ItemsRead) | Matched: $($_summary.ItemsMatched) | Planned: $_planned | Copied: $script:OutlookArchiveCopied | Moved: $script:OutlookArchiveMoved | Failed: $($_summary.Failed)" -Color $_color
+Write-Log -Message "PST: $_archivePath" -Color Gray
+if ($_summary.ReportPath) {
+  Write-Log -Message "JSON report: $($_summary.ReportPath)" -Color Cyan
+}
+
+if ($PassThru -or $WhatIfPreference) {
+  $_summary
+}
+
+if ($_summary.Status -eq 'Failed') {
   exit 1
 }

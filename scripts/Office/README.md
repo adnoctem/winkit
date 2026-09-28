@@ -31,6 +31,16 @@ PowerShell.
 
 Office desktop applications and these profile operations are not supported on Server Core. Back up affected data before making changes.
 
+All Office scripts show progress for their longer operations. Outlook archive and deduplication identify the current folder and item
+processing phase; synthetic message generation shows the number processed. Item updates are throttled to avoid slowing large batches.
+Deployment scripts show inventory, configuration, compatibility, media preparation, activation, execution, or recovery phases as applicable.
+Their progress is indeterminate while a deployment call is running; it does not estimate download or installation completion percentages.
+Data-file repair shows tool discovery and waiting status; follow ScanPST/ScanOST's own window for scan progress and any required
+confirmation.
+
+Progress displays clear when operations finish or fail. Set `$ProgressPreference = 'SilentlyContinue'` to hide them in unattended sessions;
+ordinary status messages, warnings, and returned results remain available.
+
 ## Office deployment
 
 The deployment scripts require **PSFoundation 1.6.1 or later** and an existing Microsoft-signed Office Deployment Tool (ODT) setup.exe. They
@@ -359,7 +369,8 @@ to inspect detected stores; duplicate display names are rejected. The scripts re
 profile, and do not switch Outlook offline. Leave `-QuitOutlook` off when Outlook is already open interactively; previews do not quit it.
 
 Previews avoid the requested mail changes or repair-tool launch. Outlook profile scripts can still connect to Outlook, and scripts may write
-operation logs or an explicitly requested CSV report. Use closed-file backups and sufficient free space before processing real mail.
+operation logs, archive JSON reports, or an explicitly requested CSV report. Use closed-file backups and sufficient free space before
+processing real mail.
 
 The scripts do not send mail, access address books, or use `Recipients`, avoiding those common Outlook Object Model Guard triggers. Profile,
 credential, and security dialogs can still occur, including during `-DryRun`. Rehearse against a disposable profile first.
@@ -404,6 +415,38 @@ into the archive, so allow space in both stores. `Move` removes successfully arc
 `StartDate` is inclusive. Prefer the exclusive `EndBefore` bound for whole days or years. `EndDate` is inclusive of the exact supplied time;
 a date without a time means midnight. `EndDate` and `EndBefore` cannot be combined. The archive is detached from the profile by default; use
 `-DetachWhenDone:$false` to keep it mounted. Close Outlook before copying the PST elsewhere.
+
+The progress display identifies connection, store selection, folder inspection, reading/filtering items, recording preview results, and
+copying or moving messages. Item percentages apply to the current folder and phase; total folder counts are discovered during traversal.
+Updates are throttled while processing items. Standard PowerShell `$ProgressPreference = 'SilentlyContinue'` suppresses the progress
+display.
+
+By default, each run writes a uniquely named, formatted UTF-8 JSON report under `%LOCALAPPDATA%\winkit\reports\Outlook` for the user running
+the script. Use `-ReportDirectory` to choose another directory, or `-ReportPath .\archive-report.json` to specify an exact filename relative
+to the current PowerShell location. Absolute report paths are also supported. The two parameters cannot be combined, and existing files are
+never overwritten. The parent directory is created and a new report file is reserved before Outlook is opened; an unwritable report
+destination stops the run before archive work. Reports are also written for previews and caught archive failures. They are finalized at the
+end of the run; an interrupted process can leave an empty or incomplete report. Report-write failures produce a warning and exit code 1,
+without undoing mail already copied or moved.
+
+The console prints counts and the report path. `-PassThru`, `-DryRun`, and `-WhatIf` return one summary object containing `ReportPath`,
+`Status`, `Preview`, `FoldersRead`, `FoldersSkipped`, `ItemsRead`, `ItemsMatched`, `Planned`, `Copied`, `Moved`, and `Failed`.
+`FoldersSkipped` counts encountered search/non-mail folder roots, not every descendant in excluded subtrees. `ItemsRead` includes non-mail
+items inspected in processed folders; `ItemsMatched` counts mail passing the date filters. A failed run's counts can be partial.
+
+The report contains run timestamps, the source folder and filter settings, the summary, and a `Results` array with the individual operation
+records. Each message record retains its subject (`Target`), folder (`Scope`), received date (`Received`, ISO 8601), action, status, and
+detail. Preview entries use `Status = 'Skipped'` and `Detail = 'DryRun'`; no per-message WhatIf lines or result objects are printed. The
+JSON report is the archive's detailed operation record. It contains message metadata, not message bodies or attachments.
+
+```powershell
+$summary = .\scripts\Office\New-OutlookArchive.ps1 @archive -DryRun -PassThru -ReportPath .\archive-report.json
+notepad.exe $summary.ReportPath
+
+# Read individual records for further analysis without flooding the console.
+$report = Get-Content -LiteralPath $summary.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$messages = $report.Results
+```
 
 ### PST migration and archive rehearsal
 
@@ -471,8 +514,8 @@ migration. Close Outlook before copying the archive file elsewhere; detaching a 
 
 After rehearsal and backup verification, use a different new archive path with `-Mode Move`. An existing Copy archive cannot be reused as
 the Move destination. Copy and Move archives can contain overlapping mail, so label rehearsal artifacts clearly. Preview each disjoint date
-batch first. On any failure, inspect the operation log and both PSTs and reconcile the partially completed batch before retrying. There is
-no resume ledger, transactional rollback, or deduplication of previous archives.
+batch first. On any failure, inspect the archive JSON report and both PSTs and reconcile the partially completed batch before retrying.
+There is no resume ledger, transactional rollback, or deduplication of previous archives.
 
 Moving mail out does not necessarily shrink the physical PST immediately. Compact only after validating the archive and taking another
 recoverable backup, using Outlook's data-file settings. See

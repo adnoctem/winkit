@@ -16,6 +16,8 @@
   -UseRedemption to require the free-for-personal-use Redemption component
   (Redemption.RDOSession), which can write headers and backdated ReceivedTime
   values reliably.
+  Shows connection, folder preparation, and throttled message-generation
+  progress. ProgressPreference controls the progress display.
 .PARAMETER Count
   Number of mail items to create.
 .PARAMETER Seed
@@ -292,7 +294,10 @@ $_rdoFolder = $null
 
 try {
   if ($StartDate -and $EndDate -and $StartDate -gt $EndDate) { throw 'StartDate is after EndDate.' }
+  Write-Log -Message 'Connecting to Outlook and preparing synthetic messages...' -Color Cyan
+  Write-Progress -Id 30 -Activity 'Outlook test messages' -Status 'Connecting to Outlook' -PercentComplete -1
   $_context = Connect-Outlook
+  Write-Progress -Id 30 -Activity 'Outlook test messages' -Status 'Reading Outlook stores' -PercentComplete -1
 
   $_outlookMajor = [int](($_context.App.Version -split '\.')[0])
   if ($_outlookMajor -lt 12) {
@@ -327,9 +332,11 @@ try {
 
   if (-not $WhatIfPreference) {
     if (-not $PSCmdlet.ShouldProcess($_storeRoot.FolderPath, "Create $Count synthetic messages in '$TargetFolderName'")) { return }
+    Write-Progress -Id 30 -Activity 'Outlook test messages' -Status 'Preparing target folder' -CurrentOperation $TargetFolderName -PercentComplete -1
     $_targetFolder = Get-OutlookSubFolder -ParentFolder $_storeRoot -Name $TargetFolderName -Create
 
     if ($UseRedemption) {
+      Write-Progress -Id 30 -Activity 'Outlook test messages' -Status 'Connecting Redemption to the current MAPI session' -PercentComplete -1
       try {
         $_rdoSession = New-Object -ComObject Redemption.RDOSession
         $_rdoSession.MAPIOBJECT = $_context.Namespace.MAPIOBJECT
@@ -342,6 +349,7 @@ try {
     }
   }
 
+  Write-Progress -Id 30 -Activity 'Outlook test messages' -Status 'Planning Message-IDs and received dates' -PercentComplete -1
   $_duplicates = [int][Math]::Floor($Count * $DuplicateRatio)
   $_unique = [Math]::Max(1, $Count - $_duplicates)
   $_duplicates = $Count - $_unique
@@ -351,7 +359,22 @@ try {
   if ($PSBoundParameters.ContainsKey('StartDate')) { $_dateBounds['Start'] = $StartDate }
   if ($PSBoundParameters.ContainsKey('EndDate')) { $_dateBounds['End'] = $EndDate }
 
+  $_progressTimer = [Diagnostics.Stopwatch]::StartNew()
+  $_progressPhase = if ($WhatIfPreference) { 'Previewing synthetic messages' } else { 'Creating synthetic messages' }
   for ($_index = 1; $_index -le $Count; $_index++) {
+    if ($_index -eq 1 -or $_progressTimer.ElapsedMilliseconds -ge 200) {
+      $_progress = @{
+        Id               = 30
+        Activity         = 'Outlook test messages'
+        Status           = $_progressPhase
+        CurrentOperation = "$TargetFolderName | $($_index - 1) / $Count processed"
+        PercentComplete  = [int](100.0 * ($_index - 1) / $Count)
+      }
+
+      Write-Progress @_progress
+      $_progressTimer.Restart()
+    }
+
     $_messageId = Get-TestMessageId -Index $_index -Seed $Seed -UniqueCount $_unique
     $_received = Get-TestReceivedTime -Index $_index -Count $Count @_dateBounds
     $_subject = "Winkit synthetic $_index (seed $Seed)"
@@ -393,6 +416,7 @@ catch {
   Write-Warning $_.Exception.Message
 }
 finally {
+  Write-Progress -Id 30 -Activity 'Outlook test messages' -Completed
   Remove-ComObject $_rdoFolder
 
   if ($_rdoSession) {
@@ -443,7 +467,13 @@ if (-not $UseRedemption -and $_created -gt 0 -and $_injected -eq 0) {
   Write-Log -Message 'Transport headers could not be injected. Install Redemption (free) and rerun with -UseRedemption for reliable Message-ID data.' -Color Yellow
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'New-TestOutlookMessage'
+try {
+  Write-Progress -Id 30 -Activity 'Outlook test messages' -Status 'Writing operation log' -PercentComplete -1
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'New-TestOutlookMessage'
+}
+finally {
+  Write-Progress -Id 30 -Activity 'Outlook test messages' -Completed
+}
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

@@ -226,14 +226,16 @@ Describe 'New-TestOutlookMessage determinism' {
 
 Describe 'New-OutlookArchive' {
   It 'previews the copy without creating a PST' {
-    $_results = & $script:Archiver -ArchivePath $script:ArchiveCopyPst -StoreName $script:StoreName -Mode Copy -DryRun -PassThru
+    $_summary = & $script:Archiver -ArchivePath $script:ArchiveCopyPst -ReportDirectory $script:TempRoot -StoreName $script:StoreName -Mode Copy -DryRun -PassThru
+    $_results = (Get-Content -LiteralPath $_summary.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json).Results
     @($_results | Where-Object { $_.Detail -eq 'DryRun' }).Count | Should -BeGreaterThan 0
     Test-Path -LiteralPath $script:ArchiveCopyPst | Should -BeFalse
   }
 
   It 'copies the generated mail into the archive PST' {
     $_before = Get-TestMailCount -Folder $script:StoreRoot
-    $_results = & $script:Archiver -ArchivePath $script:ArchiveCopyPst -StoreName $script:StoreName -Mode Copy -PassThru
+    $_summary = & $script:Archiver -ArchivePath $script:ArchiveCopyPst -ReportDirectory $script:TempRoot -StoreName $script:StoreName -Mode Copy -PassThru
+    $_results = (Get-Content -LiteralPath $_summary.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json).Results
     @($_results | Where-Object { $_.Status -eq 'Copied' }).Count | Should -Be $_before
     Get-TestMailCount -Folder $script:StoreRoot | Should -Be $_before
     Test-Path -LiteralPath $script:ArchiveCopyPst | Should -BeTrue
@@ -266,13 +268,15 @@ Describe 'New-OutlookArchive' {
     }
 
     $_datedArchive = Join-Path $script:TempRoot 'dated-archive.pst'
-    $_results = & $script:Archiver -ArchivePath $_datedArchive -StoreName $script:StoreName -Mode Copy -StartDate '2024-07-01' -EndBefore '2025-01-01' -PassThru
+    $_summary = & $script:Archiver -ArchivePath $_datedArchive -ReportDirectory $script:TempRoot -StoreName $script:StoreName -Mode Copy -StartDate '2024-07-01' -EndBefore '2025-01-01' -PassThru
+    $_results = (Get-Content -LiteralPath $_summary.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json).Results
     @($_results | Where-Object { $_.Status -eq 'Copied' }).Count | Should -Be 5
   }
 
   It 'moves the generated mail into the archive PST' {
     $_before = Get-TestMailCount -Folder $script:StoreRoot
-    $_results = & $script:Archiver -ArchivePath $script:ArchiveMovePst -StoreName $script:StoreName -Mode Move -PassThru
+    $_summary = & $script:Archiver -ArchivePath $script:ArchiveMovePst -ReportDirectory $script:TempRoot -StoreName $script:StoreName -Mode Move -PassThru
+    $_results = (Get-Content -LiteralPath $_summary.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json).Results
     @($_results | Where-Object { $_.Status -eq 'Moved' }).Count | Should -Be $_before
     Get-TestMailCount -Folder $script:StoreRoot | Should -Be 0
     Test-Path -LiteralPath $script:ArchiveMovePst | Should -BeTrue

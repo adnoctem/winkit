@@ -63,9 +63,10 @@ inspection. For offline rehearsal, backups, and manual archive checks, see the
    to the review folder. Deduplication checks require PSFoundation 1.3.0 or later. The preview assertion skips when transport headers are
    unavailable; the move assertion still requires five actual moves, so missing headers can also cause a failure.
 4. A second generation (seed 7) asserts deterministic Message-ID sequences.
-5. `New-OutlookArchive.ps1` previews (no PST created), then copies the store into an archive PST. When fixture injection succeeds, it also
-   verifies `StartDate`/`EndBefore` bounds select the seeded date window. A final `-Mode Move` run empties the source store into another
-   PST. Copy and Move checks reopen their archives and compare actual mail counts with the source counts.
+5. `New-OutlookArchive.ps1` previews (no PST created), then copies the store into an archive PST. Its JSON reports are retained in the
+   scratch directory; assertions read the per-message `Results` array through the returned summary's `ReportPath`. When fixture injection
+   succeeds, it also verifies `StartDate`/`EndBefore` bounds select the seeded date window. A final `-Mode Move` run empties the source
+   store into another PST. Copy and Move checks reopen their archives and compare actual mail counts with the source counts.
 6. `Repair-OutlookDataFile.ps1` previews a ScanPST run against the archive (dry run only - the real tool opens its own UI).
 7. Attempts to detach the scratch store, releases COM references, and reports the retained artifact directory. Inspect the PSTs there;
    remove them manually only after closing Outlook and confirming the files are no longer in use.

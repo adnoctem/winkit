@@ -2,7 +2,8 @@
 
 ### Bug Fixes
 
-* **dist:** add registered winkit installation lifecycle management ([285dbcb](https://github.com/adnoctem/winkit/commit/285dbcb30dec47f26f273bc2234503130df8d94f))
+- **dist:** add registered winkit installation lifecycle management
+  ([285dbcb](https://github.com/adnoctem/winkit/commit/285dbcb30dec47f26f273bc2234503130df8d94f))
 
 ## [1.4.2](https://github.com/adnoctem/winkit/compare/v1.4.1...v1.4.2) (2026-09-28)
 

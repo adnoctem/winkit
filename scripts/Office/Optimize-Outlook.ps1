@@ -11,6 +11,8 @@
 
   Deduplication scope is per folder. The same message legitimately living in
   two different folders is preserved.
+  Shows folder traversal and throttled item progress while inspecting headers
+  and processing duplicates. ProgressPreference controls the progress display.
 .PARAMETER StoreName
   Display name of the Outlook store to process. If omitted, the default
   delivery store is used. Run with -Verbose to list detected stores.
@@ -185,11 +187,29 @@ function Optimize-OutlookFolder {
   )
 
   $_folderPath = $Folder.FolderPath
+  Write-Progress -Id 21 -ParentId 20 -Activity 'Inspecting messages and processing duplicates' -Status $_folderPath -PercentComplete -1
   $_items = $Folder.Items
   $_seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+  $_progressTimer = [Diagnostics.Stopwatch]::StartNew()
 
   try {
-    for ($_index = $_items.Count; $_index -ge 1; $_index--) {
+    $_itemCount = $_items.Count
+    for ($_index = $_itemCount; $_index -ge 1; $_index--) {
+      if ($_index -eq $_itemCount -or $_progressTimer.ElapsedMilliseconds -ge 200) {
+        $_processed = $_itemCount - $_index
+        $_progress = @{
+          Id               = 21
+          ParentId         = 20
+          Activity         = 'Inspecting messages and processing duplicates'
+          Status           = $_folderPath
+          CurrentOperation = "Read headers and compare Message-IDs | $_processed / $_itemCount inspected"
+          PercentComplete  = [int](100.0 * $_processed / $_itemCount)
+        }
+
+        Write-Progress @_progress
+        $_progressTimer.Restart()
+      }
+
       $_item = $null
       $_movedItem = $null
       try {
@@ -229,6 +249,7 @@ function Optimize-OutlookFolder {
     }
   }
   finally {
+    Write-Progress -Id 21 -Activity 'Inspecting messages and processing duplicates' -Completed
     Remove-ComObject $_items
   }
 }
@@ -252,6 +273,8 @@ function Invoke-OutlookFolderTree {
     $Results
   )
 
+  Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Inspecting folder and applying exclusions' -CurrentOperation $Folder.FolderPath -PercentComplete -1
+
   if ($Folder.Name -eq $ReviewName) { return }
 
   if ($Exclude -contains $Folder.Name) {
@@ -269,6 +292,7 @@ function Invoke-OutlookFolderTree {
     Optimize-OutlookFolder -Folder $Folder -ReviewFolder $ReviewFolder -Results $Results -WhatIf:$WhatIfPreference -Confirm:$false
   }
 
+  Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Enumerating subfolders' -CurrentOperation $Folder.FolderPath -PercentComplete -1
   $_folders = $Folder.Folders
   try {
     for ($_index = 1; $_index -le $_folders.Count; $_index++) {
@@ -291,7 +315,10 @@ $_storeRoot = $null
 $_reviewFolder = $null
 
 try {
+  Write-Log -Message 'Connecting to Outlook and locating the store for duplicate review...' -Color Cyan
+  Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Connecting to Outlook' -PercentComplete -1
   $_context = Connect-Outlook
+  Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Reading Outlook stores' -PercentComplete -1
 
   $_outlookMajor = [int](($_context.App.Version -split '\.')[0])
   if ($_outlookMajor -lt 12) {
@@ -326,9 +353,11 @@ try {
 
   if (-not $WhatIfPreference) {
     if (-not $PSCmdlet.ShouldProcess($_storeRoot.FolderPath, "Move suspected duplicates to '$ReviewFolderName' for review")) { return }
+    Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Preparing duplicate review folder' -CurrentOperation $ReviewFolderName -PercentComplete -1
     $_reviewFolder = Get-OutlookSubFolder -ParentFolder $_storeRoot -Name $ReviewFolderName -Create
   }
 
+  Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Enumerating source folders' -CurrentOperation $_storeRoot.FolderPath -PercentComplete -1
   $_folders = $_storeRoot.Folders
   try {
     for ($_index = 1; $_index -le $_folders.Count; $_index++) {
@@ -350,6 +379,8 @@ catch {
   Write-Warning $_.Exception.Message
 }
 finally {
+  Write-Progress -Id 21 -Activity 'Inspecting messages and processing duplicates' -Completed
+  Write-Progress -Id 20 -Activity 'Outlook deduplication' -Completed
   Remove-ComObject $_reviewFolder
   Remove-ComObject $_storeRoot
 
@@ -382,20 +413,26 @@ else {
   Write-Log -Message "Outlook deduplication complete. Moved: $_moved | Kept: $_kept | Skipped: $_skipped | Failed: $_failed" -Color $(if ($_failed -gt 0) { 'Yellow' } else { 'Green' })
 }
 
-if ($ReportPath) {
-  $_reportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ReportPath)
-  $_reportRoot = Split-Path -Path $_reportPath -Parent
-  if (-not [string]::IsNullOrWhiteSpace($_reportRoot) -and -not (Test-Path -LiteralPath $_reportRoot)) {
-    $null = New-Item -Path $_reportRoot -ItemType Directory -Force
+try {
+  Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Writing reports and operation log' -PercentComplete -1
+  if ($ReportPath) {
+    $_reportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ReportPath)
+    $_reportRoot = Split-Path -Path $_reportPath -Parent
+    if (-not [string]::IsNullOrWhiteSpace($_reportRoot) -and -not (Test-Path -LiteralPath $_reportRoot)) {
+      $null = New-Item -Path $_reportRoot -ItemType Directory -Force
+    }
+
+    $_results | Export-Csv -Path $_reportPath -NoTypeInformation -Encoding UTF8
+    Write-Log -Message "Report: $_reportPath" -Color Gray
   }
 
-  $_results | Export-Csv -Path $_reportPath -NoTypeInformation -Encoding UTF8
-  Write-Log -Message "Report: $_reportPath" -Color Gray
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Optimize-Outlook'
+  if ($_operationLog) {
+    Write-Log -Message "Operation log: $_operationLog" -Color Gray
+  }
 }
-
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Optimize-Outlook'
-if ($_operationLog) {
-  Write-Log -Message "Operation log: $_operationLog" -Color Gray
+finally {
+  Write-Progress -Id 20 -Activity 'Outlook deduplication' -Completed
 }
 
 if ($PassThru -or $DryRun) {

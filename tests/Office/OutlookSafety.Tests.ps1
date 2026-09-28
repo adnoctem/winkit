@@ -32,21 +32,23 @@ BeforeAll {
     $mail = [PSCustomObject]@{
       EntryID = $Id; Subject = $Id; ReceivedTime = [datetime]'2024-12-31T12:00:00'
       Class = 43; MessageId = $MessageId; FailMove = $false; Copies = 0; Moves = 0
+      SourceItems = $null
     }
     $mail | Add-Member ScriptMethod Copy {
       $this.Copies++
       $copy = New-FakeMail -Id ($this.EntryID + '-copy')
       $copy.FailMove = $this.FailMove
+      $copy.SourceItems = $this.SourceItems
       # Outlook Copy changes the live source collection. Insert ahead of the
       # current item to catch reliance on mutable numeric positions.
-      $script:Source.Items.Values.Insert(0, $copy)
+      $this.SourceItems.Values.Insert(0, $copy)
       return $copy
     }
     $mail | Add-Member ScriptMethod Move {
       param($Destination)
       if ($this.FailMove) { throw 'Disk full' }
       $this.Moves++
-      $script:Source.Items.Values.Remove($this)
+      $this.SourceItems.Values.Remove($this)
       $null = $Destination.Items.Values.Add($this)
       return $this
     }
@@ -62,9 +64,14 @@ BeforeAll {
       if ($Tag -ne 'http://schemas.microsoft.com/mapi/proptag/0x36010003') { throw 'Unexpected property tag' }
       $this.FolderType
     }
+    $items = New-FakeCollection -Values $Mail
+    foreach ($item in $Mail) {
+      $item.SourceItems = $items
+    }
+
     [PSCustomObject]@{
       Name = $Name; FolderPath = "\\Test\$Name"; StoreID = 'source-store'
-      Items = (New-FakeCollection -Values $Mail); Folders = (New-FakeCollection)
+      Items = $items; Folders = (New-FakeCollection)
       DefaultItemType = 0; PropertyAccessor = $accessor
     }
   }
@@ -78,6 +85,12 @@ Describe 'Outlook archive safety' {
     $script:EndBefore = $null
     $script:OutlookArchiveCopied = 0
     $script:OutlookArchiveMoved = 0
+    $script:OutlookArchiveFoldersRead = 0
+    $script:OutlookArchiveFoldersSkipped = 0
+    $script:OutlookArchiveItemsRead = 0
+    $script:OutlookArchiveItemsMatched = 0
+    $script:OutlookArchiveProgressTimer = [Diagnostics.Stopwatch]::StartNew()
+    Mock Write-Progress { }
     $script:Source = New-FakeFolder -Name Inbox -Mail @((New-FakeMail A), (New-FakeMail B))
     $script:Destination = New-FakeFolder -Name Archive
     $namespace = [PSCustomObject]@{}
@@ -120,6 +133,8 @@ Describe 'Outlook archive safety' {
     $script:Source.Items.Count | Should -Be 2
     $script:Destination.Items.Count | Should -Be 0
     @($script:Results | Where-Object Detail -EQ DryRun).Count | Should -Be 2
+    Should -Invoke Write-Progress -ParameterFilter { $Status -eq 'Reading folder contents and applying date filters' }
+    Should -Invoke Write-Progress -ParameterFilter { $Status -eq 'Recording preview results' }
   }
 
   It 'includes the whole final day with an exclusive next-day cutoff' {
@@ -195,7 +210,7 @@ Describe 'Archive script preflight' {
   It 'refuses an existing PST before connecting to Outlook' {
     $path = Join-Path $TestDrive 'existing.pst'
     [IO.File]::WriteAllText($path, 'existing data')
-    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath $path -PassThru -WarningAction SilentlyContinue
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath $path -ReportDirectory $TestDrive -PassThru -WarningAction SilentlyContinue
     $LASTEXITCODE | Should -Be 1
     $result.Status | Should -Be Failed
     $result.Detail | Should -Match 'already exists'
@@ -204,9 +219,51 @@ Describe 'Archive script preflight' {
   }
 
   It 'refuses conflicting date bounds before connecting to Outlook' {
-    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'new.pst') -EndDate '2024-12-31' -EndBefore '2025-01-01' -PassThru -WarningAction SilentlyContinue
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'new.pst') -ReportDirectory $TestDrive -EndDate '2024-12-31' -EndBefore '2025-01-01' -PassThru -WarningAction SilentlyContinue
     $result.Status | Should -Be Failed
     $result.Detail | Should -Match 'not both'
+    Should -Invoke Connect-Outlook -Times 0
+  }
+
+  It 'stops before Outlook when the report directory is not writable' {
+    $blocked = Join-Path $TestDrive 'not-a-directory'
+    [IO.File]::WriteAllText($blocked, 'keep')
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'new.pst') -ReportDirectory $blocked -PassThru -WarningAction SilentlyContinue
+    $result.Status | Should -Be Failed
+    $result.ReportPath | Should -BeNullOrEmpty
+    $LASTEXITCODE | Should -Be 1
+    Should -Invoke Connect-Outlook -Times 0
+    [IO.File]::ReadAllText($blocked) | Should -Be 'keep'
+  }
+
+  It 'preserves an existing explicitly named report' {
+    $reportPath = Join-Path $TestDrive 'existing-report.json'
+    [IO.File]::WriteAllText($reportPath, 'original report')
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'new.pst') -ReportPath $reportPath -DryRun -WarningAction SilentlyContinue
+    $result.Status | Should -Be Failed
+    $result.Detail | Should -Match 'already exists'
+    $result.ReportPath | Should -BeNullOrEmpty
+    [IO.File]::ReadAllText($reportPath) | Should -Be 'original report'
+    Should -Invoke Connect-Outlook -Times 0
+  }
+
+  It 'rejects conflicting report options without creating either destination' {
+    $reportPath = Join-Path $TestDrive 'conflict.json'
+    $reportDirectory = Join-Path $TestDrive 'conflict-directory'
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'new.pst') -ReportPath $reportPath -ReportDirectory $reportDirectory -PassThru -WarningAction SilentlyContinue
+    $result.Status | Should -Be Failed
+    $result.Detail | Should -Match 'not both'
+    Test-Path -LiteralPath $reportPath | Should -BeFalse
+    Test-Path -LiteralPath $reportDirectory | Should -BeFalse
+    Should -Invoke Connect-Outlook -Times 0
+  }
+
+  It 'rejects a report path that resolves to the archive destination' {
+    $path = Join-Path $TestDrive 'same.pst'
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath $path -ReportPath $path -DryRun -WarningAction SilentlyContinue
+    $result.Status | Should -Be Failed
+    $result.Detail | Should -Match 'different files'
+    Test-Path -LiteralPath $path | Should -BeFalse
     Should -Invoke Connect-Outlook -Times 0
   }
 }
@@ -257,6 +314,7 @@ Describe 'Repair tool launch safety' {
 
 Describe 'Outlook store selection and preview' {
   BeforeEach {
+    Mock Write-Progress { }
     Mock Import-Module { }
     Mock Remove-ComObject { }
     Mock Invoke-ComGarbageCollection { }
@@ -283,7 +341,7 @@ Describe 'Outlook store selection and preview' {
   }
 
   It 'previews all three scripts using the default store without creating folders or quitting Outlook' {
-    $archiveResults = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'preview.pst') -DryRun -QuitOutlook
+    $archiveResults = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'preview.pst') -ReportDirectory $TestDrive -DryRun -QuitOutlook
     $dedupResults = & (Join-Path $script:OfficePath 'Optimize-Outlook.ps1') -DryRun -QuitOutlook
     $generatorResults = & (Join-Path $script:OfficePath 'New-TestOutlookMessage.ps1') -Count 1 -DryRun -QuitOutlook
     @($archiveResults | Where-Object Status -EQ Failed).Count | Should -Be 0
@@ -301,12 +359,150 @@ Describe 'Outlook store selection and preview' {
   It 'refuses ambiguous store names before mutation' {
     foreach ($name in @('New-OutlookArchive', 'Optimize-Outlook', 'New-TestOutlookMessage')) {
       $arguments = @{ StoreName = 'Duplicate name'; PassThru = $true; WarningAction = 'SilentlyContinue' }
-      if ($name -eq 'New-OutlookArchive') { $arguments.ArchivePath = Join-Path $TestDrive 'ambiguous.pst' }
+      if ($name -eq 'New-OutlookArchive') {
+        $arguments.ArchivePath = Join-Path $TestDrive 'ambiguous.pst'
+        $arguments.ReportDirectory = $TestDrive
+      }
       $result = & (Join-Path $script:OfficePath "$name.ps1") @arguments
       $result.Status | Should -Be Failed
       $result.Detail | Should -Match 'matches 2 stores'
     }
     Should -Invoke Add-OutlookStoreRoot -Times 0
     Should -Invoke Get-OutlookSubFolder -Times 0
+  }
+
+  It 'writes an empty Results array and returns one preview summary' {
+    $result = @(& (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'empty.pst') -ReportDirectory $TestDrive -WhatIf -PassThru)
+    $result.Count | Should -Be 1
+    $result[0].Status | Should -Be Preview
+    $result[0].Planned | Should -Be 0
+    $json = Get-Content -LiteralPath $result[0].ReportPath -Raw -Encoding UTF8
+    $json | Should -Match '"Results":\s*\[\s*\]'
+    ($json | ConvertFrom-Json).Summary.FoldersRead | Should -Be 1
+    Should -Invoke Write-Progress -ParameterFilter { $Completed }
+  }
+
+  It 'resolves an exact relative report path and creates its parent during WhatIf' {
+    Push-Location $TestDrive
+    try {
+      $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'relative.pst') -ReportPath '.\reports\archive-report.json' -WhatIf
+      $result.Status | Should -Be Preview
+      $result.ReportPath | Should -Be (Join-Path $TestDrive 'reports\archive-report.json')
+      $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      $report.Summary.ReportPath | Should -Be $result.ReportPath
+      Test-Path -LiteralPath (Join-Path $TestDrive 'relative.pst') | Should -BeFalse
+    }
+    finally {
+      Pop-Location
+    }
+  }
+
+  It 'keeps a large filtered preview out of the console and preserves Unicode mail in JSON' {
+    for ($index = 0; $index -lt 300; $index++) {
+      $mail = New-FakeMail -Id "mail-$index"
+      $mail.Subject = "Grüße aus Köln — $index"
+      $null = $script:Source.Items.Values.Add($mail)
+    }
+
+    $excluded = New-FakeMail -Id 'outside-date-range'
+    $excluded.ReceivedTime = [datetime]'2025-01-01'
+    $null = $script:Source.Items.Values.Add($excluded)
+    $script:FakeContext.Namespace | Add-Member ScriptMethod GetItemFromID {
+      param($Id, $StoreId)
+      if ($StoreId -ne $this.DefaultStore.Root.StoreID) {
+        throw 'Wrong store identifier'
+      }
+
+      @($this.DefaultStore.Root.Items.Values | Where-Object EntryID -EQ $Id)[0]
+    }
+
+    $arguments = @{
+      ArchivePath     = Join-Path $TestDrive 'large.pst'
+      ReportDirectory = Join-Path $TestDrive 'reports'
+      StartDate       = '2024-01-01'
+      EndBefore       = '2025-01-01'
+      DryRun          = $true
+      PassThru        = $true
+    }
+
+    $captured = @(& (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') @arguments *>&1)
+    $captured.Count | Should -Be 1
+    $result = $captured[0]
+    $result.ItemsRead | Should -Be 301
+    $result.ItemsMatched | Should -Be 300
+    $result.Planned | Should -Be 300
+    $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $report.Results.Count | Should -Be 300
+    $report.Results[0].Target | Should -Be 'Grüße aus Köln — 0'
+    $report.Results[0].Scope | Should -Be '\\Test\Root'
+    $report.Results[0].Action | Should -Be Copy
+    $report.Results[0].Detail | Should -Be DryRun
+    $report.Results[0].Received | Should -Not -BeNullOrEmpty
+    $report.Settings.EndBefore | Should -Not -BeNullOrEmpty
+    Test-Path -LiteralPath $arguments.ArchivePath | Should -BeFalse
+    @($script:Source.Items.Values | Where-Object { $_.Copies -or $_.Moves }).Count | Should -Be 0
+
+    $again = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') @arguments
+    $again.ReportPath | Should -Not -Be $result.ReportPath
+    Test-Path -LiteralPath $result.ReportPath | Should -BeTrue
+  }
+
+  It 'reports JSON serialization failure instead of claiming a report was saved' {
+    Mock ConvertTo-Json { throw 'Report write failed' }
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'failed-report.pst') -ReportDirectory $TestDrive -DryRun -WarningAction SilentlyContinue
+    $result.Status | Should -Be Failed
+    $result.ReportPath | Should -BeNullOrEmpty
+    $result.Detail | Should -Match 'Report write failed'
+    $LASTEXITCODE | Should -Be 1
+    Should -Invoke Write-Progress -ParameterFilter { $Completed }
+  }
+
+  It 'preserves successful <Mode> records and partial failures in the report' -ForEach @(
+    @{ Mode = 'Copy'; ResultStatus = 'Copied' }
+    @{ Mode = 'Move'; ResultStatus = 'Moved' }
+  ) {
+    $goodMail = New-FakeMail A
+    $goodMail.SourceItems = $script:Source.Items
+    $null = $script:Source.Items.Values.Add($goodMail)
+    $badMail = New-FakeMail B
+    $badMail.FailMove = $true
+    $badMail.SourceItems = $script:Source.Items
+    $null = $script:Source.Items.Values.Add($badMail)
+    $destination = New-FakeFolder -Name Archive
+    $destination.StoreID = 'archive-store'
+    $script:FakeContext | Add-Member NoteProperty ArchiveRoot $destination
+    $script:FakeContext.Namespace | Add-Member ScriptMethod GetItemFromID {
+      param($Id, $StoreId)
+      if ($StoreId -ne $this.DefaultStore.Root.StoreID) {
+        throw 'Wrong store identifier'
+      }
+
+      @($this.DefaultStore.Root.Items.Values | Where-Object EntryID -EQ $Id)[0]
+    }
+
+    Mock Add-OutlookStoreRoot { $global:WinkitSafetyTestContext.ArchiveRoot }
+    $arguments = @{
+      ArchivePath     = Join-Path $TestDrive 'partial.pst'
+      ReportDirectory = $TestDrive
+      Mode            = $Mode
+      DetachWhenDone  = $false
+      PassThru        = $true
+      Confirm         = $false
+      WarningAction   = 'SilentlyContinue'
+    }
+
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') @arguments
+    $result.Status | Should -Be Failed
+    $result.Failed | Should -Be 1
+    $result.$ResultStatus | Should -Be 1 -Because $result.Detail
+    $LASTEXITCODE | Should -Be 1
+    $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $report.Results.Count | Should -Be 2
+    $report.Results[0].Status | Should -Be $ResultStatus
+    $report.Results[0].Target | Should -Be A
+    $report.Results[1].Status | Should -Be Failed
+    $report.Results[1].Detail | Should -Match 'Disk full'
+    $destination.Items.Count | Should -Be 1
+    Should -Invoke Write-Progress -ParameterFilter { $Completed }
   }
 }

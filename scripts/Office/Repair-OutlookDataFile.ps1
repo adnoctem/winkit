@@ -12,6 +12,8 @@
 
   Close Outlook before repairing an attached data file. The Microsoft repair
   tools may display their own UI and can require interactive confirmation.
+  Shows tool discovery and an indeterminate progress display while waiting for
+  the repair tool. Scan/repair progress is displayed by the tool itself.
 .PARAMETER Path
   PST or OST data file to scan or repair.
 .PARAMETER Tool
@@ -110,6 +112,7 @@ function Resolve-OutlookDataFileRepairTool {
   }
 
   foreach ($_toolName in $_preferredTools) {
+    Write-Progress -Id 40 -Activity 'Outlook data-file repair' -Status "Searching Office installations for $_toolName" -PercentComplete -1
     $_tool = Find-OutlookRepairTool -Name $_toolName | Select-Object -First 1
     if ($_tool) {
       return [PSCustomObject]@{
@@ -123,94 +126,105 @@ function Resolve-OutlookDataFileRepairTool {
   return $null
 }
 
-if ($_extension -notin @('.pst', '.ost')) {
-  Write-Log -Message "Unsupported Outlook data-file extension: $_extension" -Color Red
-  Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status 'Failed' -Detail 'Expected .pst or .ost file.'
+try {
+  Write-Log -Message 'Checking the data file and locating the Outlook repair tool...' -Color Cyan
+  Write-Progress -Id 40 -Activity 'Outlook data-file repair' -Status 'Validating data file and locating repair tool' -PercentComplete -1
+  if ($_extension -notin @('.pst', '.ost')) {
+    Write-Log -Message "Unsupported Outlook data-file extension: $_extension" -Color Red
+    Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status 'Failed' -Detail 'Expected .pst or .ost file.'
 
-  if ($PassThru -or $DryRun) {
-    $_results
+    if ($PassThru -or $DryRun) {
+      $_results
+    }
+
+    exit 1
   }
 
-  exit 1
-}
+  $_repairTool = Resolve-OutlookDataFileRepairTool -RequestedTool $Tool -RequestedToolPath $ToolPath -DataFileExtension $_extension
+  if (-not $_repairTool) {
+    $_detail = if ($Tool -eq 'Auto') {
+      'No ScanPST.exe or compatible ScanOST.exe installation was found.'
+    }
+    else {
+      "No $Tool repair tool was found."
+    }
 
-$_repairTool = Resolve-OutlookDataFileRepairTool -RequestedTool $Tool -RequestedToolPath $ToolPath -DataFileExtension $_extension
-if (-not $_repairTool) {
-  $_detail = if ($Tool -eq 'Auto') {
-    'No ScanPST.exe or compatible ScanOST.exe installation was found.'
+    Write-Log -Message $_detail -Color Red
+    Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status 'Failed' -Detail $_detail
+
+    if ($PassThru -or $DryRun) {
+      $_results
+    }
+
+    exit 1
+  }
+
+  $_toolPath = $_repairTool.Path
+  $_toolName = $_repairTool.Name
+  $_commandLine = "`"$_toolPath`" `"$_dataFilePath`""
+
+  if ($DryRun) {
+    Write-Log -Message "[DRY RUN] Would run: $_commandLine" -Color Yellow
+    Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status 'Skipped' -Detail "DryRun: $_commandLine" -Property @{
+      Tool     = $_toolName
+      ToolPath = $_toolPath
+    }
+  }
+  elseif ($PSCmdlet.ShouldProcess($_dataFilePath, "Repair with $_toolName")) {
+    Write-Log -Message "Starting $_toolName for Outlook data file..." -Color Yellow
+    Write-Log -Message "  File: $_dataFilePath" -Color Gray
+    Write-Log -Message "  Tool: $_toolPath" -Color Gray
+
+    try {
+      Write-Progress -Id 40 -Activity 'Outlook data-file repair' -Status 'Checking Outlook processes and exclusive file access' -PercentComplete -1
+      if (Get-Process -Name OUTLOOK -ErrorAction SilentlyContinue) { throw 'Close Outlook before launching the repair tool.' }
+      # Fail before opening repair UI when any process still holds the data file.
+      $_lock = [IO.File]::Open($_dataFilePath, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+      $_lock.Dispose()
+      Write-Log -Message "Waiting for $_toolName to close. Use its window to review and confirm the scan or repair." -Color Cyan
+      Write-Progress -Id 40 -Activity 'Outlook data-file repair' -Status "Waiting for $_toolName; follow the instructions in its window" -PercentComplete -1
+      # Start-Process joins array arguments without preserving their quoting.
+      $_process = Start-Process -FilePath $_toolPath -ArgumentList "`"$_dataFilePath`"" -Wait -PassThru -ErrorAction Stop
+      $_status = if ($_process.ExitCode -eq 0) { 'Completed' } else { 'Failed' }
+      $_color = if ($_process.ExitCode -eq 0) { 'Green' } else { 'Yellow' }
+
+      Write-Log -Message "Repair tool exited with code $($_process.ExitCode). Confirm the scan/repair outcome in the tool's log; tool exit alone does not verify PST health." -Color $_color
+      Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status $_status -Detail "Tool: $_toolName" -Property @{
+        Tool     = $_toolName
+        ToolPath = $_toolPath
+        ExitCode = $_process.ExitCode
+      }
+    }
+    catch {
+      Write-Log -Message "FAILED - could not start ${_toolName}: $($_.Exception.Message)" -Color Red
+      Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status 'Failed' -Detail $_.Exception.Message -Property @{
+        Tool     = $_toolName
+        ToolPath = $_toolPath
+      }
+    }
   }
   else {
-    "No $Tool repair tool was found."
+    Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status 'Skipped' -Detail 'WhatIf' -Property @{
+      Tool     = $_toolName
+      ToolPath = $_toolPath
+    }
   }
 
-  Write-Log -Message $_detail -Color Red
-  Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status 'Failed' -Detail $_detail
+  Write-Progress -Id 40 -Activity 'Outlook data-file repair' -Status 'Writing operation log' -PercentComplete -1
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Repair-OutlookDataFile'
+  if ($_operationLog) {
+    Write-Log -Message "Operation log: $_operationLog" -Color Gray
+  }
 
   if ($PassThru -or $DryRun) {
     $_results
   }
 
-  exit 1
-}
-
-$_toolPath = $_repairTool.Path
-$_toolName = $_repairTool.Name
-$_commandLine = "`"$_toolPath`" `"$_dataFilePath`""
-
-if ($DryRun) {
-  Write-Log -Message "[DRY RUN] Would run: $_commandLine" -Color Yellow
-  Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status 'Skipped' -Detail "DryRun: $_commandLine" -Property @{
-    Tool     = $_toolName
-    ToolPath = $_toolPath
+  $_failed = @($_results | Where-Object { $_.Status -eq 'Failed' }).Count
+  if ($_failed -gt 0) {
+    exit 1
   }
 }
-elseif ($PSCmdlet.ShouldProcess($_dataFilePath, "Repair with $_toolName")) {
-  Write-Log -Message "Starting $_toolName for Outlook data file..." -Color Yellow
-  Write-Log -Message "  File: $_dataFilePath" -Color Gray
-  Write-Log -Message "  Tool: $_toolPath" -Color Gray
-
-  try {
-    if (Get-Process -Name OUTLOOK -ErrorAction SilentlyContinue) { throw 'Close Outlook before launching the repair tool.' }
-    # Fail before opening repair UI when any process still holds the data file.
-    $_lock = [IO.File]::Open($_dataFilePath, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
-    $_lock.Dispose()
-    # Start-Process joins array arguments without preserving their quoting.
-    $_process = Start-Process -FilePath $_toolPath -ArgumentList "`"$_dataFilePath`"" -Wait -PassThru -ErrorAction Stop
-    $_status = if ($_process.ExitCode -eq 0) { 'Completed' } else { 'Failed' }
-    $_color = if ($_process.ExitCode -eq 0) { 'Green' } else { 'Yellow' }
-
-    Write-Log -Message "Repair tool exited with code $($_process.ExitCode). Confirm the scan/repair outcome in the tool's log; tool exit alone does not verify PST health." -Color $_color
-    Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status $_status -Detail "Tool: $_toolName" -Property @{
-      Tool     = $_toolName
-      ToolPath = $_toolPath
-      ExitCode = $_process.ExitCode
-    }
-  }
-  catch {
-    Write-Log -Message "FAILED - could not start ${_toolName}: $($_.Exception.Message)" -Color Red
-    Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status 'Failed' -Detail $_.Exception.Message -Property @{
-      Tool     = $_toolName
-      ToolPath = $_toolPath
-    }
-  }
-}
-else {
-  Add-OperationResult -Results $_results -Target $_dataFilePath -Source 'OutlookRepair' -Action 'Repair' -Status 'Skipped' -Detail 'WhatIf' -Property @{
-    Tool     = $_toolName
-    ToolPath = $_toolPath
-  }
-}
-
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Repair-OutlookDataFile'
-if ($_operationLog) {
-  Write-Log -Message "Operation log: $_operationLog" -Color Gray
-}
-
-if ($PassThru -or $DryRun) {
-  $_results
-}
-
-$_failed = @($_results | Where-Object { $_.Status -eq 'Failed' }).Count
-if ($_failed -gt 0) {
-  exit 1
+finally {
+  Write-Progress -Id 40 -Activity 'Outlook data-file repair' -Completed
 }

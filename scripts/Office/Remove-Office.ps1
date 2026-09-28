@@ -94,6 +94,8 @@ $_mayHaveChanged = $false
 $_preview = [bool]$WhatIfPreference
 
 try {
+  Write-Log -Message "Office $Mode - validating options..." -Color Cyan
+  Write-Progress -Id 51 -Activity 'Office removal' -Status 'Validating options' -PercentComplete -1
   if ($Mode -eq 'Check') {
     foreach ($_name in @('OdtPath', 'LogRoot', 'ForceCloseApps')) {
       if ($PSBoundParameters.ContainsKey($_name)) {
@@ -114,10 +116,13 @@ try {
   }
 
   $_phase = 'Plan'
+  Write-Log -Message 'Reading installed Office products and configuration...' -Color Cyan
+  Write-Progress -Id 51 -Activity 'Office removal' -Status 'Reading Office inventory' -PercentComplete -1
   $_inventory = Get-OfficeInventory
   $_plan = $null
 
   if ($RemoveProductId.Count) {
+    Write-Progress -Id 51 -Activity 'Office removal' -Status 'Evaluating selected products and removal eligibility' -PercentComplete -1
     $_plan = Get-OfficeDeploymentPlan -Action Remove -RemoveProductId $RemoveProductId -Inventory $_inventory
   }
 
@@ -179,6 +184,9 @@ try {
 
     $_phase = 'Remove'
     $_mayHaveChanged = -not $_preview
+    $_progressStatus = if ($_preview) { 'Previewing Office removal' } else { 'Validating and removing Office; confirmation may be required' }
+    Write-Log -Message $_progressStatus -Color Cyan
+    Write-Progress -Id 51 -Activity 'Office removal' -Status $_progressStatus -PercentComplete -1
     $_result = Uninstall-Office -Plan $_plan -LogRoot $LogRoot @_execution
     $_exitCode = [int]$_result.WrapperExitCode
   }
@@ -213,6 +221,10 @@ catch {
     -Action $Mode `
     -Status Failed `
     -Property $_property
+}
+
+finally {
+  Write-Progress -Id 51 -Activity 'Office removal' -Completed
 }
 
 # -----------------------------------------------------------------------------

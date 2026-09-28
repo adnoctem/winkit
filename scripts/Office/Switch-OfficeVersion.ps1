@@ -181,6 +181,8 @@ $_mayHaveChanged = $false
 $_preview = [bool]$WhatIfPreference
 
 try {
+  Write-Log -Message "Office $Mode - validating options..." -Color Cyan
+  Write-Progress -Id 52 -Activity 'Office migration' -Status 'Validating options' -PercentComplete -1
   $_configurationNames = @(
     'TargetProductId',
     'Architecture',
@@ -282,8 +284,12 @@ try {
 
   if ($Mode -eq 'Recover') {
     $_phase = 'Recover'
+    Write-Progress -Id 52 -Activity 'Office migration' -Status 'Reading recovery journal' -PercentComplete -1
     $_recovery = Get-OfficeDeploymentRecovery -RunId $RunId -LogRoot $LogRoot
     $_mayHaveChanged = -not $_preview
+    $_progressStatus = if ($_preview) { 'Previewing recovery' } else { 'Validating and resuming recovery' }
+    Write-Log -Message $_progressStatus -Color Cyan
+    Write-Progress -Id 52 -Activity 'Office migration' -Status $_progressStatus -PercentComplete -1
     $_result = Resume-OfficeMigration -Recovery $_recovery -ProductKey $ProductKey @_execution
     $_exitCode = [int]$_result.WrapperExitCode
   }
@@ -304,6 +310,7 @@ try {
       }
 
       $_phase = 'Configure'
+      Write-Progress -Id 52 -Activity 'Office migration' -Status 'Resolving target products, architecture and languages' -PercentComplete -1
       $_configuration = New-OfficeDeploymentConfiguration @_configurationArgs
     }
 
@@ -329,6 +336,9 @@ try {
       }
 
       $_mayHaveChanged = -not $_preview
+      $_progressStatus = if ($_preview) { 'Previewing media preparation' } else { 'Preparing and verifying Office media; download may take some time' }
+      Write-Log -Message $_progressStatus -Color Cyan
+      Write-Progress -Id 52 -Activity 'Office migration' -Status $_progressStatus -PercentComplete -1
       $_media = Save-OfficeDeploymentMedia @_prepareArgs
       $_status = 'Completed'
       $_reason = 'MediaPrepared'
@@ -367,6 +377,8 @@ try {
     }
     else {
       $_phase = 'Plan'
+      Write-Log -Message 'Reading installed Office products and configuration...' -Color Cyan
+      Write-Progress -Id 52 -Activity 'Office migration' -Status 'Reading Office inventory' -PercentComplete -1
       $_inventory = Get-OfficeInventory
       $_plan = $null
       $_activation = $null
@@ -389,6 +401,7 @@ try {
           $_planArgs.PilotMigration = $true
         }
 
+        Write-Progress -Id 52 -Activity 'Office migration' -Status 'Evaluating deployment compatibility and media' -PercentComplete -1
         $_plan = Get-OfficeDeploymentPlan @_planArgs
       }
 
@@ -401,6 +414,7 @@ try {
             Write-Warning $_warning
           }
 
+          Write-Progress -Id 52 -Activity 'Office migration' -Status 'Reading Office activation status' -PercentComplete -1
           $_activation = Get-OfficeActivationStatus -TargetProductId $TargetProductId
           $_reason = 'PlanReady'
 
@@ -440,6 +454,9 @@ try {
         }
 
         $_mayHaveChanged = -not $_preview
+        $_progressStatus = if ($_preview) { 'Previewing Office migration' } else { 'Validating and migrating Office; confirmation may be required' }
+        Write-Log -Message $_progressStatus -Color Cyan
+        Write-Progress -Id 52 -Activity 'Office migration' -Status $_progressStatus -PercentComplete -1
         $_result = Switch-OfficeDeployment -Plan $_plan -LogRoot $LogRoot -ProductKey $ProductKey @_execution
         $_exitCode = [int]$_result.WrapperExitCode
       }
@@ -478,6 +495,7 @@ catch {
     -Property $_property
 }
 finally {
+  Write-Progress -Id 52 -Activity 'Office migration' -Completed
   # The module owns staging, journal persistence, native execution, and cleanup.
   $ProductKey = $null
 }
