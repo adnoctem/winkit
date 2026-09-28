@@ -1,4 +1,4 @@
-# Office
+﻿# Office
 
 Scripts for deploying Microsoft Office and maintaining Outlook mail stores and data files on Windows.
 
@@ -44,9 +44,35 @@ ordinary status messages, warnings, and returned results remain available.
 
 ## Office deployment
 
-The deployment scripts require **PSFoundation 1.6.1 or later** and an existing Microsoft-signed Office Deployment Tool (ODT) setup.exe. They
+The deployment scripts require **PSFoundation 1.7.2 or later** and an existing Microsoft-signed Office Deployment Tool (ODT) setup.exe. They
 share PSFoundation's inventory, planning, media validation, execution, and recovery APIs. They do not purchase licenses, upgrade Windows,
 convert Outlook profiles, or provide automatic rollback.
+
+### Validate the Office Deployment Tool
+
+Download the [Office Deployment Tool from Microsoft](https://www.microsoft.com/en-us/download/details.aspx?id=49117) and extract the
+downloaded `officedeploymenttool_*.exe` package. `OdtPath` must select the extracted `setup.exe`, not the self-extracting download or an
+Office application executable. See
+[Microsoft's ODT overview](https://learn.microsoft.com/en-us/microsoft-365-apps/deploy/overview-office-deployment-tool).
+
+The filename on disk and the embedded `OriginalFilename` field can differ. Current Microsoft ODT builds identify themselves internally as
+`Bootstrapper.exe` with the description `Microsoft 365 and Office`. PSFoundation validates that identity together with its Microsoft
+signature, publisher, and minimum supported version. Renaming a different executable to `setup.exe` does not make it trusted.
+
+Run this read-only preflight on the same file that Prepare or Migrate will use:
+
+```powershell
+Import-Module PSFoundation -MinimumVersion 1.7.2 -Force
+$tool = Test-OfficeDeploymentTool -OdtPath 'C:\Tools\ODT\setup.exe'
+$tool | Format-List Valid, Version, SignatureStatus, OriginalFilename, FileDescription, Detail
+if (-not $tool.Valid) {
+  throw "ODT validation failed: $($tool.Detail)"
+}
+```
+
+Validation does not launch the executable or download Office. A valid signature alone is insufficient if the executable identity or version
+is unsuitable. Investigate the reported failure; do not bypass signature checking. PSFoundation 1.7.1 and earlier reject the current
+bootstrapper metadata even on a fresh Microsoft download; update PSFoundation before retrying.
 
 ### Modes and responsibilities
 
@@ -94,7 +120,7 @@ before fleet deployment.
 
 ### Office Enterprise 2007 to Standard 2019 pilot
 
-`Switch-OfficeVersion.ps1 -PilotMigration` requires **PSFoundation 1.6.1 or later** and is available in **Check and Migrate only**. The
+`Switch-OfficeVersion.ps1 -PilotMigration` requires **PSFoundation 1.7.2 or later** and is available in **Check and Migrate only**. The
 wrapper passes this explicit authorization to both planning and execution; ordinary migrations retain their strict defaults.
 
 The profile is restricted to x64 Windows 10 desktop build 19045, the reported Enterprise 2007 MSI suite/resources, and Standard2019Volume
@@ -108,19 +134,35 @@ through acceptance; reverting loses subsequent guest changes. Preparing media ma
 ```powershell
 $target = @{
   TargetProductId = 'Standard2019Volume'
-  Architecture = '64'
-  Language = @('de-de')
-  SourcePath = 'C:\Media\Office2019'
+  Architecture    = '64'
+  Language        = @('de-de')
+  OdtPath         = 'C:\Tools\ODT\setup.exe'
+  SourcePath      = 'C:\Tools\ODT\Media\Office2019'
 }
-$odt = 'C:\ODT\setup.exe' # Existing verified Microsoft ODT
-.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Prepare @target -OdtPath $odt -PassThru
-.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Check @target -RemoveMsi -PilotMigration -PassThru
-.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target -OdtPath $odt -RemoveMsi -PilotMigration -DryRun -PassThru
+# Create only the media parent; Prepare creates the verified package.
+New-Item -ItemType Directory -Path (Split-Path -Parent $target.SourcePath) -Force | Out-Null
+$checkTarget = $target.Clone()
+$checkTarget.Remove('OdtPath')
+
+.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Prepare @target -PassThru
+.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Check @checkTarget -RemoveMsi -PilotMigration -PassThru
+.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target -RemoveMsi -PilotMigration -DryRun -PassThru
 # After reviewing the plan, removal scope, and rollback point:
-$result = .\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target -OdtPath $odt `
-  -RemoveMsi -PilotMigration -PassThru -Confirm
+$mak = Read-Host 'Office Standard 2019 MAK' -AsSecureString
+try {
+  $result = .\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target `
+    -RemoveMsi -PilotMigration -ProductKey $mak -PassThru -Confirm
+}
+finally {
+  $mak.Dispose()
+  Remove-Variable mak -ErrorAction SilentlyContinue
+}
 $result | ConvertTo-Json -Depth 30
 ```
+
+`Check` rejects `OdtPath` because it does not launch ODT; the separate `checkTarget` retains the same product, language, architecture, and
+media path. Do not also pass `-OdtPath` explicitly when it is already in `target`. For KMS activation, omit the MAK prompt and `-ProductKey`
+instead of supplying a placeholder key.
 
 Use the same ExcludeApp/ExcludePublisher settings for preparation, Check and Migrate if desired. Standard is a different application set
 from Enterprise; review required applications and 32-bit add-in compatibility before accepting the migration. Prepare has no pilot flag. Do
@@ -137,7 +179,7 @@ explicitly if required and collect evidence again. Do not change the reference 2
 
 `SourcePath` selects the verified installation-media package, not Office's installed application directory. Office setup chooses its normal
 application location. Raw ODT can download beside `setup.exe` when SourcePath is omitted, but these scripts require a dedicated, explicit
-package directory for preparation and media verification, such as `C:\ODT\Office2019-Media`. Its parent must already exist. See
+package directory for preparation and media verification, such as `C:\Tools\ODT\Media\Office2019`. Its parent must already exist. See
 [Microsoft's SourcePath documentation](https://learn.microsoft.com/en-us/deployoffice/office-deployment-tool-configuration-options).
 
 | Product family     | TargetProductId                       | Channel                                             |

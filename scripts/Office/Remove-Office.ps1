@@ -1,12 +1,12 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.6.1' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.7.2' }
 
 <#
 .SYNOPSIS
   Inventories or removes explicitly selected Click-to-Run Office products.
 .DESCRIPTION
-  Uses PSFoundation 1.6.1 for removal planning, confirmation, execution, and
+  Uses PSFoundation 1.7.2 for removal planning, confirmation, execution, and
   verification. Never defaults to removing all Office. Selected products already
   absent are a successful no-op. Unselected products must remain unchanged.
   Standalone MSI removal is unsupported; use an approved migration where applicable.

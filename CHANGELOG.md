@@ -2,7 +2,8 @@
 
 ### Features
 
-* **scripts:** extend Outlook archive and repair workflows ([0a054e5](https://github.com/adnoctem/winkit/commit/0a054e5d845e13071735689161203732c6970124))
+- **scripts:** extend Outlook archive and repair workflows
+  ([0a054e5](https://github.com/adnoctem/winkit/commit/0a054e5d845e13071735689161203732c6970124))
 
 ## [1.5.1](https://github.com/adnoctem/winkit/compare/v1.5.0...v1.5.1) (2026-09-28)
 

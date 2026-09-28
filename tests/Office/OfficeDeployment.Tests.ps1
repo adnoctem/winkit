@@ -247,11 +247,11 @@ Describe 'Office wrapper contracts' {
     Should -Invoke Switch-OfficeDeployment -Times 0
   }
 
-  It 'requires PSFoundation 1.6.1 and a mandatory mode in <Entry>' -ForEach @(
+  It 'requires PSFoundation 1.7.2 and a mandatory mode in <Entry>' -ForEach @(
     @{ Entry = 'Install-Office' }, @{ Entry = 'Remove-Office' }, @{ Entry = 'Switch-OfficeVersion' }
   ) {
     $ast = $script:ScriptAsts[$Entry]
-    $ast.ScriptRequirements.RequiredModules[0].Version | Should -Be ([version]'1.6.1')
+    $ast.ScriptRequirements.RequiredModules[0].Version | Should -Be ([version]'1.7.2')
     $mode = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Mode' }
     $mode.Extent.Text | Should -Match 'Mandatory = \$true'
     $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $true).Count | Should -Be 0
@@ -443,6 +443,7 @@ Describe 'Office wrapper contracts' {
     @{ Entry = 'Remove-Office'; Arguments = @{ Mode = 'Check'; ForceCloseApps = $true } }
     @{ Entry = 'Switch-OfficeVersion'; Arguments = @{ Mode = 'Recover'; TargetProductId = 'Standard2024Volume' } }
     @{ Entry = 'Switch-OfficeVersion'; Arguments = @{ Mode = 'Recover'; RemoveMsi = $true } }
+    @{ Entry = 'Switch-OfficeVersion'; Arguments = @{ Mode = 'Check'; OdtPath = 'C:\Tools\ODT\setup.exe' } }
   ) {
     $Arguments.PassThru = $true
     $run = Invoke-OfficeWrapperTest $Entry $Arguments
