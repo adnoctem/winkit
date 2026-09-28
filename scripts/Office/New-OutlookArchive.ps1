@@ -1,27 +1,34 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.7.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.7.1' }
 
 <#
 .SYNOPSIS
   Archives Outlook mail into a standalone Unicode PST.
 .DESCRIPTION
-  Adds a new PST store to the current Outlook profile, mirrors selected source
+  Creates or opens a PST store in the current Outlook profile, mirrors selected source
   folder paths, and copies or moves mail items into it. Defaults to Inbox only;
   Recurse explicitly includes descendants. Standard folders other than Inbox
   require their Include switch. Custom Exclusions always take precedence. Optional
   received-date bounds limit which mail items are archived. When finished, the
   PST can be detached. Close Outlook before copying the PST file elsewhere.
-  Requires a NEW local PST path; reruns must use a different path to avoid
-  duplicate archives. Non-mail items and search folders are always skipped.
+  Creates a new local PST unless Append explicitly selects an existing file.
+  Append does not deduplicate messages; repeating Copy can create duplicates.
+  SkipPathPreservation flattens selected mail into the archive root.
+  Non-mail items and search folders are always skipped.
   Included non-mail containers allow traversal to their mail subfolders.
   Copy temporarily duplicates each message in its SOURCE store before moving
   the duplicate to the archive. Keep a closed-file backup and adequate headroom.
   Shows folder and item progress and writes a JSON report, including previews.
   Per-message results are stored in the report rather than printed to the console.
 .PARAMETER ArchivePath
-  Full path of a new local .pst file. Existing files are refused.
-.PARAMETER IncludeInbox
-  Permit the standard Inbox folder within the selected scope. Enabled unless explicitly set to false.
+  Full path of a local .pst file. Existing files require Append.
+.PARAMETER Append
+  Add mail to an existing PST. A missing file is refused. Existing attachments
+  and display names are preserved unless a new display name is supplied.
+  This is not an idempotent retry mode; overlapping Copy passes add duplicates.
+.PARAMETER SkipPathPreservation
+  Put all selected mail directly in the archive root instead of recreating
+  source folder paths. With Recurse, mail from multiple folders is combined.
 .PARAMETER IncludeSentItems
   Permit the standard SentItems folder within the selected scope. Excluded unless explicitly included.
 .PARAMETER IncludeDeletedItems
@@ -32,34 +39,13 @@
   Permit the standard Outbox folder within the selected scope. Excluded unless explicitly included.
 .PARAMETER IncludeDrafts
   Permit the standard Drafts folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeCalendar
-  Permit the standard Calendar folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeContacts
-  Permit the standard Contacts folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeJournal
-  Permit the standard Journal folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeNotes
-  Permit the standard Notes folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeTasks
-  Permit the standard Tasks folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeAllPublicFolders
-  Permit the standard AllPublicFolders folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeConflicts
-  Permit the standard Conflicts folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeSyncIssues
-  Permit the standard SyncIssues folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeLocalFailures
-  Permit the standard LocalFailures folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeServerFailures
-  Permit the standard ServerFailures folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeRssFeeds
-  Permit the standard RssFeeds folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeToDo
-  Permit the standard ToDo folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeManagedEmail
-  Permit the standard ManagedEmail folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeSuggestedContacts
-  Permit the standard SuggestedContacts folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeMedia
+  Permit Calendar, Contacts, Journal, Notes, Tasks, AllPublicFolders, RssFeeds,
+  ToDo, ManagedEmail, and SuggestedContacts within the selected scope. Only mail
+  is processed; Recurse permits traversal through included non-mail containers.
+.PARAMETER IncludeFailures
+  Permit SyncIssues, Conflicts, LocalFailures, and ServerFailures within the
+  selected scope. Search folders remain excluded.
 .PARAMETER Exclusions
   Exact store-relative paths excluded with their descendants. Exclusions win over Include switches.
 .PARAMETER StoreName
@@ -82,13 +68,15 @@
 .PARAMETER Mode
   Copy leaves source mail intact. Move removes archived items from the source.
 .PARAMETER DisplayName
-  Display name for the PST. Defaults to the filename without .pst.
+  Display name for the PST. New files default to the filename without .pst.
+  Append preserves the existing name unless this parameter is supplied.
   DataFileName is an alias.
 .PARAMETER AddDataFile
-  Keep the created PST attached to the current Outlook profile.
+  Keep a PST attached when this run added it to the current Outlook profile.
   Cannot be combined with DetachWhenDone set to true.
 .PARAMETER DetachWhenDone
-  Remove the PST store from the profile at the end.
+  Remove an attachment created by this run at the end. An already attached
+  archive is left open; explicitly requesting its detachment is rejected.
 .PARAMETER DryRun
   Preview changes without copying or moving messages.
 .PARAMETER Sort
@@ -136,11 +124,14 @@ param (
   [string]
   $ArchivePath,
 
-  [string]
-  $StoreName,
+  [switch]
+  $Append,
 
   [switch]
-  $IncludeInbox,
+  $SkipPathPreservation,
+
+  [string]
+  $StoreName,
 
   [Alias('IncludeSentMail')]
   [switch]
@@ -159,46 +150,10 @@ param (
   $IncludeDrafts,
 
   [switch]
-  $IncludeCalendar,
+  $IncludeMedia,
 
   [switch]
-  $IncludeContacts,
-
-  [switch]
-  $IncludeJournal,
-
-  [switch]
-  $IncludeNotes,
-
-  [switch]
-  $IncludeTasks,
-
-  [switch]
-  $IncludeAllPublicFolders,
-
-  [switch]
-  $IncludeConflicts,
-
-  [switch]
-  $IncludeSyncIssues,
-
-  [switch]
-  $IncludeLocalFailures,
-
-  [switch]
-  $IncludeServerFailures,
-
-  [switch]
-  $IncludeRssFeeds,
-
-  [switch]
-  $IncludeToDo,
-
-  [switch]
-  $IncludeManagedEmail,
-
-  [switch]
-  $IncludeSuggestedContacts,
+  $IncludeFailures,
 
   [Alias('ExcludeFolders')]
   [string[]]
@@ -276,6 +231,34 @@ if ($_outlookUser.IsAdministrator) {
 if ($DryRun) {
   $WhatIfPreference = $true
   Write-Log -Message "DRY RUN - no Outlook messages will be archived`n" -Color Yellow
+}
+
+# Script options expand to the identity-based kinds accepted by PSFoundation.
+# Inbox is always permitted; Exclusions can still exclude its exact path.
+$_inclusionGroups = [ordered]@{
+  IncludeSentItems    = @('SentItems')
+  IncludeDeletedItems = @('DeletedItems')
+  IncludeJunk         = @('Junk')
+  IncludeDrafts       = @('Drafts')
+  IncludeOutbox       = @('Outbox')
+  IncludeMedia        = @(
+    'Calendar',
+    'Contacts',
+    'Journal',
+    'Notes',
+    'Tasks',
+    'AllPublicFolders',
+    'RssFeeds',
+    'ToDo',
+    'ManagedEmail',
+    'SuggestedContacts'
+  )
+  IncludeFailures     = @(
+    'SyncIssues',
+    'Conflicts',
+    'LocalFailures',
+    'ServerFailures'
+  )
 }
 
 $_results = New-Object System.Collections.ArrayList
@@ -389,7 +372,16 @@ function Add-OutlookArchiveResult {
     $Item,
 
     [string]
-    $Detail
+    $Detail,
+
+    [string]
+    $DestinationFolderPath,
+
+    [string]
+    $SourceEntryID,
+
+    [string]
+    $SourceStoreID
   )
 
   $_subject = ''
@@ -415,7 +407,11 @@ function Add-OutlookArchiveResult {
   }
 
   $_property = @{
-    Received = $_received
+    Received              = $_received
+    SourceFolderPath      = $Folder
+    DestinationFolderPath = $DestinationFolderPath
+    SourceEntryID         = $SourceEntryID
+    SourceStoreID         = $SourceStoreID
   }
 
   Add-OperationResult `
@@ -437,6 +433,9 @@ function Copy-OutlookFolderItem {
 
     [object]
     $DestinationFolder,
+
+    [string]
+    $DestinationRelativePath,
 
     [string]
     $ArchiveMode,
@@ -494,12 +493,23 @@ function Copy-OutlookFolderItem {
         Subject      = $_item.Subject
         ReceivedTime = $_item.ReceivedTime
       }
-      $_destinationPath = if ($DestinationFolder) { $DestinationFolder.FolderPath } else { $_archivePath }
+      # Use a stable file + store-relative path, including when previewing an
+      # unattached archive whose Outlook display name is not yet available.
+      $_destinationPath = $_archivePath + '::\' + $DestinationRelativePath
+      $_resultArguments = @{
+        Results               = $Results
+        Action                = $ArchiveMode
+        Folder                = $_folderPath
+        Item                  = $_metadata
+        DestinationFolderPath = $_destinationPath
+        SourceEntryID         = $_id
+        SourceStoreID         = [string]$SourceFolder.StoreID
+      }
 
       # Record previews directly: ShouldProcess would print one WhatIf line
       # per message. Real transfers still require ShouldProcess approval.
       if ($WhatIfPreference) {
-        Add-OutlookArchiveResult -Results $Results -Action $ArchiveMode -Status 'Skipped' -Folder $_folderPath -Item $_metadata -Detail 'DryRun'
+        Add-OutlookArchiveResult @_resultArguments -Status 'Skipped' -Detail 'DryRun'
       }
       elseif ($PSCmdlet.ShouldProcess("$_folderPath | $($_metadata.Subject)", "$ArchiveMode to $_destinationPath")) {
         if ($ArchiveMode -eq 'Move') {
@@ -513,10 +523,10 @@ function Copy-OutlookFolderItem {
           $script:OutlookArchiveCopied++
           $_status = 'Copied'
         }
-        Add-OutlookArchiveResult -Results $Results -Action $ArchiveMode -Status $_status -Folder $SourceFolder.FolderPath -Item $_metadata -Detail "$_status to $_destinationPath"
+        Add-OutlookArchiveResult @_resultArguments -Status $_status -Detail "$_status to $_destinationPath"
       }
       else {
-        Add-OutlookArchiveResult -Results $Results -Action $ArchiveMode -Status 'Skipped' -Folder $_folderPath -Item $_metadata -Detail 'Declined'
+        Add-OutlookArchiveResult @_resultArguments -Status 'Skipped' -Detail 'Declined'
       }
 
       $_processed++
@@ -541,6 +551,9 @@ $_folderPlan = @()
 $_destinationFolder = $null
 $_archiveRoot = $null
 $_archiveOwned = $false
+$_archiveAttachedInitially = $false
+$_initialStoreIDs = @()
+$_destinationValidation = 'NotValidated'
 $_archivePath = $ArchivePath
 $_sourcePath = $null
 $_reportPath = $null
@@ -563,10 +576,10 @@ try {
   }
 
   $_archivePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ArchivePath)
-  if (-not $PSBoundParameters.ContainsKey('DisplayName')) {
+  if (-not $Append -and -not $PSBoundParameters.ContainsKey('DisplayName')) {
     $DisplayName = [IO.Path]::GetFileNameWithoutExtension($_archivePath)
   }
-  if ([string]::IsNullOrWhiteSpace($DisplayName)) {
+  if ((-not $Append -or $PSBoundParameters.ContainsKey('DisplayName')) -and [string]::IsNullOrWhiteSpace($DisplayName)) {
     throw 'DisplayName must not be blank.'
   }
   if ($PSBoundParameters.ContainsKey('ReportPath')) {
@@ -607,8 +620,17 @@ try {
     throw 'ArchivePath must end in .pst.'
   }
 
-  if (Test-Path -LiteralPath $_archivePath) {
-    throw 'ArchivePath already exists. Use a new PST path for every run.'
+  if ($Append) {
+    if (-not (Test-Path -LiteralPath $_archivePath -PathType Leaf)) {
+      throw 'Append requires an existing PST file. Omit Append to create a new archive.'
+    }
+    $_archivePath = Resolve-LongPath -LiteralPath $_archivePath
+    if ((Get-Item -LiteralPath $_archivePath -ErrorAction Stop).IsReadOnly) {
+      throw 'ArchivePath is read-only.'
+    }
+  }
+  elseif (Test-Path -LiteralPath $_archivePath) {
+    throw 'ArchivePath already exists. Supply Append to add mail to this PST, or choose a new path.'
   }
 
   $_drive = New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($_archivePath))
@@ -680,42 +702,59 @@ try {
     $_sourceRoot = Get-OutlookStoreRoot -Namespace $_context.Namespace -Name $StoreName
   }
   Write-Verbose "Source: $($_sourceRoot.FolderPath)"
-  $_includedKinds = @('Inbox')
-  $_standardKinds = @(
-    'Inbox',
-    'SentItems',
-    'DeletedItems',
-    'Junk',
-    'Outbox',
-    'Drafts',
-    'Calendar',
-    'Contacts',
-    'Journal',
-    'Notes',
-    'Tasks',
-    'AllPublicFolders',
-    'Conflicts',
-    'SyncIssues',
-    'LocalFailures',
-    'ServerFailures',
-    'RssFeeds',
-    'ToDo',
-    'ManagedEmail',
-    'SuggestedContacts'
-  )
-  foreach ($_kind in $_standardKinds) {
-    $_parameter = 'Include' + $_kind
-    if ($PSBoundParameters.ContainsKey($_parameter)) {
-      $_includedKinds = @($_includedKinds | Where-Object { $_ -ne $_kind })
-      if ($PSBoundParameters[$_parameter]) {
-        $_includedKinds += $_kind
+  if ($Append) {
+    # Reuse an existing attachment by file path, never by its display label.
+    $_stores = $_context.Namespace.Stores
+    $_archiveMatches = 0
+    try {
+      for ($_storeIndex = 1; $_storeIndex -le $_stores.Count; $_storeIndex++) {
+        $_store = $_stores.Item($_storeIndex)
+        try {
+          $_initialStoreIDs += [string]$_store.StoreID
+          $_storePath = [string]$_store.FilePath
+          if ([string]::IsNullOrWhiteSpace($_storePath)) {
+            continue
+          }
+          $_storePath = Resolve-LongPath -LiteralPath $_storePath
+          if ($_storePath -eq $_archivePath) {
+            $_archiveMatches++
+            if ($_archiveMatches -gt 1) {
+              throw 'ArchivePath matches more than one attached store.'
+            }
+            $_archiveRoot = $_store.GetRootFolder()
+            $_archiveAttachedInitially = $true
+            if ($_archiveRoot.StoreID -eq $_sourceRoot.StoreID) {
+              throw 'Source and archive must be different stores.'
+            }
+          }
+        }
+        finally {
+          Remove-ComObject $_store
+        }
       }
+    }
+    finally {
+      Remove-ComObject $_stores
+    }
+
+    if ($_archiveAttachedInitially -and $PSBoundParameters.ContainsKey('DetachWhenDone') -and $DetachWhenDone) {
+      throw 'The archive was already attached to Outlook. Omit DetachWhenDone to preserve that attachment.'
+    }
+    $_destinationValidation = if ($_archiveAttachedInitially) { 'AttachedStore' } else { 'FileOnly' }
+    if ($WhatIfPreference -and -not $_archiveAttachedInitially) {
+      Write-Log -Message 'Append preview: the PST will remain detached; Outlook store and destination-folder validation is deferred until execution.' -Color Yellow
+    }
+    if ($Mode -eq 'Copy') {
+      Write-Warning 'Append with Copy can duplicate previously archived messages. Use disjoint source selections; Append does not deduplicate or resume interrupted runs.'
+    }
+  }
+  $_includedKinds = @('Inbox')
+  foreach ($_option in $_inclusionGroups.Keys) {
+    if ($PSBoundParameters.ContainsKey($_option) -and $PSBoundParameters[$_option]) {
+      $_includedKinds += $_inclusionGroups[$_option]
     }
   }
 
-  if (-not (Get-Command -Name Get-OutlookFolderPlan -Module PSFoundation -ErrorAction SilentlyContinue)) {
-    throw 'The loaded PSFoundation version does not provide Get-OutlookFolderPlan. Install the PSFoundation release containing the Outlook folder-selection API before using this script.'
-  }
   $_planArguments = @{
     Namespace  = $_context.Namespace
     StoreRoot  = $_sourceRoot
@@ -729,27 +768,70 @@ try {
     $_planArguments.FolderName = $FolderName
   }
 
-  $_folderPlan = @(Get-OutlookFolderPlan @_planArguments)
+  try {
+    $_folderPlan = @(Get-OutlookFolderPlan @_planArguments)
+  }
+  catch {
+    $_selectionError = $_.Exception.Message
+    foreach ($_option in $_inclusionGroups.Keys) {
+      foreach ($_kind in $_inclusionGroups[$_option]) {
+        $_selectionError = $_selectionError.Replace("Include$_kind required", "$_option required")
+      }
+    }
+    throw $_selectionError
+  }
+
+  foreach ($_entry in $_folderPlan) {
+    foreach ($_option in $_inclusionGroups.Keys) {
+      foreach ($_kind in $_inclusionGroups[$_option]) {
+        $_entry.Reason = $_entry.Reason.Replace("Include$_kind required", "$_option required")
+      }
+    }
+  }
   $_sourcePath = [string]$_folderPlan[0].FolderPath
   $script:OutlookArchiveFoldersSkipped = @($_folderPlan | Where-Object { -not $_.Process }).Count
   if (-not $WhatIfPreference) {
-    $_declined = -not $PSCmdlet.ShouldProcess("$_sourcePath -> $_archivePath", "Archive mail ($Mode), Recurse=$Recurse, to a NEW PST")
+    $_destinationAction = if ($Append) { 'an EXISTING PST' } else { 'a NEW PST' }
+    $_layout = if ($SkipPathPreservation) { 'flatten into archive root' } else { 'preserve source folder paths' }
+    $_declined = -not $PSCmdlet.ShouldProcess("$_sourcePath -> $_archivePath", "Archive mail ($Mode), Recurse=$Recurse, to $_destinationAction; $_layout")
   }
 
   if (-not $WhatIfPreference -and -not $_declined) {
-    Write-OutlookArchiveProgress -Phase 'Creating archive PST' -Folder $_archivePath -Force
-    $_archiveRoot = Add-OutlookStoreRoot -Namespace $_context.Namespace -Path $_archivePath
+    if (-not $_archiveRoot) {
+      # Recheck immediately before AddStoreEx, which creates missing files.
+      if ($Append -and -not (Test-Path -LiteralPath $_archivePath -PathType Leaf)) {
+        throw 'The archive disappeared before attachment. Append will not create a replacement.'
+      }
+      if (-not $Append -and (Test-Path -LiteralPath $_archivePath)) {
+        throw 'The archive path appeared after validation. Refusing to reuse it without Append.'
+      }
+      $_phase = if ($Append) { 'Opening existing archive PST' } else { 'Creating archive PST' }
+      Write-OutlookArchiveProgress -Phase $_phase -Folder $_archivePath -Force
+      $_archiveRoot = Add-OutlookStoreRoot -Namespace $_context.Namespace -Path $_archivePath
+      # Store identity also catches path aliases that long-name expansion
+      # does not resolve, such as directory junctions.
+      $_archiveAttachedInitially = $_archiveRoot.StoreID -in $_initialStoreIDs
+      $_archiveOwned = -not $_archiveAttachedInitially -and $_archiveRoot.StoreID -ne $_sourceRoot.StoreID
+    }
     if ($_archiveRoot.StoreID -eq $_sourceRoot.StoreID) {
       throw 'Source and archive must be different stores.'
     }
-
-    $_archiveOwned = $true
-    try {
-      $_archiveRoot.Name = $DisplayName
+    if ($_archiveAttachedInitially -and $PSBoundParameters.ContainsKey('DetachWhenDone') -and $DetachWhenDone) {
+      throw 'The archive was already attached to Outlook. Omit DetachWhenDone to preserve that attachment.'
     }
-    catch {
-      Write-Warning "Could not rename archive PST store to '$DisplayName': $($_.Exception.Message)"
-      Add-OperationResult -Results $_results -Target $_archivePath -Source 'Outlook' -Action 'RenameStore' -Status 'Failed' -Detail $_.Exception.Message
+
+    $_destinationValidation = 'AttachedStore'
+    if (-not $Append -or $PSBoundParameters.ContainsKey('DisplayName')) {
+      try {
+        $_archiveRoot.Name = $DisplayName
+      }
+      catch {
+        Write-Warning "Could not rename archive PST store to '$DisplayName': $($_.Exception.Message)"
+        Add-OperationResult -Results $_results -Target $_archivePath -Source 'Outlook' -Action 'RenameStore' -Status 'Failed' -Detail $_.Exception.Message
+      }
+    }
+    else {
+      $DisplayName = [string]$_archiveRoot.Name
     }
   }
 
@@ -769,17 +851,58 @@ try {
         if ($_folder.StoreID -ne $_entry.StoreID -or $_folder.EntryID -ne $_entry.EntryID) {
           throw 'Resolved source folder no longer matches the reviewed folder plan.'
         }
-        if (-not $WhatIfPreference -and $_entry.RelativePath) {
-          foreach ($_segment in $_entry.RelativePath.Split('\')) {
+        $_destinationRelativePath = if ($SkipPathPreservation) { '' } else { [string]$_entry.RelativePath }
+        if (-not $WhatIfPreference -and $_destinationRelativePath) {
+          foreach ($_segment in $_destinationRelativePath.Split('\')) {
+            $_children = $_destinationFolder.Folders
+            $_matchingChildren = 0
+            try {
+              for ($_childIndex = 1; $_childIndex -le $_children.Count; $_childIndex++) {
+                $_child = $_children.Item($_childIndex)
+                try {
+                  if ($_child.Name -eq $_segment) {
+                    $_matchingChildren++
+                  }
+                }
+                finally {
+                  Remove-ComObject $_child
+                }
+              }
+            }
+            finally {
+              Remove-ComObject $_children
+            }
+            if ($_matchingChildren -gt 1) {
+              throw "Ambiguous destination folder '$($_destinationFolder.FolderPath)\$_segment'."
+            }
             $_next = Get-OutlookSubFolder -ParentFolder $_destinationFolder -Name $_segment -Create
             if ($_destinationFolder -ne $_archiveRoot) {
               Remove-ComObject $_destinationFolder
             }
             $_destinationFolder = $_next
+            $_accessor = $_destinationFolder.PropertyAccessor
+            try {
+              if ($_destinationFolder.DefaultItemType -ne 0 -or
+                $_accessor.GetProperty('http://schemas.microsoft.com/mapi/proptag/0x36010003') -eq 2) {
+                throw "Destination folder '$($_destinationFolder.FolderPath)' is not a writable mail folder."
+              }
+            }
+            finally {
+              Remove-ComObject $_accessor
+            }
           }
         }
 
-        Copy-OutlookFolderItem -SourceFolder $_folder -DestinationFolder $_destinationFolder -ArchiveMode $Mode -Results $_results -WhatIf:$WhatIfPreference -Confirm:$false
+        $_copyArguments = @{
+          SourceFolder            = $_folder
+          DestinationFolder       = $_destinationFolder
+          DestinationRelativePath = $_destinationRelativePath
+          ArchiveMode             = $Mode
+          Results                 = $_results
+          WhatIf                  = [bool]$WhatIfPreference
+          Confirm                 = $false
+        }
+        Copy-OutlookFolderItem @_copyArguments
       }
       finally {
         if ($_destinationFolder -and $_destinationFolder -ne $_archiveRoot) {
@@ -848,7 +971,7 @@ else {
 }
 
 if ($_declined) {
-  $_detail = 'Archive creation was declined.'
+  $_detail = 'Archive operation was declined.'
 }
 
 $_summaryProperty = @{
@@ -914,22 +1037,27 @@ try {
     StartedAt     = $_startedAt.ToString('o')
     FinishedAt    = (Get-Date).ToString('o')
     Settings      = [ordered]@{
-      ArchivePath     = $_archivePath
-      StoreName       = $StoreName
-      SourceFolder    = $_sourcePath
-      FolderName      = if ($PSBoundParameters.ContainsKey('FolderName')) { $FolderName } else { $null }
-      Sort            = $Sort
-      FolderSelection = if ($PSBoundParameters.ContainsKey('FolderName')) { 'ExplicitPath' } else { 'DefaultInbox' }
-      Recurse         = [bool]$Recurse
-      Include         = @($_includedKinds)
-      Exclusions      = @($Exclusions)
-      Mode            = $Mode
-      StartDate       = if ($StartDate) { $StartDate.ToString('o') } else { $null }
-      EndDate         = if ($EndDate) { $EndDate.ToString('o') } else { $null }
-      EndBefore       = if ($EndBefore) { $EndBefore.ToString('o') } else { $null }
-      DetachWhenDone  = $DetachWhenDone
-      DisplayName     = $DisplayName
-      AddDataFile     = [bool]$AddDataFile
+      ArchivePath              = $_archivePath
+      Append                   = [bool]$Append
+      SkipPathPreservation     = [bool]$SkipPathPreservation
+      ArchiveAttachedInitially = $_archiveAttachedInitially
+      AttachmentCreated        = $_archiveOwned
+      DestinationValidation    = $_destinationValidation
+      StoreName                = $StoreName
+      SourceFolder             = $_sourcePath
+      FolderName               = if ($PSBoundParameters.ContainsKey('FolderName')) { $FolderName } else { $null }
+      Sort                     = $Sort
+      FolderSelection          = if ($PSBoundParameters.ContainsKey('FolderName')) { 'ExplicitPath' } else { 'DefaultInbox' }
+      Recurse                  = [bool]$Recurse
+      Include                  = @($_includedKinds)
+      Exclusions               = @($Exclusions)
+      Mode                     = $Mode
+      StartDate                = if ($StartDate) { $StartDate.ToString('o') } else { $null }
+      EndDate                  = if ($EndDate) { $EndDate.ToString('o') } else { $null }
+      EndBefore                = if ($EndBefore) { $EndBefore.ToString('o') } else { $null }
+      DetachWhenDone           = $DetachWhenDone
+      DisplayName              = $DisplayName
+      AddDataFile              = [bool]$AddDataFile
     }
     Summary       = $_summary
     FolderPlan    = @($_folderPlan)

@@ -15,8 +15,6 @@
   two different folders is preserved.
   Shows folder traversal and throttled item progress while inspecting headers
   and processing duplicates. ProgressPreference controls the progress display.
-.PARAMETER IncludeInbox
-  Permit the standard Inbox folder within the selected scope. Enabled unless explicitly set to false.
 .PARAMETER IncludeSentItems
   Permit the standard SentItems folder within the selected scope. Excluded unless explicitly included.
 .PARAMETER IncludeDeletedItems
@@ -27,34 +25,13 @@
   Permit the standard Outbox folder within the selected scope. Excluded unless explicitly included.
 .PARAMETER IncludeDrafts
   Permit the standard Drafts folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeCalendar
-  Permit the standard Calendar folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeContacts
-  Permit the standard Contacts folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeJournal
-  Permit the standard Journal folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeNotes
-  Permit the standard Notes folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeTasks
-  Permit the standard Tasks folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeAllPublicFolders
-  Permit the standard AllPublicFolders folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeConflicts
-  Permit the standard Conflicts folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeSyncIssues
-  Permit the standard SyncIssues folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeLocalFailures
-  Permit the standard LocalFailures folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeServerFailures
-  Permit the standard ServerFailures folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeRssFeeds
-  Permit the standard RssFeeds folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeToDo
-  Permit the standard ToDo folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeManagedEmail
-  Permit the standard ManagedEmail folder within the selected scope. Excluded unless explicitly included.
-.PARAMETER IncludeSuggestedContacts
-  Permit the standard SuggestedContacts folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeMedia
+  Permit Calendar, Contacts, Journal, Notes, Tasks, AllPublicFolders, RssFeeds,
+  ToDo, ManagedEmail, and SuggestedContacts within the selected scope. Only mail
+  is processed; Recurse permits traversal through included non-mail containers.
+.PARAMETER IncludeFailures
+  Permit SyncIssues, Conflicts, LocalFailures, and ServerFailures within the
+  selected scope. Search folders remain excluded.
 .PARAMETER Exclusions
   Exact store-relative paths excluded with their descendants. Exclusions win over Include switches.
 .PARAMETER StoreName
@@ -105,9 +82,6 @@ param (
   [string]
   $StoreName,
 
-  [switch]
-  $IncludeInbox,
-
   [Alias('IncludeSentMail')]
   [switch]
   $IncludeSentItems,
@@ -125,46 +99,10 @@ param (
   $IncludeDrafts,
 
   [switch]
-  $IncludeCalendar,
+  $IncludeMedia,
 
   [switch]
-  $IncludeContacts,
-
-  [switch]
-  $IncludeJournal,
-
-  [switch]
-  $IncludeNotes,
-
-  [switch]
-  $IncludeTasks,
-
-  [switch]
-  $IncludeAllPublicFolders,
-
-  [switch]
-  $IncludeConflicts,
-
-  [switch]
-  $IncludeSyncIssues,
-
-  [switch]
-  $IncludeLocalFailures,
-
-  [switch]
-  $IncludeServerFailures,
-
-  [switch]
-  $IncludeRssFeeds,
-
-  [switch]
-  $IncludeToDo,
-
-  [switch]
-  $IncludeManagedEmail,
-
-  [switch]
-  $IncludeSuggestedContacts,
+  $IncludeFailures,
 
   [Alias('ExcludeFolders')]
   [string[]]
@@ -225,6 +163,34 @@ $script:HDR_TAGS = @(
   'http://schemas.microsoft.com/mapi/proptag/0x007D001F',
   'http://schemas.microsoft.com/mapi/proptag/0x007D001E'
 )
+
+# Script options expand to the identity-based kinds accepted by PSFoundation.
+# Inbox is always permitted; Exclusions can still exclude its exact path.
+$_inclusionGroups = [ordered]@{
+  IncludeSentItems    = @('SentItems')
+  IncludeDeletedItems = @('DeletedItems')
+  IncludeJunk         = @('Junk')
+  IncludeDrafts       = @('Drafts')
+  IncludeOutbox       = @('Outbox')
+  IncludeMedia        = @(
+    'Calendar',
+    'Contacts',
+    'Journal',
+    'Notes',
+    'Tasks',
+    'AllPublicFolders',
+    'RssFeeds',
+    'ToDo',
+    'ManagedEmail',
+    'SuggestedContacts'
+  )
+  IncludeFailures     = @(
+    'SyncIssues',
+    'Conflicts',
+    'LocalFailures',
+    'ServerFailures'
+  )
+}
 
 $_results = New-Object System.Collections.ArrayList
 
@@ -448,41 +414,12 @@ try {
   }
   $Exclusions = @($Exclusions) + @($ReviewFolderName)
   $_includedKinds = @('Inbox')
-  $_standardKinds = @(
-    'Inbox',
-    'SentItems',
-    'DeletedItems',
-    'Junk',
-    'Outbox',
-    'Drafts',
-    'Calendar',
-    'Contacts',
-    'Journal',
-    'Notes',
-    'Tasks',
-    'AllPublicFolders',
-    'Conflicts',
-    'SyncIssues',
-    'LocalFailures',
-    'ServerFailures',
-    'RssFeeds',
-    'ToDo',
-    'ManagedEmail',
-    'SuggestedContacts'
-  )
-  foreach ($_kind in $_standardKinds) {
-    $_parameter = 'Include' + $_kind
-    if ($PSBoundParameters.ContainsKey($_parameter)) {
-      $_includedKinds = @($_includedKinds | Where-Object { $_ -ne $_kind })
-      if ($PSBoundParameters[$_parameter]) {
-        $_includedKinds += $_kind
-      }
+  foreach ($_option in $_inclusionGroups.Keys) {
+    if ($PSBoundParameters.ContainsKey($_option) -and $PSBoundParameters[$_option]) {
+      $_includedKinds += $_inclusionGroups[$_option]
     }
   }
 
-  if (-not (Get-Command -Name Get-OutlookFolderPlan -Module PSFoundation -ErrorAction SilentlyContinue)) {
-    throw 'The loaded PSFoundation version does not provide Get-OutlookFolderPlan. Install the PSFoundation release containing the Outlook folder-selection API before using this script.'
-  }
   $_planArguments = @{
     Namespace  = $_context.Namespace
     StoreRoot  = $_storeRoot
@@ -496,7 +433,26 @@ try {
     $_planArguments.FolderName = $FolderName
   }
 
-  $_folderPlan = @(Get-OutlookFolderPlan @_planArguments)
+  try {
+    $_folderPlan = @(Get-OutlookFolderPlan @_planArguments)
+  }
+  catch {
+    $_selectionError = $_.Exception.Message
+    foreach ($_option in $_inclusionGroups.Keys) {
+      foreach ($_kind in $_inclusionGroups[$_option]) {
+        $_selectionError = $_selectionError.Replace("Include$_kind required", "$_option required")
+      }
+    }
+    throw $_selectionError
+  }
+
+  foreach ($_entry in $_folderPlan) {
+    foreach ($_option in $_inclusionGroups.Keys) {
+      foreach ($_kind in $_inclusionGroups[$_option]) {
+        $_entry.Reason = $_entry.Reason.Replace("Include$_kind required", "$_option required")
+      }
+    }
+  }
   $_sourcePath = [string]$_folderPlan[0].FolderPath
 
   if (-not $WhatIfPreference) {

@@ -36,7 +36,7 @@ All Office scripts show progress for their longer operations. Outlook archive an
 processing phase; synthetic message generation shows the number processed. Item updates are throttled to avoid slowing large batches.
 Deployment scripts show inventory, configuration, compatibility, media preparation, activation, execution, or recovery phases as applicable.
 Their progress is indeterminate while a deployment call is running; it does not estimate download or installation completion percentages.
-Data-file repair shows tool discovery and waiting status; follow ScanPST/ScanOST's own window for scan progress and any required
+Data-file repair shows tool discovery and waiting status; follow the repair utility's own window for scan progress and any required
 confirmation.
 
 Progress displays clear when operations finish or fail. Set `$ProgressPreference = 'SilentlyContinue'` to hide them in unattended sessions;
@@ -346,13 +346,13 @@ profile's user; SYSTEM is not suitable for these operations.
 
 ### Compatibility and session requirements
 
-| Script                       | Minimum classic Outlook         | Requirement                                                                |
-| ---------------------------- | ------------------------------- | -------------------------------------------------------------------------- |
-| `New-OutlookArchive.ps1`     | 2007 (12)                       | Unicode PST creation through `NameSpace.AddStoreEx`.                       |
-| `Backup-Outlook.ps1`         | 2007 (12) for discovery         | No Outlook required in direct `-PSTPath` mode.                             |
-| `Optimize-Outlook.ps1`       | 2007 (12)                       | Transport-header access through `Item.PropertyAccessor`.                   |
-| `New-TestOutlookMessage.ps1` | 2007 (12)                       | Outlook object model and optional registered Redemption component.         |
-| `Repair-OutlookDataFile.ps1` | Office 12 tool discovery onward | An available ScanPST/ScanOST executable; it does not connect to a profile. |
+| Script                       | Minimum classic Outlook         | Requirement                                                                           |
+| ---------------------------- | ------------------------------- | ------------------------------------------------------------------------------------- |
+| `New-OutlookArchive.ps1`     | 2007 (12)                       | Unicode PST creation through `NameSpace.AddStoreEx`.                                  |
+| `Backup-Outlook.ps1`         | 2007 (12) for discovery         | No Outlook required in direct `-PSTPath` mode.                                        |
+| `Optimize-Outlook.ps1`       | 2007 (12)                       | Transport-header access through `Item.PropertyAccessor`.                              |
+| `New-TestOutlookMessage.ps1` | 2007 (12)                       | Outlook object model and optional registered Redemption component.                    |
+| `Repair-OutlookDataFile.ps1` | Office 12 tool discovery onward | ScanPST, or an explicit legacy executable; legacy utilities can prompt for a profile. |
 
 The mail profile scripts and backup discovery reject Outlook versions below 12. Repair instead validates the data file and locates a repair
 utility; it does not enforce a client-version check. These are script compatibility requirements, not a guarantee of vendor support or PST
@@ -404,9 +404,10 @@ disposing of the local data.
 
 ### Folder selection and exclusions
 
-`New-OutlookArchive.ps1` and `Optimize-Outlook.ps1` require PSFoundation 1.7.0 and share the same folder-selection policy. When `FolderName`
-is omitted, both select the store's Inbox by identity and process only its direct mail. This works with German or renamed Inboxes. Explicit
-names are exact, case-insensitive paths relative to the selected store, not wildcard patterns or searches across the store.
+`New-OutlookArchive.ps1` requires PSFoundation 1.7.1; `Optimize-Outlook.ps1` requires 1.7.0. Both share the same folder-selection policy.
+When `FolderName` is omitted, both select the store's Inbox by identity and process only its direct mail. This works with German or renamed
+Inboxes. Explicit names are exact, case-insensitive paths relative to the selected store, not wildcard patterns or searches across the
+store.
 
 | Selection                                        | Scope                                                             |
 | ------------------------------------------------ | ----------------------------------------------------------------- |
@@ -427,28 +428,31 @@ at every depth.
 
 Standard folders are recognized by Outlook/MAPI identities, independently of display names or language. Inbox is permitted by default; all
 other identified standard folders require their inclusion switch. Inclusion permits a folder **within the selected scope**; it does not add
-folders outside that scope or enable recursion. Use `-IncludeInbox:$false` to exclude Inbox too. Custom exclusions take precedence. An
-excluded standard parent also excludes its descendants; include the parent as well to reach a standard child.
+folders outside that scope or enable recursion. To exclude Inbox, use its exact displayed path in `-Exclusions`. Custom exclusions take
+precedence. An excluded standard parent also excludes its descendants; include the parent as well to reach a standard child.
 
-| Standard folders                          | Inclusion parameters                                                                                           |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Inbox and sent mail                       | `IncludeInbox`, `IncludeSentItems` (alias `IncludeSentMail`)                                                   |
-| Deleted and junk mail                     | `IncludeDeletedItems`, `IncludeJunk`                                                                           |
-| Unsent mail                               | `IncludeDrafts`, `IncludeOutbox`                                                                               |
-| Calendar, contacts, journal, notes, tasks | `IncludeCalendar`, `IncludeContacts`, `IncludeJournal`, `IncludeNotes`, `IncludeTasks`                         |
-| Synchronization folders                   | `IncludeSyncIssues`, `IncludeConflicts`, `IncludeLocalFailures`, `IncludeServerFailures`                       |
-| Other standard folders                    | `IncludeRssFeeds`, `IncludeManagedEmail`, `IncludeSuggestedContacts`, `IncludeAllPublicFolders`, `IncludeToDo` |
+| Standard folders                                                                                             | Inclusion parameter                                                 |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| Inbox                                                                                                        | Always permitted within the selected scope, unless excluded by path |
+| Sent mail                                                                                                    | `IncludeSentItems` (alias `IncludeSentMail`)                        |
+| Deleted mail                                                                                                 | `IncludeDeletedItems`                                               |
+| Junk mail                                                                                                    | `IncludeJunk`                                                       |
+| Drafts                                                                                                       | `IncludeDrafts`                                                     |
+| Outbox                                                                                                       | `IncludeOutbox`                                                     |
+| Calendar, Contacts, Journal, Notes, Tasks, AllPublicFolders, RssFeeds, ToDo, ManagedEmail, SuggestedContacts | `IncludeMedia`                                                      |
+| SyncIssues, Conflicts, LocalFailures, ServerFailures                                                         | `IncludeFailures`                                                   |
 
 These switches follow [Outlook's standard folder enumeration](https://learn.microsoft.com/en-us/office/vba/api/outlook.oldefaultfolders).
 Availability depends on the store and Outlook version. Search folders, including virtual To-Do views, are always skipped to avoid processing
 the same underlying messages twice. Non-mail items are never archived or deduplicated. Included non-mail containers permit traversal to mail
-subfolders when `-Recurse` is set; `-IncludeCalendar` does not migrate appointments.
+subfolders when `-Recurse` is set; `-IncludeMedia` does not migrate appointments, contacts, or other non-mail items. Both groups are off by
+default. `Media` groups Outlook's remaining standard containers; it does not select messages by attachment or media type.
 
 Outlook 2007 identity discovery supports PST stores using MAPI properties; Exchange/OST stores require a newer classic Outlook client. For a
 non-default PST in Outlook 2007, Inbox identity may be unresolved, requiring an explicit `FolderName` selection. Inbox remains permitted by
-default, but explicitly excluding it by identity fails rather than pretending it was excluded. Use an exact custom exclusion for its
-displayed path in that case. Arbitrary provider-created Spam/Trash folders that have no standard identity need explicit `-Exclusions`; there
-is no translated-name guessing. Unexpected provider errors stop planning before mail processing or destination-folder creation.
+default. Use an exact custom exclusion for its displayed path in that case. Arbitrary provider-created Spam/Trash folders that have no
+standard identity need explicit `-Exclusions`; there is no translated-name guessing. Unexpected provider errors stop planning before mail
+processing or destination-folder creation.
 
 The optimizer always excludes its top-level review folder. These scanning controls do not apply to the test-message generator, which writes
 only to its explicit target folder, or to backup/repair, which operate on whole data files. Office deployment has no mailbox-folder scope.
@@ -470,8 +474,15 @@ keeps. Test-message reports use the planned received dates; actual injection rem
 
 ### Archive mail
 
-`New-OutlookArchive.ps1` creates a new local Unicode PST, preserves selected store-relative folder paths, and copies or moves mail into it.
-Non-mail items and search folders are skipped. The destination PST must not already exist; use a new path for every run.
+`New-OutlookArchive.ps1` creates a new local Unicode PST or appends to an existing local PST, preserves selected store-relative folder
+paths, and copies or moves mail into it. Non-mail items and search folders are skipped. Existing files require `-Append`; with `-Append`, a
+missing destination is refused.
+
+Folder paths are preserved from the source store root even when selecting a deeply nested folder. For example,
+`Posteingang\Hub\Filters\Amazon` is recreated under the archive root, retaining the source names and language. Existing destination folders
+are reused and missing folders are created. Ambiguous names and incompatible destination folders stop processing. `-SkipPathPreservation`
+instead places all selected messages directly in the archive root. With `-Recurse` this combines messages from multiple folders; source
+paths remain recorded in the report.
 
 The destination's parent directory must already exist, and source and destination must be distinct stores. Root-level mail is included only
 when `-FolderName ''` selects the store root. The default processes Inbox alone; see the shared folder-selection rules above.
@@ -496,12 +507,27 @@ only when its descendants should also be processed. To include eligible folders 
 `Copy` is the default and leaves source messages intact. It temporarily duplicates each message in its source store before moving the copy
 into the archive, so allow space in both stores. `Move` removes successfully archived messages from the source.
 
+Use `-Append` to archive additional approved folders into the same file. `-StoreName` continues to identify the source store; `-ArchivePath`
+identifies the destination, and `-DisplayName` is only its display label:
+
+```powershell
+.\scripts\Office\New-OutlookArchive.ps1 @archive -Append -FolderName 'Posteingang\Hub\Filters\Amazon' -DryRun
+.\scripts\Office\New-OutlookArchive.ps1 @archive -Append -FolderName 'Posteingang\Hub\Filters\Amazon'
+```
+
+Append adds messages without deduplication, overwrite, or a resume ledger. Repeating an overlapping `Copy` pass creates duplicates. Use
+disjoint selections and inspect reports after partial failures before retrying. Successfully transferred messages and the existing archive
+are retained on failure. Append uses PSFoundation's `Resolve-LongPath` API to expand short-name paths before comparing stores.
+
 `StartDate` is inclusive. Prefer the exclusive `EndBefore` bound for whole days or years. `EndDate` is inclusive of the exact supplied time;
-a date without a time means midnight. `EndDate` and `EndBefore` cannot be combined. The archive is detached from the profile by default; use
-`-AddDataFile` to keep it in Outlook's current profile and data-file list. Its display name defaults to the filename without `.pst`, such as
-`Archive - 2018`. `-DisplayName` (alias `-DataFileName`) overrides the name. Rename failures are visible warnings and failed report entries.
-`-DetachWhenDone:$false` remains supported; explicitly combining `-AddDataFile` with `-DetachWhenDone:$true` is rejected. Previews never
-attach a PST. Close Outlook before copying the PST elsewhere.
+a date without a time means midnight. `EndDate` and `EndBefore` cannot be combined. An attachment added by the run is detached by default;
+use `-AddDataFile` to keep it in Outlook's current profile and data-file list. A new PST's display name defaults to the filename without
+`.pst`, such as `Archive - 2018`. `-DisplayName` (alias `-DataFileName`) overrides the name. Rename failures are visible warnings and failed
+report entries. `-DetachWhenDone:$false` remains supported; explicitly combining `-AddDataFile` with `-DetachWhenDone:$true` is rejected.
+Previews never attach a PST. Append leaves a previously attached archive open and preserves its display name unless `-DisplayName` is
+explicitly supplied. Explicit `-DetachWhenDone:$true` is refused for a previously attached archive. A detached archive's store and folder
+validation is deferred until execution; preview reports identify this as `DestinationValidation = FileOnly`. Close Outlook before copying
+the PST elsewhere.
 
 The progress display identifies connection, store selection, folder inspection, reading/filtering items, recording preview results, and
 copying or moving messages. Item percentages apply to the current folder and phase. Folder planning completes before mail processing.
@@ -523,12 +549,16 @@ includes non-mail items inspected in processed folders; `ItemsMatched` counts ma
 partial.
 
 The report contains run timestamps, source folder and filter settings, inclusion/exclusion choices, a `FolderPlan` with selection reasons,
-the summary, and a `Results` array with the individual operation records. `Settings.Sort` records the chosen date order.
-`Settings.SourceFolder` records the effective source path; `FolderSelection` is `DefaultInbox` for implicit selection or `ExplicitPath` when
-`FolderName` was supplied. The requested `FolderName` is null for implicit selection and an empty string for explicit store-root selection.
-Each message record retains its subject (`Target`), folder (`Scope`), received date (`Received`, ISO 8601), action, status, and detail.
-Preview entries use `Status = 'Skipped'` and `Detail = 'DryRun'`; no per-message WhatIf lines or result objects are printed. The JSON report
-is the archive's detailed operation record. It contains message metadata, not message bodies or attachments.
+the summary, and a `Results` array with the individual operation records. `Settings.Sort` records the chosen date order. `Settings` also
+records `Append`, `SkipPathPreservation`, attachment ownership, and destination validation. Message results retain `Scope` and add
+`SourceFolderPath`, `DestinationFolderPath`, `SourceEntryID`, and `SourceStoreID`. Destination paths use
+`archive.pst::\store-relative\folder` notation, with `archive.pst::\` identifying the archive root. These identifiers aid auditing; they are
+not a crash-safe resume ledger. `Settings.SourceFolder` records the effective source path; `FolderSelection` is `DefaultInbox` for implicit
+selection or `ExplicitPath` when `FolderName` was supplied. The requested `FolderName` is null for implicit selection and an empty string
+for explicit store-root selection. Each message record retains its subject (`Target`), folder (`Scope`), received date (`Received`, ISO
+8601), action, status, and detail. Preview entries use `Status = 'Skipped'` and `Detail = 'DryRun'`; no per-message WhatIf lines or result
+objects are printed. The JSON report is the archive's detailed operation record. It contains message metadata, not message bodies or
+attachments.
 
 Archive and deduplication reports display `<No Subject>` when a message subject is missing, empty, or whitespace-only. This is a report
 label; the message's subject is not changed.
@@ -610,10 +640,11 @@ released its file.
 
 #### Reduce the production PST
 
-After rehearsal and backup verification, use a different new archive path with `-Mode Move`. An existing Copy archive cannot be reused as
-the Move destination. Copy and Move archives can contain overlapping mail, so label rehearsal artifacts clearly. Preview each disjoint date
-batch first. On any failure, inspect the archive JSON report and both PSTs and reconcile the partially completed batch before retrying.
-There is no resume ledger, transactional rollback, or deduplication of previous archives.
+After rehearsal and backup verification, use a different new archive path with `-Mode Move`. Append later disjoint batches to that
+production archive with `-Append`. Appending the same messages to an existing Copy rehearsal archive would duplicate them, so keep rehearsal
+and production archives separate and label them clearly. Preview each disjoint date batch first. On any failure, inspect the archive JSON
+report and both PSTs and reconcile the partially completed batch before retrying. There is no resume ledger, transactional rollback, or
+deduplication of previous archives.
 
 Moving mail out does not necessarily shrink the physical PST immediately. Compact only after validating the archive and taking another
 recoverable backup, using Outlook's data-file settings. See
@@ -711,25 +742,42 @@ location before attaching it for recovery.
 
 ### Repair a data file
 
-`Repair-OutlookDataFile.ps1` locates and launches ScanPST or ScanOST for the specified file. `Auto` chooses ScanPST for PST files and
-prefers ScanOST for OST files when available, otherwise ScanPST. `-Tool` chooses a utility explicitly; `-ToolPath` supplies its executable.
+`Repair-OutlookDataFile.ps1` requires PSFoundation 1.7.1 and discovers ScanPST for both PST and OST files. `-ToolPath` overrides discovery
+with an explicit executable; there is no `-Tool` selector or automatic ScanOST discovery. File, tool, and operation-log paths use their long
+filesystem names.
+
+ScanPST executables from the Office 16 family at version `16.0.10325.20082` or later use targeted mode: `-Path` is required and is passed as
+`-file "<path>" -rescan 1`. The rescan option activates the documented command-line mode and limits the run to one pass. The UI remains
+visible; the script does not add `-force` or `-silent`. Capability detection uses executable version metadata, not the installation folder.
+This is a conservative version-based inference, not a runtime capability probe; MSI and Click-to-Run file versions can differ. Targeted mode
+requires local storage. UNC paths, mapped network drives, and drives whose type cannot be verified are rejected even during preview. Copy
+the data file to local storage before selecting it for repair.
+
+Older ScanPST builds and unknown or explicitly selected legacy tools launch interactively without arguments. `-Path` is optional in this
+mode: when supplied, it is displayed and checked, but you must select the file or profile in the utility. An explicit legacy ScanOST remains
+usable through `-ToolPath`; it selects an Outlook profile and does not accept a file from this script. Run profile-based legacy utilities as
+the intended Outlook user.
 
 ```powershell
 .\scripts\Office\Repair-OutlookDataFile.ps1 -Path 'D:\Mail\archive.pst' -DryRun
-.\scripts\Office\Repair-OutlookDataFile.ps1 -Path 'D:\Mail\archive.pst' -Tool ScanPST -PassThru
+.\scripts\Office\Repair-OutlookDataFile.ps1 -Path 'D:\Mail\archive.pst' -PassThru
+
+# Explicit interactive launch on a legacy workstation.
+.\scripts\Office\Repair-OutlookDataFile.ps1 -ToolPath 'C:\Program Files (x86)\Microsoft Office\Office12\SCANOST.EXE'
 ```
 
-Back up the file and close Outlook before repair. The script checks for running Outlook and attempts exclusive access to the data file. The
-Microsoft utility may require interactive input. Paths containing spaces are supported, and nonzero tool exits are reported as failures. A
-successful tool exit does not certify PST or OST health or establish that a repair was performed; inspect the utility's scan results and
-log.
+Back up the file and close Outlook before repair. The script checks for running Outlook and, when `-Path` is supplied, attempts exclusive
+access to that file. The Microsoft utility may require interactive input. Paths containing spaces are supported, and nonzero tool exits are
+reported as failures. A successful tool exit does not certify PST or OST health or establish that a repair was performed; inspect the
+utility's scan results and log. Preview and result records identify `LaunchMode`, `FileVersion`, `ToolPath`, and `RequestedPath`.
+`Action = 'LaunchRepairTool'` describes process execution; interactive tools can operate on a different file selected in their UI.
 
 ## Testing
 
 Run `.\winkit.ps1 test` for logic and mocked safety tests without Outlook. Outlook regression tests cover collection mutation, transfer
-failures, date boundaries, store selection, preview behavior, excluded subtrees, repair-path quoting, and locks. Transport Message-ID
-parsing belongs to PSFoundation and is tested in that module's repository. Real Office deployment and activation require a recoverable pilot
-workstation.
+failures, date boundaries, store selection, preview behavior, excluded subtrees, repair launch modes, argument quoting, and locks. Transport
+Message-ID parsing belongs to PSFoundation and is tested in that module's repository. Real Office deployment and activation require a
+recoverable pilot workstation.
 
 Office deployment wrapper tests cover mode validation, locale forwarding, confirmation/previews, recovery routing, and module result/exit
 propagation. Native deployment, inventory, and media-verification tests belong to PSFoundation; wrapper tests never execute ODT.
