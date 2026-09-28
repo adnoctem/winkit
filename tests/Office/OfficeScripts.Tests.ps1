@@ -13,10 +13,13 @@ BeforeAll {
 Describe 'Office script file conventions' {
   It 'contains the expected script set' {
     @($script:Scripts | ForEach-Object { $_.Name }) | Should -Be @(
+      'Install-Office.ps1',
       'New-OutlookArchive.ps1',
       'New-TestOutlookMessage.ps1',
       'Optimize-Outlook.ps1',
-      'Repair-OutlookDataFile.ps1'
+      'Remove-Office.ps1',
+      'Repair-OutlookDataFile.ps1',
+      'Switch-OfficeVersion.ps1'
     )
   }
 

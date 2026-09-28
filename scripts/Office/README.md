@@ -4,6 +4,8 @@ Scripts for deploying Microsoft Office and maintaining Outlook mail stores and d
 
 | Script                                                   | Purpose                                                                                 |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| [Install-Office.ps1](Install-Office.ps1)                 | Prepare, install, verify, or recover an Office deployment.                              |
+| [Remove-Office.ps1](Remove-Office.ps1)                   | Inventory or remove selected Click-to-Run Office products.                              |
 | [Switch-OfficeVersion.ps1](Switch-OfficeVersion.ps1)     | Inventory Office, prepare installation media, and migrate to a selected Office product. |
 | [New-OutlookArchive.ps1](New-OutlookArchive.ps1)         | Copy or move mail into a new Unicode PST archive.                                       |
 | [Optimize-Outlook.ps1](Optimize-Outlook.ps1)             | Move duplicate messages into a review folder.                                           |
@@ -22,155 +24,307 @@ Get-Help .\scripts\Office\New-OutlookArchive.ps1 -Full
 Install the repository dependencies with `.\winkit.ps1 init`. Scripts declare their minimum PowerShell and PSFoundation versions in
 `#Requires`. All support `-DryRun`, `-WhatIf`, and `-PassThru`; previews and required privileges depend on the operation.
 
-Office migration requires elevated PowerShell and uses 64-bit PowerShell on a 64-bit OS, including when the installed Office suite is
+Office deployment requires elevated PowerShell and uses 64-bit PowerShell on a 64-bit OS, including when the installed Office suite is
 32-bit. Outlook profile operations require an interactive user session and PowerShell matching Outlook's architecture. These are different
 requirements: Outlook 2007 profile operations use 32-bit PowerShell, while migrating that installation on 64-bit Windows uses 64-bit
 PowerShell.
 
 Office desktop applications and these profile operations are not supported on Server Core. Back up affected data before making changes.
 
-## Office migration
+## Office deployment
 
-`Switch-OfficeVersion.ps1` uses the Microsoft Office Deployment Tool (ODT). It requires an explicit mode and destination; it does not select
-or purchase a license, upgrade Windows, convert Outlook profiles, or provide automatic rollback.
+The deployment scripts require **PSFoundation 1.6.0 or later** and an existing Microsoft-signed Office Deployment Tool (ODT) setup.exe. They
+share PSFoundation's inventory, planning, media validation, execution, and recovery APIs. They do not purchase licenses, upgrade Windows,
+convert Outlook profiles, or provide automatic rollback.
 
-### Modes
+### Modes and responsibilities
 
-| Mode      | Behavior                                                                                                                       |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `Check`   | Read installed Click-to-Run and MSI Office registrations. With `-TargetProductId`, also report the target's activation status. |
-| `Prepare` | Download the selected destination and record its build, configuration, file sizes, and SHA256 hashes in a media manifest.      |
-| `Migrate` | Validate and stage prepared media locally, remove approved source products, install the destination, and verify the result.    |
+| Script               | Mode    | Behavior                                                                                      |
+| -------------------- | ------- | --------------------------------------------------------------------------------------------- |
+| Install-Office       | Check   | Read inventory; with a target, assess installation eligibility and activation.                |
+| Install-Office       | Prepare | Download and verify a reusable installation package.                                          |
+| Install-Office       | Install | Install on a clean machine, or return an independently verified compliant no-op.              |
+| Install-Office       | Recover | Verify or continue installation using its protected recovery journal.                         |
+| Remove-Office        | Check   | Read inventory; with selected product IDs, assess removal eligibility.                        |
+| Remove-Office        | Remove  | Remove exactly the selected supported Click-to-Run products.                                  |
+| Switch-OfficeVersion | Check   | Read inventory; with a target/removal selection, assess migration eligibility and activation. |
+| Switch-OfficeVersion | Prepare | Prepare media using the same API as Install-Office.                                           |
+| Switch-OfficeVersion | Migrate | Stage the destination, remove approved sources, install, and verify.                          |
+| Switch-OfficeVersion | Recover | Verify or continue the recorded migration without expanding removal authority.                |
 
-`Check`, `-DryRun`, and `-WhatIf` do not write files, download media, terminate applications, launch installers, or change licensing.
-Migration previews still require valid ODT and prepared media and must pass preflight checks. Actual Prepare and Migrate operations use
-high-impact confirmation. Use `-Confirm:$false` for a reviewed unattended deployment.
+Mode is mandatory. Check without a target/selection is inventory-only. A target Check returns a plan with State, Eligible, Blockers, and
+language transitions; a blocked plan exits with code 1. Supply SourcePath when assessing a deployment that needs media. Check does not
+perform every execution-time check: the module revalidates the host, applications, inventory, and media during deployment.
 
-### Supported installations
+Check and previews do not download, write logs/journals, stop applications, launch installers, or change Office/licensing. -DryRun also sets
+WhatIfPreference. Both -DryRun and -WhatIf return results even without -PassThru. Previews still run applicable validation and can return
+blockers. Execution and preparation use high-impact confirmation; use -Confirm:$false for reviewed unattended runs. This does not bypass
+validation or suppress language warnings.
 
-Sources include MSI Office 2007, 2010, 2013, and 2016, including Office 2007 Enterprise, and registered Click-to-Run products selected by
-their exact product IDs. Unsupported or unknown MSI generations are blocked. Destinations are:
+Install has no removal parameters. Conflicting or incomplete installations are not automatically reconfigured. A compliant no-op requires
+verification of the full configuration, including languages and application selection, and does not reapply a supplied key.
 
-| Product family     | `TargetProductId`                         | Channel                                                        |
-| ------------------ | ----------------------------------------- | -------------------------------------------------------------- |
-| Office 2019 volume | `Standard2019Volume`, `ProPlus2019Volume` | `PerpetualVL2019`                                              |
-| Office LTSC 2021   | `Standard2021Volume`, `ProPlus2021Volume` | `PerpetualVL2021`                                              |
-| Office LTSC 2024   | `Standard2024Volume`, `ProPlus2024Volume` | `PerpetualVL2024`                                              |
-| Microsoft 365 Apps | `O365ProPlusRetail`, `O365BusinessRetail` | `Current` by default; also `MonthlyEnterprise` or `SemiAnnual` |
+### Backend availability
 
-The volume channel is derived from the destination. `-Architecture` accepts `32` or `64` and defaults to `64`. `-Language` accepts a list of
-explicit language IDs and defaults to `de-de`. `-Version` optionally pins an exact `16.0` build; otherwise Prepare records the build it
-downloads. `-ExcludeApp` omits selected destination applications; `-ExcludePublisher` adds Publisher to that list.
+The current native execution backend targets elevated **x64 Windows 11 desktop** hosts, including deployment of 32-bit Office there. Server,
+ARM, and ordinary Windows 10 execution are outside that gate. The narrowly scoped pilot below is the only Windows 10 exception. Product IDs
+identify targets; their availability is not a vendor lifecycle or product/OS support guarantee. Check OS support, licensing, add-ins, VBA,
+and Outlook compatibility for the destination.
 
-Verify the operating system, licensing entitlement, add-ins, VBA, and Outlook compatibility for the selected destination. The script's
-Windows version guard is not a complete vendor support matrix, and availability of a product ID does not establish current vendor support.
-Perform the migration on a recoverable pilot workstation before broader deployment.
+Native inventory currently reports Languages and PrimaryLanguage as verification limitations. Install/Migrate plans return
+UnsupportedNativeVerification before mutation when these postconditions cannot be verified. Installed-Office automatic locale sourcing also
+remains blocked where this evidence is unavailable. Explicit language selection sets the target; it does not bypass native verification. The
+scripts preserve these module blockers by default. PilotMigration waives only the named language limitations for its exact profile.
 
-### Removal scope
+Standalone MSI removal is unsupported. Recovery supports pre-launch continuation, verification of a completed deployment, and certain
+migration checkpoints after verified Click-to-Run removal. Uncertain partial-installer states return UnsupportedRecoveryState. Recover does
+not implement Quick Repair, Online Repair, journal-free mutation, or rollback. Validate supported operations on disposable pilot machines
+before fleet deployment.
 
-Run Check before choosing removal options:
+### Office Enterprise 2007 to Standard 2019 pilot
+
+`Switch-OfficeVersion.ps1 -PilotMigration` is available in **Check and Migrate only**. It requires an audited PSFoundation build that
+exposes `PilotMigration` on both `Get-OfficeDeploymentPlan` and `Switch-OfficeDeployment`. The ordinary minimum/pin remains 1.6.0 until a
+release containing this API exists; the wrapper checks capabilities and fails before planning on an older build. Do not assume installing
+the current 1.6.0 Gallery package enables the pilot. Update the dependency pin to the actual published release when adopting it.
+
+For an immediate local rehearsal, copy the audited PSFoundation `src` directory to a dedicated `Modules\PSFoundation` directory on the pilot
+VM. Prepend the parent `Modules` directory to `$env:PSModulePath` in the elevated 64-bit PowerShell session, import PSFoundation, and verify
+`(Get-Module PSFoundation).Path` points to that copy. Keep the whole module intact; do not copy only office.ps1 or change its version.
+
+The profile is restricted to x64 Windows 10 desktop build 19045, the reported Enterprise 2007 MSI suite/resources, and Standard2019Volume
+x64 on PerpetualVL2019. German UI must be selected explicitly. Installed-office auto-discovery remains unavailable. The plan separately
+records German, English, French and Italian companion proofing intent, which still requires post-install review. Additional full UI packs
+are not silently installed. This pilot does not establish vendor support for Office 2019 or readiness for unattended workforce deployment.
+
+Use a fresh ABB backup plus a short-lived pre-migration VM snapshot, with working hypervisor console/revert access. Keep users off the VM
+through acceptance; reverting loses subsequent guest changes. Preparing media may be done before the snapshot. Example from the winkit root:
+
+```powershell
+$target = @{
+  TargetProductId = 'Standard2019Volume'
+  Architecture = '64'
+  Language = @('de-de')
+  SourcePath = 'C:\Media\Office2019'
+}
+$odt = 'C:\ODT\setup.exe' # Existing verified Microsoft ODT
+.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Prepare @target -OdtPath $odt -PassThru
+.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Check @target -RemoveMsi -PilotMigration -PassThru
+.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target -OdtPath $odt -RemoveMsi -PilotMigration -DryRun -PassThru
+# After reviewing the plan, removal scope, and rollback point:
+$result = .\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target -OdtPath $odt `
+  -RemoveMsi -PilotMigration -PassThru -Confirm
+$result | ConvertTo-Json -Depth 30
+```
+
+Use the same ExcludeApp/ExcludePublisher settings for preparation, Check and Migrate if desired. Standard is a different application set
+from Enterprise; review required applications and 32-bit add-in compatibility before accepting the migration. Prepare has no pilot flag. Do
+not use Recover for this pilot: its schema-2 journal is inspectable evidence, and the module refuses replay.
+
+Native exit 0 or 3010 with unresolved observations returns **AppliedUnverified**, wrapper exit **1**, and detailed `Verification.Unknowns`.
+Native codes and `RebootRequired` survive unchanged; unverified exit 1 takes precedence over 3010. This is a manual review point, never a
+signal to rerun the migration. Known mismatches and native errors remain failures. Journal/JSONL paths are in the result. Save these, the
+result JSON, a fresh collector report and relevant native ODT logs **off the VM before any revert**; native logs may contain secrets. Check
+Standard 2019 x64/build, German UI, all four proofing languages, activation, applications, add-ins and the existing Outlook profile. Reboot
+explicitly if required and collect evidence again. Do not change the reference 2019 workstation.
+
+### Products, languages, and configuration
+
+| Product family     | TargetProductId                       | Channel                                             |
+| ------------------ | ------------------------------------- | --------------------------------------------------- |
+| Office 2019 volume | Standard2019Volume, ProPlus2019Volume | PerpetualVL2019                                     |
+| Office LTSC 2021   | Standard2021Volume, ProPlus2021Volume | PerpetualVL2021                                     |
+| Office LTSC 2024   | Standard2024Volume, ProPlus2024Volume | PerpetualVL2024                                     |
+| Microsoft 365 Apps | O365ProPlusRetail, O365BusinessRetail | Current by default; MonthlyEnterprise or SemiAnnual |
+
+-Architecture accepts 32 or 64 and defaults to 64. Volume channels are derived from the product. -Version optionally selects an exact 16.0
+build; preparation otherwise resolves and pins a build. -ExcludeApp selects omitted applications; -ExcludePublisher adds Publisher.
+PSFoundation validates allowed configuration values.
+
+Language defaults to exactly **en-us**, independently of Windows or the execution account. Use -Language de-de for German, or an ordered
+list such as -Language en-us,de-de. Order is preserved; the first language is the primary shell language. This does not change Windows
+locale, keyboard layouts, or individual users' Office editing/display preferences.
+
+ODT uses the same deployment engine with XML specifying products and languages. Media must contain the required language payloads. An
+English/German package may serve an English-only, German-only, or bilingual request without installing every available language.
+
+Automatic discovery requires -AutoSourceLocales. Its default source is InstalledOffice, requiring unambiguous installed-language and
+primary-language evidence. -LocaleSource OperatingSystem instead reads the machine installation UI language, not the administrator's
+culture. LocaleSource requires AutoSourceLocales; explicit Language and automatic sourcing are mutually exclusive. Discovery failures are
+not silently replaced by en-us or OS language detection.
+
+Switch reports language changes or unknown source languages in plans and warnings. Review additions, removals, and primary-language changes
+before confirming. Explicitly select -Language de-de for German legacy MSI migrations where automatic preservation is unavailable. Include
+needed language/proofing resources in the deployment plan; complete legacy preservation cannot be inferred from a product LCID.
+
+### Prepare reusable media
+
+Obtain an official Microsoft ODT setup.exe. PSFoundation checks its Microsoft signature and tool metadata. Use a dedicated local or UNC
+package directory whose parent already exists. Valid compatible packages can be verified and reused; incompatible or incomplete packages
+require a new directory.
+
+The package and manifest must have Administrators/SYSTEM ownership and protected write access. Restrict share access appropriately and
+ensure the actual execution identity can reach UNC media. SYSTEM or remote sessions may lack the operator's network access or mapped drives.
+Keep the package unchanged while it is being staged.
+
+```powershell
+$target = @{
+  TargetProductId = 'Standard2024Volume'
+  Architecture   = '64'
+  SourcePath     = '\\srv\deploy\Office2024'
+  OdtPath        = 'C:\ODT\setup.exe'
+}
+
+# Include both language payloads in a reusable package.
+.\scripts\Office\Install-Office.ps1 -Mode Prepare @target -Language en-us,de-de -PassThru
+```
+
+Preparation publishes a schema-2 psfoundation-office-media.json manifest with the build, available languages, tool version, payload sizes,
+and hashes. It does not publish a partial download as ready. Old schema-1 winkit-office-media.json packages require preparation into a new
+directory. Hashes detect changed payloads; they do not authenticate a manifest that an attacker can also replace.
+
+Deployment verifies a protected local copy before installation/removal. Staging requires twice the media size plus 4 GiB free on the staging
+drive; this is an allowance, not an exact installed-size estimate. Missing language payloads stop validation. Deployment does not silently
+download missing files from the CDN or select a different build.
+
+### Install a clean workstation
+
+Close Office applications across sessions, complete pending reboots, and avoid concurrent deployments. These calls use the package settings
+above. With Language omitted, the requested installation is English even when the package also contains German.
+
+```powershell
+.\scripts\Office\Install-Office.ps1 -Mode Check -PassThru
+
+$check = @{
+  TargetProductId = $target.TargetProductId
+  SourcePath     = $target.SourcePath
+}
+
+.\scripts\Office\Install-Office.ps1 -Mode Check @check -PassThru
+.\scripts\Office\Install-Office.ps1 -Mode Install @target -DryRun
+
+# Run after reviewing the plan and applicable backend limitations.
+.\scripts\Office\Install-Office.ps1 -Mode Install @target -Confirm:$false -PassThru
+```
+
+Use -Language de-de on target Check and Install calls for German. Running applications block execution unless -ForceCloseApps explicitly
+authorizes termination, which can discard unsaved work. The module uses a shared deployment lock and checks native deployment activity. It
+never schedules a reboot.
+
+### Migrate an existing installation
+
+Back up user data and retain previous installation media and licenses. Inventory before selecting removals:
 
 ```powershell
 .\scripts\Office\Switch-OfficeVersion.ps1 -Mode Check -PassThru
 ```
 
-- `-RemoveProductId` names the exact installed Click-to-Run products to remove. Unapproved additional products, such as Visio or Project,
-  stop the migration. Stale removal selections also stop it; refresh the list after a partial migration.
-- `-RemoveMsi` authorizes removal of **all ODT-supported MSI Office products**, including supported Visio, Project, language packs,
-  runtimes, and database engines. It does not select only the Office suite. Review applications that depend on these components first.
-- Coexisting products are not automatically preserved. If the destination is already installed with other Office products, or with a
-  different architecture, resolve the installation manually.
+- -RemoveProductId names exact installed Click-to-Run IDs authorized for removal. Unapproved additional products, such as Visio or Project,
+  block migration. Stale selections also block it; refresh the plan after partial work.
+- -RemoveMsi authorizes **all supported MSI Office removals**, including supported Visio, Project, language packs, runtimes, and database
+  engines. It does not mean only the suite. Review dependent applications. Unknown or unsupported MSI components block the plan.
+- Installation and migration are separate operations. A desired configuration change on an existing target requires explicit planning; it is
+  not an automatic repair, update, or architecture conversion by Install.
 
-If the destination and architecture are already installed alone, Migrate verifies activation and skips installation. It does not reapply
-languages, exclusions, channel, build, or a supplied key, and it does not serve as a repair or update command.
-
-### Prepare installation media
-
-Obtain an official Microsoft ODT `setup.exe`. The script validates its signature, publisher, executable metadata, and minimum version. Use a
-dedicated local or UNC directory with no existing `Office` subdirectory. Restrict write access to deployment administrators and use a fresh
-directory after an interrupted download.
+MSI sources recognized for migration include Office 2007, 2010, 2013, and 2016, including Office 2007 Enterprise. Recognition does not
+override the host and verification gates above.
 
 ```powershell
-$target = @{
-  TargetProductId = 'Standard2024Volume'
-  SourcePath      = '\\srv\deploy\Office2024'
-  OdtPath         = 'C:\ODT\setup.exe'
-  Architecture   = '64'
-  Language       = @('de-de')
-}
+# Explicitly request German for an MSI source.
+.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target -RemoveMsi -Language de-de -DryRun
+.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target -RemoveMsi -Language de-de -PassThru
 
-.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Prepare @target
-```
-
-Use the same target settings on each workstation. Migration requires the generated `winkit-office-media.json` manifest and matching
-payloads. It copies and verifies the media locally before removing Office. Staging requires twice the media size plus 4 GiB free on the
-ProgramData drive; this allowance is not an exact installation-size estimate. Keep the source unchanged and accessible while staging. Hashes
-detect changes to the prepared media; they do not replace access controls on the media and manifest.
-
-### Migrate a workstation
-
-Close Office applications in all sessions, complete pending reboots, back up user data, and retain the previous installation media and
-licenses for recovery. Do not run concurrent Office deployments. The following examples use the `$target` settings above.
-
-For Office 2007 Enterprise or another supported MSI source:
-
-```powershell
-.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target -RemoveMsi -DryRun
-
-# Run after reviewing the inventory, removal scope, and preview.
-.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target -RemoveMsi -PassThru
-```
-
-For a Click-to-Run source, specify the ID reported by Check:
-
-```powershell
+# Select Click-to-Run products from the inventory.
 $source = @{ RemoveProductId = @('HomeBusiness2019Retail') }
 
 .\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target @source -DryRun
 .\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target @source -PassThru
 ```
 
-Running Office applications stop migration by default. `-ForceCloseApps` explicitly allows their termination across sessions and can discard
-unsaved work. The script never schedules a reboot.
+The module validates and stages destination media before removal, then rechecks inventory and applications. Approved MSI removal is part of
+the destination ODT configuration. A removal failure or reboot requirement stops continuation; inspect the result and recovery record before
+retrying. Failure after removal may require manual recovery.
 
-### Activation and results
+### Remove selected products
 
-Volume destinations use default KMS licensing when no key is supplied. To supply a MAK, obtain it as a SecureString before migration:
+Remove-Office supports selected Click-to-Run products and their installed languages. It has no default selection and no RemoveMsi switch.
+Unselected products must remain verifiably unchanged; uncertain shared-component effects can block removal. Already absent selected products
+return AlreadyAbsent with Changed=false.
+
+```powershell
+$removal = @{
+  RemoveProductId = @('O365ProPlusRetail')
+  OdtPath         = 'C:\ODT\setup.exe'
+}
+
+.\scripts\Office\Remove-Office.ps1 -Mode Check -RemoveProductId $removal.RemoveProductId -PassThru
+.\scripts\Office\Remove-Office.ps1 -Mode Remove @removal -DryRun
+.\scripts\Office\Remove-Office.ps1 -Mode Remove @removal -Confirm:$false -PassThru
+```
+
+The scripts do not implement custom cleanup of profiles, PSTs, user documents, or product keys. Keep backups before removing software.
+
+### Recover a recorded deployment
+
+Use the RunId and LogRoot from the original operation. Recover reads the protected local journal and rechecks state and media. Its target,
+languages, build, and removal scope come from the recorded operation. Target/removal overrides are rejected, including explicit Language or
+AutoSourceLocales: recovery never redetects languages.
+
+```powershell
+$recovery = @{
+  RunId   = '0123456789abcdef0123456789abcdef'
+  OdtPath = 'C:\ODT\setup.exe'
+  LogRoot = 'C:\ProgramData\PSFoundation-Office'
+}
+
+.\scripts\Office\Install-Office.ps1 -Mode Recover @recovery -DryRun
+.\scripts\Office\Install-Office.ps1 -Mode Recover @recovery -PassThru
+
+# Use Switch instead for an original migration journal.
+.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Recover @recovery -DryRun
+```
+
+Replace the example RunId with the actual identifier and use the matching script for the recorded action. Installation recovery cannot
+inherit migration removal authority. Supply a needed MAK again as SecureString; journals never contain it. Changed media, unexpected
+products, pending reboots, active deployments, and unsupported interrupted phases can block recovery. Repeatedly invoking Recover does not
+make an unsupported partial install safe.
+
+### Activation, logging, and automation results
+
+Volume installations use default KMS licensing without a supplied key. Supply a MAK only as SecureString:
 
 ```powershell
 $mak = Read-Host 'MAK for the destination' -AsSecureString
-.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target -RemoveMsi -ProductKey $mak -PassThru
+.\scripts\Office\Install-Office.ps1 -Mode Install @target -ProductKey $mak -PassThru
 ```
 
-ODT requires the key in temporary XML. The directory is restricted to Administrators and SYSTEM, the XML is removed in cleanup, and the key
-is not passed on the process command line. This does not guarantee secure deletion or control the contents of ODT's own logs.
+ODT needs the key in temporary XML. PSFoundation restricts that directory to Administrators/SYSTEM and removes the XML during cleanup; the
+key is not passed on the process command line. This does not guarantee secure erasure or redaction of ODT's own logs.
 
-The script verifies installed product, architecture, build, and removal results. Volume activation must match the destination and report a
-licensed status. Microsoft 365 returns `UserActivationRequired`; complete activation in the licensed user's session. Existing product keys
-are not automatically removed.
+Installation verification and activation are separate. Volume licensing must match the destination. Microsoft 365 reports
+UserActivationRequired and needs activation in the licensed user's session. Resolve activation-only failures separately rather than
+automatically reinstalling. Existing keys are not automatically removed.
 
-Approved Prepare/Migrate operations write transcripts under `%ProgramData%\OfficeMigration` by default; use `-LogRoot` to choose another
-directory. `-PassThru` returns structured results with the available inventory, activation status, failure phase, and reboot requirement.
+Deployment operations keep protected journals and JSONL result logs under %ProgramData%\PSFoundation-Office by default. -LogRoot selects
+another local root. Prepare returns a media assessment rather than a deployment journal; Check and previews write no operation logs.
 
-| Exit code | Meaning                                                                                                                               |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `0`       | Inventory, preparation, installation, or preview completed. Check the result's status; subscription activation may still be required. |
-| `1`       | Preflight, execution, cleanup, or verification failed. Office may be partially migrated.                                              |
-| `3010`    | Installation verified and a reboot is required. MSI removal always reports this requirement after a successful migration.             |
+-PassThru returns one structured outcome. Execution/recovery outcomes preserve PSFoundation's fields, including ReasonCode, Phase, Changed,
+ChangeKnown, RebootRequired, NativeResults, Verification, Activation, RecoveryPath, LogPaths, and cleanup details. Changed=null with
+ChangeKnown=false means the operation may have changed the machine. Check returns Inventory and an optional Plan; Prepare returns Media and
+distinguishes MediaPrepared, AlreadyPrepared, and NotExecuted.
 
-A reboot request during Click-to-Run removal stops installation and reports a failure with `RebootRequired`. Reboot, run Check, and refresh
-the removal plan. If installation succeeds but volume activation is not verified, resolve KMS/MAK activation separately. A failed
-installation after removal may require manual recovery. Inspect the reported phase, transcript, ODT logs, and any temporary directory
-reported by a cleanup error.
+| Process exit code | Meaning                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------- |
+| 0                 | Completed, compliant/absent no-op, or preview. Inspect Status and activation.                     |
+| 1                 | Blocked, failed, or unverified. Inspect ReasonCode, Phase, native outcomes, and possible changes. |
+| 3010              | A reboot is required. This can also be a blocked recovery; inspect Status before continuing.      |
 
-After any requested reboot, check the installed inventory and target activation:
-
-```powershell
-.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Check -TargetProductId Standard2024Volume -PassThru
-```
+For automation, use explicit Mode, configuration, and -Confirm:$false; consume -PassThru objects rather than parsing console messages. Use
+ConvertTo-Json -Depth 30 for nested results. Supply only parameters applicable to the selected mode: omit OdtPath from Check and deployment
+settings from Recover. Missing mode-specific inputs fail rather than prompting partway through work.
 
 Microsoft references:
-[ODT configuration](https://learn.microsoft.com/en-us/microsoft-365-apps/deploy/office-deployment-tool-configuration-options),
+[ODT configuration and languages](https://learn.microsoft.com/en-us/microsoft-365-apps/deploy/office-deployment-tool-configuration-options),
 [MSI removal scope](https://learn.microsoft.com/en-us/microsoft-365-apps/deploy/upgrade-from-msi-version), and
 [Office LTSC 2024 deployment](https://learn.microsoft.com/en-us/office/ltsc/2024/deploy).
 
@@ -400,6 +554,9 @@ Run `.\winkit.ps1 test` for logic and mocked safety tests without Outlook. Outlo
 failures, date boundaries, store selection, preview behavior, excluded subtrees, repair-path quoting, and locks. Transport Message-ID
 parsing belongs to PSFoundation and is tested in that module's repository. Real Office deployment and activation require a recoverable pilot
 workstation.
+
+Office deployment wrapper tests cover mode validation, locale forwarding, confirmation/previews, recovery routing, and module result/exit
+propagation. Native deployment, inventory, and media-verification tests belong to PSFoundation; wrapper tests never execute ODT.
 
 The optional `.\winkit.ps1 test -Outlook` suite generates deterministic subjects, Message-IDs, dates, and seeded duplicates in its scratch
 store. Archive checks reopen output PSTs and compare actual mail counts. These tests require the intended Outlook installation; logic tests

@@ -3,6 +3,8 @@ extend-exclude = []
 
 [default]
 extend-ignore-identifiers-re = [".*MAK*", ".*mak*"]
+# schtasks.exe output-format switch used by the diagnostic collector.
+extend-ignore-re = ['/fo\b']
 
 [default.extend-identifiers]
 MAK = "MAK"
