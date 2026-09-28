@@ -32,7 +32,7 @@ its Office API from version 1.6.1 or later.
 - [Redemption](https://www.dimastr.com/redemption/) is recommended for transport-header and backdated `ReceivedTime` injection; check
   licensing for your use. Native writes are best-effort, and fixture persistence must be verified.
 - An interactive MAPI profile. The suite attaches its scratch PST to the active profile and targets that store. It does not create or select
-  a separate profile; use a disposable profile and run as its user, at the same elevation as Outlook.
+  a separate profile; use a disposable profile and run as its user, with both Outlook and the test shell non-elevated.
 
 ### Disposable test profile (recommended)
 

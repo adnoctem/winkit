@@ -77,6 +77,55 @@ BeforeAll {
   }
 }
 
+Describe 'Outlook profile elevation guard' -ForEach @(
+  @{ ScriptName = 'New-OutlookArchive' }
+  @{ ScriptName = 'Optimize-Outlook' }
+  @{ ScriptName = 'New-TestOutlookMessage' }
+) {
+  BeforeEach {
+    Mock Import-Module { }
+    Mock Get-UserInfo { @{ UserName = 'TEST\Administrator'; IsAdministrator = $true } }
+    Mock Connect-Outlook { throw 'Connection reached for guard test' }
+    Mock Write-Log { }
+    Mock Write-OperationResultLog { }
+    Mock Remove-ComObject { }
+    Mock Invoke-ComGarbageCollection { }
+    $script:ProfileGuardScriptPath = Join-Path $script:OfficePath "$ScriptName.ps1"
+    $arguments = @{ PassThru = $true }
+    if ($ScriptName -eq 'New-OutlookArchive') {
+      $arguments.ArchivePath = Join-Path $TestDrive 'guard.pst'
+      $arguments.ReportDirectory = Join-Path $TestDrive 'reports'
+    }
+  }
+
+  It 'blocks elevated execution before COM access or report creation, including previews' {
+    foreach ($preview in @($false, $true)) {
+      { & $script:ProfileGuardScriptPath @arguments -DryRun:$preview } | Should -Throw '*non-elevated*IgnoreAdministrator*'
+    }
+
+    Should -Invoke Connect-Outlook -Times 0
+    Should -Invoke Write-OperationResultLog -Times 0
+    Test-Path -LiteralPath (Join-Path $TestDrive 'reports') | Should -BeFalse
+  }
+
+  It 'allows the explicit override with a context warning' {
+    $result = & $script:ProfileGuardScriptPath @arguments -IgnoreAdministrator -DryRun -WarningVariable warnings -WarningAction SilentlyContinue
+    Should -Invoke Connect-Outlook -Times 1 -Exactly
+    ($warnings -join ' ') | Should -Match 'IgnoreAdministrator permits elevated execution'
+    ($warnings -join ' ') | Should -Match 'same Windows user and elevation'
+    $result.Status | Should -Be Failed
+    $result.Detail | Should -Match 'Connection reached for guard test'
+  }
+
+  It 'allows a non-elevated user without an override warning' {
+    Mock Get-UserInfo { @{ UserName = 'TEST\MailboxUser'; IsAdministrator = $false } }
+    $result = & $script:ProfileGuardScriptPath @arguments -DryRun -WarningVariable warnings -WarningAction SilentlyContinue
+    Should -Invoke Connect-Outlook -Times 1 -Exactly
+    ($warnings -join ' ') | Should -Not -Match 'IgnoreAdministrator permits'
+    $result.Detail | Should -Match 'Connection reached for guard test'
+  }
+}
+
 Describe 'Outlook archive safety' {
   BeforeEach {
     Mock Remove-ComObject { }
@@ -199,6 +248,7 @@ Describe 'Outlook deduplication safety' {
 
 Describe 'Archive script preflight' {
   BeforeEach {
+    Mock Get-UserInfo { @{ UserName = 'TEST\MailboxUser'; IsAdministrator = $false } }
     Mock Import-Module { }
     Mock Connect-Outlook { throw 'Must not open Outlook' }
     Mock Remove-ComObject { }
@@ -314,6 +364,7 @@ Describe 'Repair tool launch safety' {
 
 Describe 'Outlook store selection and preview' {
   BeforeEach {
+    Mock Get-UserInfo { @{ UserName = 'TEST\MailboxUser'; IsAdministrator = $false } }
     Mock Write-Progress { }
     Mock Import-Module { }
     Mock Remove-ComObject { }

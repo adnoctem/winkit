@@ -43,6 +43,10 @@
 .PARAMETER QuitOutlook
   Quit the Outlook application object on exit. Leave off if Outlook was already
   open interactively.
+.PARAMETER IgnoreAdministrator
+  Allow an elevated PowerShell session. Use only when Outlook intentionally
+  runs elevated under the same Windows user. Does not switch users or profiles.
+  Elevated execution is otherwise refused, including during previews.
 .EXAMPLE
   PS> .\New-TestOutlookMessage.ps1 -Count 20 -Seed 42 -DuplicateRatio 0.25
   Creates 20 synthetic items in a WinkitTestData folder; 5 of them duplicate
@@ -96,10 +100,23 @@ param (
   $PassThru,
 
   [switch]
+  $IgnoreAdministrator,
+
+  [switch]
   $QuitOutlook
 )
 
 Import-Module PSFoundation -Force
+
+# Outlook automation must use the mailbox user's interactive security context.
+$_outlookUser = Get-UserInfo
+if ($_outlookUser.IsAdministrator) {
+  if (-not $IgnoreAdministrator) {
+    throw "PowerShell is elevated as '$($_outlookUser.UserName)'. Run this script from a non-elevated PowerShell window as the Windows user who runs Outlook. Use -IgnoreAdministrator only when Outlook intentionally runs elevated under that same user."
+  }
+
+  Write-Warning "IgnoreAdministrator permits elevated execution as '$($_outlookUser.UserName)'. Outlook must run under the same Windows user and elevation. This override does not switch users or profiles."
+}
 
 # -----------------------------------------------------------------------------
 

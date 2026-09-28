@@ -134,6 +134,11 @@ explicitly if required and collect evidence again. Do not change the reference 2
 
 ### Products, languages, and configuration
 
+`SourcePath` selects the verified installation-media package, not Office's installed application directory. Office setup chooses its normal
+application location. Raw ODT can download beside `setup.exe` when SourcePath is omitted, but these scripts require a dedicated, explicit
+package directory for preparation and media verification, such as `C:\ODT\Office2019-Media`. Its parent must already exist. See
+[Microsoft's SourcePath documentation](https://learn.microsoft.com/en-us/deployoffice/office-deployment-tool-configuration-options).
+
 | Product family     | TargetProductId                       | Channel                                             |
 | ------------------ | ------------------------------------- | --------------------------------------------------- |
 | Office 2019 volume | Standard2019Volume, ProPlus2019Volume | PerpetualVL2019                                     |
@@ -358,6 +363,12 @@ Run profile operations as the logged-in Outlook user at the same elevation as Ou
 ```text
 C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe
 ```
+
+`New-OutlookArchive`, `Optimize-Outlook`, and `New-TestOutlookMessage` refuse elevated PowerShell sessions before connecting to Outlook or
+writing reports, including during previews. Open PowerShell normally as the mailbox's Windows user. An administrator account using a
+non-elevated token is allowed. Use `-IgnoreAdministrator` only when Outlook intentionally runs elevated under that same user; the override
+prints a warning and does not select another Windows identity or Outlook profile. A non-elevated shell under the wrong user is still the
+wrong context. Office installation/removal/migration continue to require elevation; data-file repair does not attach to an Outlook profile.
 
 An appropriate 32-bit PowerShell 7 host is another option on an OS that supports it; 64-bit Outlook 2010 or later uses 64-bit PowerShell.
 Although the scripts use PowerShell 5.0-compatible syntax, the pinned PSFoundation module requires PowerShell 5.1. Run initialization and
