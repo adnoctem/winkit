@@ -1,3 +1,9 @@
+## [1.4.4](https://github.com/adnoctem/winkit/compare/v1.4.3...v1.4.4) (2026-09-28)
+
+### Bug Fixes
+
+* **scripts:** guard Outlook automation against elevated execution ([2eb1821](https://github.com/adnoctem/winkit/commit/2eb1821d626c1f15db0a183fad87b8b9ec8fcad7))
+
 ## [1.4.3](https://github.com/adnoctem/winkit/compare/v1.4.2...v1.4.3) (2026-09-28)
 
 ### Bug Fixes
