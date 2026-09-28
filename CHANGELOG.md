@@ -1,3 +1,9 @@
+## [1.5.1](https://github.com/adnoctem/winkit/compare/v1.5.0...v1.5.1) (2026-09-28)
+
+### Bug Fixes
+
+* **scripts:** sort Outlook report results by received date ([96a1bf5](https://github.com/adnoctem/winkit/commit/96a1bf5f4d64fc6d22e635f2bb41ee6d28c66eea))
+
 ## [1.5.0](https://github.com/adnoctem/winkit/compare/v1.4.4...v1.5.0) (2026-09-28)
 
 ### Features
