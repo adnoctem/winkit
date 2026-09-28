@@ -8,6 +8,6 @@
   PSScriptAnalyzer = '1.25.0'
   PSWindowsUpdate  = '2.2.1.5'
   PSWritePDF       = '0.0.20'
-  PSWriteOffice    = '3.0.7'
+  PSWriteOffice    = '3.0.8'
   Transferetto     = '2.0.1'
 }
