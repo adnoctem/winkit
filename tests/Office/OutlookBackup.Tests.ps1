@@ -6,7 +6,7 @@ param ()
 
 BeforeAll {
   Import-Module PSFoundation -Force
-  $script:BackupScript = Join-Path $PSScriptRoot '../../scripts/Office/Backup-OutlookDataFile.ps1'
+  $script:BackupScript = Join-Path $PSScriptRoot '../../scripts/Office/Backup-Outlook.ps1'
 }
 
 Describe 'Outlook backup profile discovery' {

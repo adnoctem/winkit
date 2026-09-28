@@ -8,7 +8,7 @@ Scripts for deploying Microsoft Office and maintaining Outlook mail stores and d
 | [Remove-Office.ps1](Remove-Office.ps1)                   | Inventory or remove selected Click-to-Run Office products.                              |
 | [Switch-OfficeVersion.ps1](Switch-OfficeVersion.ps1)     | Inventory Office, prepare installation media, and migrate to a selected Office product. |
 | [New-OutlookArchive.ps1](New-OutlookArchive.ps1)         | Copy or move mail into a new Unicode PST archive.                                       |
-| [Backup-OutlookDataFile.ps1](Backup-OutlookDataFile.ps1) | Create verified, closed-file copies of PST data files.                                  |
+| [Backup-Outlook.ps1](Backup-Outlook.ps1)                 | Create verified, closed-file copies of PST data files.                                  |
 | [Optimize-Outlook.ps1](Optimize-Outlook.ps1)             | Move duplicate messages into a review folder.                                           |
 | [New-TestOutlookMessage.ps1](New-TestOutlookMessage.ps1) | Create synthetic messages for testing in an Outlook folder.                             |
 | [Repair-OutlookDataFile.ps1](Repair-OutlookDataFile.ps1) | Open Microsoft's repair utility for a PST or OST file.                                  |
@@ -349,7 +349,7 @@ profile's user; SYSTEM is not suitable for these operations.
 | Script                       | Minimum classic Outlook         | Requirement                                                                |
 | ---------------------------- | ------------------------------- | -------------------------------------------------------------------------- |
 | `New-OutlookArchive.ps1`     | 2007 (12)                       | Unicode PST creation through `NameSpace.AddStoreEx`.                       |
-| `Backup-OutlookDataFile.ps1` | 2007 (12) for discovery         | No Outlook required in direct `-PSTPath` mode.                             |
+| `Backup-Outlook.ps1`         | 2007 (12) for discovery         | No Outlook required in direct `-PSTPath` mode.                             |
 | `Optimize-Outlook.ps1`       | 2007 (12)                       | Transport-header access through `Item.PropertyAccessor`.                   |
 | `New-TestOutlookMessage.ps1` | 2007 (12)                       | Outlook object model and optional registered Redemption component.         |
 | `Repair-OutlookDataFile.ps1` | Office 12 tool discovery onward | An available ScanPST/ScanOST executable; it does not connect to a profile. |
@@ -659,9 +659,9 @@ store. Redemption reuses Outlook's MAPI session rather than selecting another pr
 
 ### Back up PST data files
 
-`Backup-OutlookDataFile.ps1` copies entire PST files into a unique directory under `-Destination`. It preserves mail, contacts, calendars,
-and all other contents of each source PST, including junk and deleted items. It does not filter messages or export server mailboxes. OST
-caches and stores without a PST path are reported as skipped; selecting no usable PSTs fails the run.
+`Backup-Outlook.ps1` copies entire PST files into a unique directory under `-Destination`. It preserves mail, contacts, calendars, and all
+other contents of each source PST, including junk and deleted items. It does not filter messages or export server mailboxes. OST caches and
+stores without a PST path are reported as skipped; selecting no usable PSTs fails the run.
 
 Profile discovery uses the same interactive Outlook session as the other profile scripts. Omit selection options for the default delivery
 store, specify a unique `-StoreName`, or use `-AllStores` for every attached PST. The script releases COM references and waits up to
@@ -669,11 +669,11 @@ store, specify a unique `-StoreName`, or use `-AllStores` for every attached PST
 `-QuitOutlook`. The script never force-kills Outlook. Profile discovery rejects elevated sessions unless `-IgnoreAdministrator` is supplied.
 
 ```powershell
-.\scripts\Office\Backup-OutlookDataFile.ps1 -AllStores -Destination 'E:\OutlookBackups' -DryRun
-.\scripts\Office\Backup-OutlookDataFile.ps1 -AllStores -Destination 'E:\OutlookBackups' -QuitOutlook -PassThru
+.\scripts\Office\Backup-Outlook.ps1 -AllStores -Destination 'E:\OutlookBackups' -DryRun
+.\scripts\Office\Backup-Outlook.ps1 -AllStores -Destination 'E:\OutlookBackups' -QuitOutlook -PassThru
 
 # Detached archives can be copied directly, without opening Outlook.
-.\scripts\Office\Backup-OutlookDataFile.ps1 -PSTPath 'D:\Archive\mail-2024.pst' -Destination 'E:\OutlookBackups' -PassThru
+.\scripts\Office\Backup-Outlook.ps1 -PSTPath 'D:\Archive\mail-2024.pst' -Destination 'E:\OutlookBackups' -PassThru
 ```
 
 `-PSTPath` accepts one or more literal filenames and cannot be combined with `StoreName`, `AllStores`, `QuitOutlook`, `IgnoreAdministrator`,

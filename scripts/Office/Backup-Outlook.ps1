@@ -34,11 +34,11 @@
 .PARAMETER PassThru
   Return one summary containing backup counts and the manifest ReportPath.
 .EXAMPLE
-  PS> .\Backup-OutlookDataFile.ps1 -Destination E:\OutlookBackups -AllStores -DryRun
+  PS> .\Backup-Outlook.ps1 -Destination E:\OutlookBackups -AllStores -DryRun
 .EXAMPLE
-  PS> .\Backup-OutlookDataFile.ps1 -Destination E:\OutlookBackups -AllStores -QuitOutlook -PassThru
+  PS> .\Backup-Outlook.ps1 -Destination E:\OutlookBackups -AllStores -QuitOutlook -PassThru
 .EXAMPLE
-  PS> .\Backup-OutlookDataFile.ps1 -PSTPath D:\Archive\mail.pst -Destination E:\OutlookBackups -PassThru
+  PS> .\Backup-Outlook.ps1 -PSTPath D:\Archive\mail.pst -Destination E:\OutlookBackups -PassThru
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
@@ -322,7 +322,7 @@ finally {
     try {
       $_manifest = [ordered]@{
         SchemaVersion = 1
-        Script        = 'Backup-OutlookDataFile'
+        Script        = 'Backup-Outlook'
         StartedAt     = $_startedAt.ToString('o')
         FinishedAt    = (Get-Date).ToString('o')
         Copied        = $_copied
