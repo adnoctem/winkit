@@ -1,3 +1,9 @@
+## [1.4.1](https://github.com/adnoctem/winkit/compare/v1.4.0...v1.4.1) (2026-09-28)
+
+### Bug Fixes
+
+* **scripts:** support scoped Office migration pilots ([b6a00c7](https://github.com/adnoctem/winkit/commit/b6a00c7eb9a2aa94176e7024b6c628e91e5efd40))
+
 ## [1.4.0](https://github.com/adnoctem/winkit/compare/v1.3.1...v1.4.0) (2026-09-22)
 
 ### Features
