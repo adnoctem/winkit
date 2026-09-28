@@ -1,3 +1,9 @@
+## [1.4.2](https://github.com/adnoctem/winkit/compare/v1.4.1...v1.4.2) (2026-09-28)
+
+### Bug Fixes
+
+* **scripts:** repair installer pipeline execution and use environment configuration ([f6d151a](https://github.com/adnoctem/winkit/commit/f6d151a1dc3eef044ce244247852f1176a78cd99))
+
 ## [1.4.1](https://github.com/adnoctem/winkit/compare/v1.4.0...v1.4.1) (2026-09-28)
 
 ### Bug Fixes
