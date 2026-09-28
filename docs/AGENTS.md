@@ -39,6 +39,8 @@ a symlink to this file — edit this one.
 - Every script opens with `#Requires -Version 5.0`, `#Requires -RunAsAdministrator` (when elevation is required), and
   `#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = 'x.y.z' }` — pin the lowest version that provides every cmdlet used
 - `install.ps1` is the sole PSFoundation exception: it must remain standalone so it can install the pinned dependency on a fresh machine
+- The web installer `install.ps1` takes configuration only from `WINKIT_*` process environment variables, including `WINKIT_DRY_RUN`; it has
+  no public script parameters. Keep the documented `irm | iex` entry point working in Windows PowerShell 5.1
 - `Import-Module PSFoundation -Force` after the param block
 - Comment-based help with `.SYNOPSIS`/`.DESCRIPTION`/`.PARAMETER`/`.EXAMPLE`, plus a `.NOTES` block (Author, License, Server Core support,
   SYSTEM-account suitability)
@@ -46,6 +48,8 @@ a symlink to this file — edit this one.
 - Results use PSFoundation `New-OperationResult`/`Add-OperationResult`; user feedback via `Write-Log -Message -Color`
 - PowerShell 5.0 compatibility: no ternary, `??`, or null-conditional operators (PSUseCompatibleSyntax targets 5.0/5.1/7.0)
 - Encoding: UTF-8 with BOM, CRLF (enforced by formatter and pre-commit `mixed-line-ending`); 2-space indentation
+- `install.ps1` is the encoding exception: keep it ASCII-only UTF-8 **without BOM**, with CRLF. Windows PowerShell 5.1 treats a BOM
+  preserved in downloaded text as code, breaking the documented `irm | iex` entry point
 - New plural nouns in function/script names must be added to the `PSUseSingularNouns` `NounAllowList` in `PSScriptAnalyzerSettings.psd1`
 
 ## Code readability and structure (non-negotiable)

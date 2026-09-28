@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.0
+#Requires -Version 5.0
 
 <#
 .SYNOPSIS
@@ -15,54 +15,45 @@
 
   The installer is intentionally standalone and does not import PSFoundation.
 
-.PARAMETER Scope
-  Installation scope. CurrentUser installs below LocalAppData and updates the
-  user PATH. AllUsers installs below Program Files, updates the machine PATH,
-  and requires an elevated PowerShell session. Defaults to CurrentUser.
+  Configure the installer through process environment variables, not script
+  parameters. Unset or blank values use defaults. Boolean settings accept
+  1/true/yes/on or 0/false/no/off, case-insensitively; invalid values fail.
 
-.PARAMETER InstallPath
-  Destination directory. Defaults to %LOCALAPPDATA%\Programs\winkit for
-  CurrentUser or %ProgramFiles%\winkit for AllUsers.
-
-.PARAMETER Repository
-  GitHub release repository in OWNER/REPOSITORY form. Defaults to
-  adnoctem/winkit. Managed installations remain bound to their original
-  repository.
-
-.PARAMETER Version
-  Semantic release version to install, with or without a leading v. The latest
-  stable GitHub release is selected when this parameter is omitted.
-
-.PARAMETER NoPath
-  Do not add the installed bin directory to the persistent PATH.
-
-.PARAMETER Force
-  Download and reinstall the selected release even when that version is already
-  installed. Force never permits replacement of an unrecognized directory.
-
-.PARAMETER NonInteractive
-  Suppress installer confirmation prompts and use safe defaults. The
-  WINKIT_NON_INTERACTIVE environment variable accepts the same behavior when
-  set to 1 or true. Unsafe conflicts still fail instead of being accepted.
-
-.PARAMETER DryRun
-  Resolve the selected release and show the intended operation without
-  downloading or changing the system.
-
-.PARAMETER PassThru
-  Return a result object describing the installation operation.
+  WINKIT_SCOPE: CurrentUser (default) or AllUsers. AllUsers installation requires
+  elevation. Existing managed installations retain their scope unless specified.
+  WINKIT_INSTALL_PATH: destination; defaults to %LOCALAPPDATA%\Programs\winkit
+  for CurrentUser or %ProgramFiles%\winkit for AllUsers.
+  WINKIT_REPOSITORY: OWNER/REPOSITORY; defaults to adnoctem/winkit. Existing
+  managed installations retain their repository unless specified.
+  WINKIT_VERSION: semantic release version, optionally prefixed by v; defaults
+  to the latest stable GitHub release.
+  WINKIT_NO_PATH: skip persistent and current-session PATH updates.
+  WINKIT_FORCE: reinstall the release and pinned dependency. Never replaces an
+  unrecognized directory or bypasses checksum and ownership validation.
+  WINKIT_NON_INTERACTIVE: suppress installer confirmations; conflicts still fail.
+  WINKIT_DRY_RUN: read release metadata and print sources, destinations,
+  dependency installation, and PATH changes without downloading release assets
+  or changing the system. Takes precedence over force and non-interactive mode.
+  WINKIT_PASS_THRU: return a structured installation result.
+  All Boolean settings default to false.
 
 .EXAMPLE
   PS> irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 | iex
   Installs or updates the latest stable winkit release for the current user.
 
 .EXAMPLE
-  PS> & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1'))) -InstallPath 'D:\Tools\winkit'
+  PS> $env:WINKIT_INSTALL_PATH = 'D:\Tools\winkit'
+  PS> irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 | iex
   Installs winkit at a custom location.
 
 .EXAMPLE
   PS> $env:WINKIT_NON_INTERACTIVE = '1'; irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 | iex
   Installs or updates winkit without installer prompts.
+
+.EXAMPLE
+  PS> $env:WINKIT_DRY_RUN = '1'
+  PS> irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 | iex
+  Prints the plan. Remove Env:WINKIT_DRY_RUN before an actual installation.
 
 .LINK
   https://github.com/adnoctem/winkit
@@ -71,43 +62,18 @@
   Author: MVProwess <info@mvprowess.com>
   License: MIT
   Server Core support: Yes.
-  SYSTEM-account suitability: Use -Scope AllUsers and an explicit InstallPath;
+  SYSTEM-account suitability: Set WINKIT_SCOPE=AllUsers and WINKIT_INSTALL_PATH;
   CurrentUser installs target the invoking account's profile.
 #>
 
-[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
-param (
-  [ValidateSet('CurrentUser', 'AllUsers')]
-  [string]$Scope,
-
-  [ValidateNotNullOrEmpty()]
-  [string]$InstallPath,
-
-  [ValidatePattern('^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')]
-  [string]$Repository = 'adnoctem/winkit',
-
-  [ValidatePattern('^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$')]
-  [string]$Version,
-
-  [switch]$NoPath,
-
-  [switch]$Force,
-
-  [switch]$NonInteractive,
-
-  [switch]$DryRun,
-
-  [switch]$PassThru
-)
-
+# Keep helper functions and installer state out of the invoking session.
 & {
-  param (
-    [Parameter(Mandatory = $true)]
-    [pscustomobject]$Context
-  )
-
   Set-StrictMode -Version 2.0
   $ErrorActionPreference = 'Stop'
+
+  if ($args.Count) {
+    throw 'The installer accepts WINKIT_* environment variables, not command-line parameters.'
+  }
 
   function Write-InstallerMessage {
     param (
@@ -134,6 +100,39 @@ param (
       { $_ -in @('0', 'false', 'no', 'off') } { return $false }
       default { throw "$Name must be 1/true/yes/on or 0/false/no/off." }
     }
+  }
+
+  function Get-InstallerConfiguration {
+    $configuration = [ordered]@{}
+    $stringSettings = [ordered]@{
+      Scope       = 'WINKIT_SCOPE'
+      InstallPath = 'WINKIT_INSTALL_PATH'
+      Repository  = 'WINKIT_REPOSITORY'
+      Version     = 'WINKIT_VERSION'
+    }
+
+    foreach ($name in $stringSettings.Keys) {
+      $value = [Environment]::GetEnvironmentVariable($stringSettings[$name], 'Process')
+      $configuration[$name] = if ([string]::IsNullOrWhiteSpace($value)) { $null } else { $value.Trim() }
+    }
+
+    if ($configuration.Scope -and $configuration.Scope -notin @('CurrentUser', 'AllUsers')) {
+      throw 'WINKIT_SCOPE must be CurrentUser or AllUsers.'
+    }
+    if ($configuration.Repository -and $configuration.Repository -notmatch '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$') {
+      throw 'WINKIT_REPOSITORY must use OWNER/REPOSITORY format.'
+    }
+    if ($configuration.Version -and $configuration.Version -notmatch '^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$') {
+      throw 'WINKIT_VERSION must be a semantic release version, optionally prefixed by v.'
+    }
+
+    $configuration.NoPath = Get-EnvironmentBoolean -Name 'WINKIT_NO_PATH'
+    $configuration.Force = Get-EnvironmentBoolean -Name 'WINKIT_FORCE'
+    $configuration.NonInteractive = Get-EnvironmentBoolean -Name 'WINKIT_NON_INTERACTIVE'
+    $configuration.DryRun = Get-EnvironmentBoolean -Name 'WINKIT_DRY_RUN'
+    $configuration.PassThru = Get-EnvironmentBoolean -Name 'WINKIT_PASS_THRU'
+
+    return [pscustomobject]$configuration
   }
 
   function Get-NormalizedPath {
@@ -658,16 +657,15 @@ namespace WinkitInstaller {
   }
 
   function Invoke-WinkitInstaller {
-    [CmdletBinding(SupportsShouldProcess = $true)]
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param (
       [Parameter(Mandatory = $true)]
       [pscustomobject]$Context
     )
 
-    $scopeSpecified = $Context.BoundParameters.ContainsKey('Scope')
-    $pathSpecified = $Context.BoundParameters.ContainsKey('InstallPath')
-    $repositorySpecified = $Context.BoundParameters.ContainsKey('Repository')
-    $nonInteractiveSpecified = $Context.BoundParameters.ContainsKey('NonInteractive')
+    $scopeSpecified = -not [string]::IsNullOrWhiteSpace($Context.Scope)
+    $pathSpecified = -not [string]::IsNullOrWhiteSpace($Context.InstallPath)
+    $repositorySpecified = -not [string]::IsNullOrWhiteSpace($Context.Repository)
 
     $effectiveScope = if ($scopeSpecified) { $Context.Scope } else { 'CurrentUser' }
     if ($pathSpecified) {
@@ -692,11 +690,13 @@ namespace WinkitInstaller {
       }
     }
 
-    if ($effectiveScope -eq 'AllUsers' -and -not (Test-Administrator)) {
+    $dryRunEnabled = $Context.DryRun -or $WhatIfPreference
+
+    if ($effectiveScope -eq 'AllUsers' -and -not $dryRunEnabled -and -not (Test-Administrator)) {
       throw 'AllUsers installation requires an elevated PowerShell session.'
     }
 
-    $effectiveRepository = $Context.Repository
+    $effectiveRepository = if ($repositorySpecified) { $Context.Repository } else { 'adnoctem/winkit' }
     if ($state) {
       if (-not $repositorySpecified) {
         $effectiveRepository = [string]$state.repository
@@ -704,13 +704,6 @@ namespace WinkitInstaller {
       elseif (-not ([string]$state.repository).Equals($effectiveRepository, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "The managed installation belongs to '$($state.repository)'. Choose another InstallPath for '$effectiveRepository'."
       }
-    }
-
-    $nonInteractiveEnabled = if ($nonInteractiveSpecified) {
-      [bool]$Context.NonInteractive
-    }
-    else {
-      Get-EnvironmentBoolean -Name 'WINKIT_NON_INTERACTIVE'
     }
 
     $release = Get-WinkitRelease -ReleaseRepository $effectiveRepository -ReleaseVersion $Context.Version
@@ -738,22 +731,58 @@ namespace WinkitInstaller {
     }
 
     $description = "$operation winkit $($release.Version) at '$effectiveInstallPath'"
-    if ($Context.DryRun) {
-      $WhatIfPreference = $true
-    }
+    $parentPath = Split-Path -Path $effectiveInstallPath -Parent
+    $binPath = Join-Path -Path $effectiveInstallPath -ChildPath 'bin'
 
-    if ($Context.DryRun -or $Context.WhatIfPreference) {
-      $null = $Context.Cmdlet.ShouldProcess($effectiveInstallPath, $description)
+    if ($dryRunEnabled) {
+      $WhatIfPreference = $true
+
+      Write-InstallerMessage -Message "DRY RUN: $description ($effectiveScope)."
+      Write-InstallerMessage -Message "Scripts: $(Join-Path -Path $effectiveInstallPath -ChildPath 'scripts')"
+      Write-InstallerMessage -Message "Launchers: $binPath"
+      Write-InstallerMessage -Message "Resources: $(Join-Path -Path $effectiveInstallPath -ChildPath 'resources')"
+
+      if ($payloadRequired) {
+        Write-InstallerMessage -Message "Would download archive: $($release.ZipUri)"
+        Write-InstallerMessage -Message "Would download checksums: $($release.ChecksumUri)"
+        Write-InstallerMessage -Message "Would create temporary staging below '$parentPath' in .winkit-install-<id>, verify SHA-256 and archive layout, then activate the release."
+        if ($state) {
+          Write-InstallerMessage -Message "Would keep the current installation in a sibling .backup-<id> directory until activation succeeds."
+        }
+        Write-InstallerMessage -Message 'Would write .winkit-install.json and remove temporary staging and any completed backup.'
+      }
+      else {
+        Write-InstallerMessage -Message 'Would reuse the existing release files; no release asset download is needed.'
+      }
+
+      Write-InstallerMessage -Message "Would ensure the PSFoundation version pinned in verified requirements.psd1 is installed from PSGallery with scope $effectiveScope; install NuGet if needed."
+      if ($Context.Force) {
+        Write-InstallerMessage -Message 'WINKIT_FORCE would reinstall the pinned dependency even if it is already available.'
+      }
+      if ($Context.NoPath) {
+        Write-InstallerMessage -Message 'PATH update disabled by WINKIT_NO_PATH.'
+      }
+      else {
+        $pathTarget = if ($effectiveScope -eq 'AllUsers') { 'machine' } else { 'user' }
+        Write-InstallerMessage -Message "Would ensure '$binPath' is on the $pathTarget PATH and the current session PATH."
+      }
+      if ($effectiveScope -eq 'AllUsers') {
+        Write-InstallerMessage -Message 'Actual AllUsers installation requires an elevated PowerShell session.'
+      }
+      Write-InstallerMessage -Message 'Preview only: release metadata was read; no assets, modules, directories, or PATH settings were changed.'
+
       $result = Get-InstallResult -Status 'Planned' -ResultVersion $release.Version -PreviousVersion $previousVersion -ResultPath $effectiveInstallPath -ResultScope $effectiveScope
-      if ($Context.PassThru) { return $result }
+      if ($Context.PassThru) {
+        return $result
+      }
       return
     }
 
-    $approved = if ($nonInteractiveEnabled) {
+    $approved = if ($Context.NonInteractive) {
       $true
     }
     else {
-      $Context.Cmdlet.ShouldProcess($effectiveInstallPath, $description)
+      $PSCmdlet.ShouldProcess($effectiveInstallPath, $description)
     }
     if (-not $approved) {
       $result = Get-InstallResult -Status 'Skipped' -ResultVersion $release.Version -PreviousVersion $previousVersion -ResultPath $effectiveInstallPath -ResultScope $effectiveScope
@@ -761,7 +790,6 @@ namespace WinkitInstaller {
       return
     }
 
-    $parentPath = Split-Path -Path $effectiveInstallPath -Parent
     if (-not (Test-Path -LiteralPath $parentPath -PathType Container)) {
       New-Item -Path $parentPath -ItemType Directory -Force | Out-Null
     }
@@ -903,22 +931,9 @@ namespace WinkitInstaller {
   $originalSecurityProtocol = [Net.ServicePointManager]::SecurityProtocol
   try {
     [Net.ServicePointManager]::SecurityProtocol = $originalSecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    Invoke-WinkitInstaller -Context $Context -Confirm:$false
+    Invoke-WinkitInstaller -Context (Get-InstallerConfiguration)
   }
   finally {
     [Net.ServicePointManager]::SecurityProtocol = $originalSecurityProtocol
   }
-} ([pscustomobject]@{
-    BoundParameters  = $PSBoundParameters
-    Cmdlet           = $PSCmdlet
-    Scope            = $Scope
-    InstallPath      = $InstallPath
-    Repository       = $Repository
-    Version          = $Version
-    NoPath           = [bool]$NoPath
-    Force            = [bool]$Force
-    NonInteractive   = [bool]$NonInteractive
-    DryRun           = [bool]$DryRun
-    PassThru         = [bool]$PassThru
-    WhatIfPreference = [bool]$WhatIfPreference
-  })
+} @args

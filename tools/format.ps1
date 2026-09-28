@@ -13,6 +13,8 @@
 
   Files are rewritten in place with UTF-8 with BOM (required for reliable
   parsing under Windows PowerShell 5.1) and CRLF line endings.
+  The web entry point install.ps1 uses ASCII-only UTF-8 without BOM so its
+  downloaded text can also be parsed by Windows PowerShell's iex.
 
   Use -Check to report files that would change without writing them, suitable
   for pre-commit hooks and CI jobs.
@@ -86,6 +88,8 @@ if (-not $IncludeSecrets) {
 
 $rootFullPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath((Split-Path -Path $PSScriptRoot -Parent))
 $utf8Bom = New-Object System.Text.UTF8Encoding($true)
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$installerPath = Join-Path -Path $rootFullPath -ChildPath 'install.ps1'
 $changed = New-Object System.Collections.Generic.List[string]
 $processed = 0
 
@@ -130,6 +134,11 @@ $files = @($files |
 foreach ($file in $files) {
   $processed++
   $source = [System.IO.File]::ReadAllText($file.FullName)
+  $isWebInstaller = $file.FullName -eq $installerPath
+  if ($isWebInstaller -and $source -match '[^\x00-\x7F]') {
+    throw 'install.ps1 must remain ASCII-only for BOM-free Windows PowerShell and HTTP execution.'
+  }
+
   $normalizedSource = $source -replace "`r`n|`r|`n", "`n"
   if ([string]::IsNullOrWhiteSpace($normalizedSource)) {
     continue
@@ -141,12 +150,14 @@ foreach ($file in $files) {
 
   $_needsFormat = ($_formattedTrimmed -ne $_normalizedTrimmed)
   $_needsLineEndingFix = ($source -match '(?<!\r)\n|\r(?!\n)')
+  $_needsInstallerEncodingFix = $isWebInstaller -and ([System.IO.File]::ReadAllBytes($file.FullName)[0] -eq 0xEF)
 
-  if ($_needsFormat -or $_needsLineEndingFix) {
+  if ($_needsFormat -or $_needsLineEndingFix -or $_needsInstallerEncodingFix) {
     [void]$changed.Add($file.FullName)
     if (-not $Check) {
       $formattedCrlf = $formatted -replace "`r`n", "`n" -replace "`n", "`r`n"
-      [System.IO.File]::WriteAllText($file.FullName, $formattedCrlf, $utf8Bom)
+      $encoding = if ($isWebInstaller) { $utf8NoBom } else { $utf8Bom }
+      [System.IO.File]::WriteAllText($file.FullName, $formattedCrlf, $encoding)
       Write-Output "Formatted: $($file.FullName)"
     }
   }

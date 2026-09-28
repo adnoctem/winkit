@@ -48,7 +48,8 @@ line-ending normalization on write.
 
 Output defaults to:
 
-- **Encoding**: UTF-8 with BOM (required for reliable parsing under Windows PowerShell 5.1)
+- **Encoding**: UTF-8 with BOM (required for reliable parsing under Windows PowerShell 5.1). The standalone web installer `install.ps1` is
+  ASCII-only UTF-8 without BOM so `irm | iex` can parse downloaded text; the formatter preserves this exception
 - **Line endings**: CRLF
 - **Indentation**: 2 spaces
 - **Excluded directories**: `.git`, `.idea`, `dist`, `build`, `secrets` (unless `-IncludeSecrets` is supplied)
