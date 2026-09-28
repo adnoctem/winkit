@@ -48,11 +48,11 @@ line-ending normalization on write.
 
 Output defaults to:
 
-- **Encoding**: UTF-8 with BOM (required for reliable parsing under Windows PowerShell 5.1). The standalone web installer `install.ps1` is
-  ASCII-only UTF-8 without BOM so `irm | iex` can parse downloaded text; the formatter preserves this exception
+- **Encoding**: UTF-8 with BOM (required for reliable parsing under Windows PowerShell 5.1). The standalone web installer `dist/install.ps1`
+  is ASCII-only UTF-8 without BOM so `irm | iex` can parse downloaded text; the formatter preserves this exception
 - **Line endings**: CRLF
 - **Indentation**: 2 spaces
-- **Excluded directories**: `.git`, `.idea`, `dist`, `build`, `secrets` (unless `-IncludeSecrets` is supplied)
+- **Excluded directories**: `.git`, `.idea`, `build`, `secrets` (unless `-IncludeSecrets` is supplied)
 
 To limit the scope, pass explicit paths:
 
@@ -150,7 +150,7 @@ update incoming links before removing redundant files.
 ### Linting
 
 Run PSScriptAnalyzer against all PowerShell sources under the repository root (the `lib` and `scripts` directories, the `tools/` scripts,
-and `winkit.ps1`). The `.git`, `.idea`, `dist`, `build`, and `secrets` directories are excluded by default:
+and `winkit.ps1`). The `.git`, `.idea`, `build`, and `secrets` directories are excluded by default:
 
 ```pwsh
 .\winkit.ps1 lint
@@ -173,7 +173,7 @@ Create clean deployment archives containing only the `lib/` and `scripts/` direc
 .\winkit.ps1 build
 ```
 
-By default, both a `.zip` and a `.tar.gz` archive are written to the `dist/` directory. Existing archives with the same names are
+By default, both a `.zip` and a `.tar.gz` archive are written to the `build/` directory. Existing archives with the same names are
 overwritten.
 
 Build only a specific format:

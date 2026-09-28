@@ -35,13 +35,13 @@
       {
         "assets": [
           {
-            "path": "dist/*.zip"
+            "path": "build/*.zip"
           },
           {
-            "path": "dist/*.tar.gz"
+            "path": "build/*.tar.gz"
           },
           {
-            "path": "dist/CHECKSUMS_SHA256.txt"
+            "path": "build/CHECKSUMS_SHA256.txt"
           }
         ]
       }

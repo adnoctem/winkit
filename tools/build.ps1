@@ -5,17 +5,17 @@
   Builds deployable winkit source archives.
 
 .DESCRIPTION
-  Creates a clean bundle containing the repository's scripts, bin, and
-  resources directories together with the runtime requirements and license,
+  Creates a clean bundle containing scripts, bin, resources, and maintained
+  dist sources together with the runtime requirements and license,
   preserving their relative layout so scripts and launchers can be distributed
   and unpacked as a unit.
 
-  Archives are written to the dist directory, which is created when it does not
+  Archives are written to the build directory, which is created when it does not
   already exist. By default, the script builds both:
 
-    dist/winkit.zip
-    dist/winkit.tar.gz
-    dist/CHECKSUMS_SHA256.txt
+    build/winkit.zip
+    build/winkit.tar.gz
+    build/CHECKSUMS_SHA256.txt
 
   Existing archives with the same names are overwritten. Archives are produced
   directly from the source directories — no staging copy is made, which avoids
@@ -25,7 +25,7 @@
   the archives so only existing files are referenced.
 
 .PARAMETER OutputDirectory
-  Directory where archives are written. Defaults to the repository dist folder.
+  Directory where archives are written. Defaults to the repository build folder.
 
 .PARAMETER Name
   Base archive name without extension. Defaults to winkit.
@@ -35,11 +35,11 @@
 
 .EXAMPLE
   PS> ./build.ps1
-  Creates dist/winkit.zip, dist/winkit.tar.gz, and dist/CHECKSUMS_SHA256.txt.
+  Creates build/winkit.zip, build/winkit.tar.gz, and build/CHECKSUMS_SHA256.txt.
 
 .EXAMPLE
   PS> ./build.ps1 -Format Zip
-  Creates only dist/winkit.zip.
+  Creates only build/winkit.zip.
 
 .EXAMPLE
   PS> ./build.ps1 -OutputDirectory C:\Temp -Name winkit-vm-test
@@ -55,9 +55,9 @@
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (
-  [string]$OutputDirectory = (Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'dist'),
+  [string]$OutputDirectory = (Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'build'),
 
-  [ValidateNotNullOrEmpty()]
+  [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._-]*$')]
   [string]$Name = 'winkit',
 
   [ValidateSet('Both', 'Zip', 'TarGz')]
@@ -74,11 +74,15 @@ $checksumPath = Join-Path -Path $outputPath -ChildPath 'CHECKSUMS_SHA256.txt'
 
 # The source items that make up a bundle. Validated up front so a missing item
 # fails before any archive work begins.
-$sourceItems = 'scripts', 'bin', 'resources', 'requirements.psd1', 'LICENSE'
+$sourceItems = 'scripts', 'bin', 'resources', 'dist', 'requirements.psd1', 'LICENSE'
 $sourcePaths = foreach ($item in $sourceItems) {
   $path = Join-Path -Path $repositoryRoot -ChildPath $item
   if (-not (Test-Path -LiteralPath $path)) {
     throw "Required build source item not found: $path"
+  }
+  if ((Test-Path -LiteralPath $path -PathType Container) -and
+    ($outputPath -eq $path -or $outputPath.StartsWith($path.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase))) {
+    throw "Build output must be outside the distribution source directories: $outputPath"
   }
   $path
 }
@@ -90,7 +94,10 @@ function Clear-BuildPath {
   )
 
   if (Test-Path -LiteralPath $Path) {
-    Remove-Item -LiteralPath $Path -Recurse -Force
+    if ((Get-Item -LiteralPath $Path -Force).PSIsContainer) {
+      throw "Refusing to replace a directory with a build artifact: $Path"
+    }
+    Remove-Item -LiteralPath $Path -Force
   }
 }
 
@@ -102,7 +109,7 @@ if ($Format -eq 'Both' -or $Format -eq 'Zip') {
   if ($PSCmdlet.ShouldProcess($zipPath, 'Create ZIP archive')) {
     Clear-BuildPath -Path $zipPath
     # Compress-Archive accepts multiple -Path roots and preserves each top-level
-    # directory name, so 'lib' and 'scripts' land in the archive exactly as they
+    # directory name, so 'dist' and 'scripts' land in the archive exactly as they
     # are on disk — no staging copy needed.
     Compress-Archive -Path $sourcePaths -DestinationPath $zipPath -Force
     Write-Output "Built: $zipPath"

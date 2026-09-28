@@ -62,76 +62,20 @@ also serve as implementation examples for composing new automation routines or r
 
 ## 📦 Installation and updates
 
-Run the following command in PowerShell 5.0 or newer to install the latest stable release. Running the same command again updates an
-existing managed installation:
+Install or update winkit from native Windows PowerShell 5.1 or PowerShell 7:
 
 ```powershell
-irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/adnoctem/winkit/main/dist/install.ps1 | iex
 ```
 
-The default installation is per-user at `%LOCALAPPDATA%\Programs\winkit`. The installer verifies the release archive against its published
-SHA-256 checksum, installs the pinned `PSFoundation` runtime dependency, and adds winkit's `bin` directory to the user `PATH`.
-
-Configure the installer with `WINKIT_*` environment variables in the current PowerShell session. The same settings apply to `irm | iex` and
-to a downloaded `install.ps1` file; the installer has no command-line parameters.
-
-```powershell
-# Preview a custom destination without installing anything
-$env:WINKIT_INSTALL_PATH = 'D:\Tools\winkit'
-$env:WINKIT_DRY_RUN = '1'
-irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 | iex
-
-# Install at the same destination after reviewing the plan
-Remove-Item Env:WINKIT_DRY_RUN
-irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 | iex
-```
-
-| Variable                 | Default               | Purpose                                                                                                   |
-| ------------------------ | --------------------- | --------------------------------------------------------------------------------------------------------- |
-| `WINKIT_SCOPE`           | `CurrentUser`         | `CurrentUser` or `AllUsers`; actual AllUsers installation requires elevation.                             |
-| `WINKIT_INSTALL_PATH`    | Scope-specific path   | Custom destination; otherwise `%LOCALAPPDATA%\Programs\winkit` or `%ProgramFiles%\winkit`.                |
-| `WINKIT_REPOSITORY`      | `adnoctem/winkit`     | GitHub release repository in `OWNER/REPOSITORY` format.                                                   |
-| `WINKIT_VERSION`         | Latest stable release | Exact semantic version, optionally prefixed by `v`.                                                       |
-| `WINKIT_NO_PATH`         | False                 | Skip persistent and current-session PATH updates.                                                         |
-| `WINKIT_FORCE`           | False                 | Reinstall the selected release and its pinned dependency; ownership and checksum checks remain mandatory. |
-| `WINKIT_NON_INTERACTIVE` | False                 | Suppress installer confirmations; unsafe conflicts still fail.                                            |
-| `WINKIT_DRY_RUN`         | False                 | Print the installation plan without installing anything.                                                  |
-| `WINKIT_PASS_THRU`       | False                 | Return a structured result describing the operation.                                                      |
-
-Boolean settings accept `1`, `true`, `yes`, or `on` to enable and `0`, `false`, `no`, or `off` to disable, case-insensitively. Unset or
-blank values use defaults. Invalid values fail before any installation. Only prefixed settings are read; an unrelated `DRY_RUN` variable has
-no effect. Settings remain in the current session until removed or changed, so clear `WINKIT_DRY_RUN` before installing. Existing managed
-installations retain their recorded scope and repository when those settings are omitted; explicitly conflicting values are rejected.
-
-Preview reads GitHub release metadata and prints release URLs, script/launcher/resource destinations, temporary staging, the dependency
-installation plan, and intended PATH changes. It does not download release assets, install modules or package providers, create directories,
-or change PATH. The exact PSFoundation version is read from the verified release archive during actual installation. AllUsers destinations
-can be previewed without elevation. Dry-run takes precedence over force and non-interactive mode.
-
-```powershell
-# Unattended machine-wide installation from an elevated PowerShell session
-$env:WINKIT_SCOPE = 'AllUsers'
-$env:WINKIT_NON_INTERACTIVE = '1'
-$env:WINKIT_PASS_THRU = '1'
-irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 | iex
-```
-
-The non-interactive setting applies only to the installer; it never bypasses confirmations in winkit's operational scripts.
-
-The concise `irm | iex` form executes the current installer source directly. To inspect it before execution, download it first:
-
-```powershell
-$installer = Join-Path $env:TEMP 'install-winkit.ps1'
-irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 -OutFile $installer
-Get-Content $installer
-& $installer
-```
+See the [distribution guide](dist/README.md) for installation, updates, dry runs, uninstallation, scope changes, environment settings, and
+registry registration. Maintained distribution sources live in `dist/`; generated release archives live in the ignored `build/` directory.
 
 ## ✨ TL;DR
 
 ```pwsh
 # install or update winkit
-irm https://raw.githubusercontent.com/adnoctem/winkit/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/adnoctem/winkit/main/dist/install.ps1 | iex
 
 # repository development: initialize dependencies
 .\winkit.ps1 init

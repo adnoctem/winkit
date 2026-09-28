@@ -81,7 +81,7 @@ if (-not (Test-Path -LiteralPath $settingsPath -PathType Leaf)) {
 }
 
 $extensions = @('.ps1', '.psm1', '.psd1')
-$excludedDirectories = @('.git', '.idea', 'dist', 'build')
+$excludedDirectories = @('.git', '.idea', 'build')
 if (-not $IncludeSecrets) {
   $excludedDirectories += 'secrets'
 }
@@ -89,7 +89,7 @@ if (-not $IncludeSecrets) {
 $rootFullPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath((Split-Path -Path $PSScriptRoot -Parent))
 $utf8Bom = New-Object System.Text.UTF8Encoding($true)
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-$installerPath = Join-Path -Path $rootFullPath -ChildPath 'install.ps1'
+$installerPath = Join-Path -Path $rootFullPath -ChildPath 'dist/install.ps1'
 $changed = New-Object System.Collections.Generic.List[string]
 $processed = 0
 

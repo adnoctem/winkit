@@ -6,7 +6,7 @@
 
 .DESCRIPTION
   By default, scans the entire repository root for .ps1, .psm1, and .psd1 files
-  and invokes PSScriptAnalyzer once per file. The .git, .idea, dist, build, and
+  and invokes PSScriptAnalyzer once per file. The .git, .idea, build, and
   secrets directories are excluded by default so generated, vendored, or
   sensitive content is never analyzed.
 
@@ -63,7 +63,7 @@ if (-not (Test-Path -LiteralPath $settingsPath -PathType Leaf)) {
 }
 
 $extensions = @('.ps1', '.psm1', '.psd1')
-$excludedDirectories = @('.git', '.idea', 'dist', 'build', 'secrets')
+$excludedDirectories = @('.git', '.idea', 'build', 'secrets')
 $rootFullPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath((Split-Path -Path $PSScriptRoot -Parent))
 
 function Test-LintExcludedPath {

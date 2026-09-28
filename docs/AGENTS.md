@@ -1,4 +1,4 @@
-﻿# winkit — Agent Guidance
+# winkit — Agent Guidance
 
 `winkit` is a PowerShell script collection for Windows configuration, hardening, and provisioning. It contains **no module code**: shared
 functionality lives in the separate `PSFoundation` module (PowerShell Gallery), which every script imports by name. The root `AGENTS.md` is
@@ -12,12 +12,13 @@ a symlink to this file — edit this one.
 - `.\winkit.ps1 test` — run the winkit Pester suite under `tests/` (logic tests, no Outlook); `-Outlook` also runs the integration suite
   (needs Outlook, uses a scratch PST). Module logic tests live in the PSFoundation repo
 - `.\winkit.ps1 deps` — compare `requirements.psd1` pins against the PowerShell Gallery (`-Check` reports only)
-- `.\winkit.ps1 build` — create `dist/` archives (ZIP + tar.gz) from `scripts/`
+- `.\winkit.ps1 build` — create `build/` archives (ZIP + tar.gz) from `scripts/`
 
 ## Layout
 
-- `install.ps1` — standalone, idempotent release installer/updater; it deliberately cannot depend on PSFoundation because it installs the
-  pinned runtime dependency
+- `dist/` — tracked standalone installer/uninstaller sources and their user guide; they cannot depend on PSFoundation because they install
+  or remove winkit itself
+- `build/` — gitignored generated release archives and checksums
 - `scripts/` — the product: executable admin scripts, filed by what they change. The scripts root holds only the three `bin/`-launched entry
   points (`Invoke-Bootstrap`, `Invoke-Optimizer`, `Invoke-InformationRetrieval`); everything else lives in `Privacy/`, `Interface/`,
   `System/`, `Software/`, `Features/`, `Maintenance/`, `Diagnostics/`, `Network/`, `Administration/`, `Policy/`, `Files/`, `Office/`, and
@@ -38,9 +39,9 @@ a symlink to this file — edit this one.
 
 - Every script opens with `#Requires -Version 5.0`, `#Requires -RunAsAdministrator` (when elevation is required), and
   `#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = 'x.y.z' }` — pin the lowest version that provides every cmdlet used
-- `install.ps1` is the sole PSFoundation exception: it must remain standalone so it can install the pinned dependency on a fresh machine
-- The web installer `install.ps1` takes configuration only from `WINKIT_*` process environment variables, including `WINKIT_DRY_RUN`; it has
-  no public script parameters. Keep the documented `irm | iex` entry point working in Windows PowerShell 5.1
+- `dist/install.ps1` and `dist/uninstall.ps1` are the PSFoundation exceptions: distribution maintenance must remain standalone
+- The web installer `dist/install.ps1` takes configuration only from `WINKIT_*` process environment variables, including `WINKIT_DRY_RUN`;
+  it has no public script parameters. Keep the documented `irm | iex` entry point working in Windows PowerShell 5.1
 - `Import-Module PSFoundation -Force` after the param block
 - Comment-based help with `.SYNOPSIS`/`.DESCRIPTION`/`.PARAMETER`/`.EXAMPLE`, plus a `.NOTES` block (Author, License, Server Core support,
   SYSTEM-account suitability)
@@ -48,7 +49,7 @@ a symlink to this file — edit this one.
 - Results use PSFoundation `New-OperationResult`/`Add-OperationResult`; user feedback via `Write-Log -Message -Color`
 - PowerShell 5.0 compatibility: no ternary, `??`, or null-conditional operators (PSUseCompatibleSyntax targets 5.0/5.1/7.0)
 - Encoding: UTF-8 with BOM, CRLF (enforced by formatter and pre-commit `mixed-line-ending`); 2-space indentation
-- `install.ps1` is the encoding exception: keep it ASCII-only UTF-8 **without BOM**, with CRLF. Windows PowerShell 5.1 treats a BOM
+- `dist/install.ps1` is the encoding exception: keep it ASCII-only UTF-8 **without BOM**, with CRLF. Windows PowerShell 5.1 treats a BOM
   preserved in downloaded text as code, breaking the documented `irm | iex` entry point
 - New plural nouns in function/script names must be added to the `PSUseSingularNouns` `NounAllowList` in `PSScriptAnalyzerSettings.psd1`
 
@@ -87,7 +88,7 @@ Passing the formatter is necessary but does not establish readable structure. Fo
 
 - `docs/CONTRIBUTING.md` still references the retired `lib/` module and a `tests/` directory — both were split out into PSFoundation; trust
   the code over that document
-- Format/lint exclude `secrets/` and `dist/` by default (`-IncludeSecrets` overrides)
+- Format/lint exclude `secrets/` and `build/`; tracked `dist/` sources are included by default (`-IncludeSecrets` overrides)
 - Commit messages must be conventional (types `build|ci|docs|feat|fix|perf|refactor|test|chore`; scopes `lib|scripts|tools|config|docs` —
   `lib` is historical) — see `docs/CONTRIBUTING.md`
 - Releases are semantic-release driven: superlint gates the push, then dispatches `release`; a `feat` commit on `main` releases a minor,
