@@ -71,9 +71,35 @@ BeforeAll {
 
     [PSCustomObject]@{
       Name = $Name; FolderPath = "\\Test\$Name"; StoreID = 'source-store'
+      EntryID = 'folder-' + $Name
       Items = $items; Folders = (New-FakeCollection)
       DefaultItemType = 0; PropertyAccessor = $accessor
     }
+  }
+}
+
+Describe 'Outlook report subjects' -ForEach @(
+  @{ ResultFunction = 'Add-OutlookArchiveResult' }
+  @{ ResultFunction = 'Add-OutlookItemResult' }
+) {
+  It 'labels <Case> subjects without changing the source message' -ForEach @(
+    @{ Case = 'null'; Subject = $null; Expected = '<No Subject>' }
+    @{ Case = 'empty'; Subject = ''; Expected = '<No Subject>' }
+    @{ Case = 'whitespace'; Subject = " `t "; Expected = '<No Subject>' }
+    @{ Case = 'nonblank'; Subject = '  Grüße aus Köln  '; Expected = '  Grüße aus Köln  ' }
+  ) {
+    $mail = New-FakeMail -Id 'subject-test'
+    $mail.Subject = $Subject
+    $results = New-Object Collections.ArrayList
+
+    & $ResultFunction -Results $results -Item $mail -Action Copy -Status Skipped -Folder '\\Test\Inbox' -Detail DryRun
+
+    $results.Count | Should -Be 1
+    $json = ConvertTo-Json -InputObject @($results) -Depth 5 | ConvertFrom-Json
+    $json[0].Target | Should -BeExactly $Expected
+    $csv = $results | ConvertTo-Csv -NoTypeInformation | ConvertFrom-Csv
+    $csv.Target | Should -BeExactly $Expected
+    $mail.Subject | Should -BeExactly $Subject
   }
 }
 
@@ -203,12 +229,6 @@ Describe 'Outlook archive safety' {
     Test-OutlookItemInRange $mail | Should -BeFalse
   }
 
-  It 'skips virtual search folders before creating destinations' {
-    Mock Get-OutlookSubFolder { throw 'Must not create a folder' }
-    $folder = New-FakeFolder -Name Search -FolderType 2
-    Copy-OutlookFolderTree -SourceFolder $folder -DestinationParent $script:Destination -ArchiveMode Move -Results $script:Results -Confirm:$false
-    Should -Invoke Get-OutlookSubFolder -Times 0
-  }
 }
 
 Describe 'Outlook deduplication safety' {
@@ -237,13 +257,6 @@ Describe 'Outlook deduplication safety' {
     $script:Destination.Items.Count | Should -Be 0
   }
 
-  It 'excludes the entire subtree under an excluded folder' {
-    Mock Optimize-OutlookFolder { throw 'Must not process excluded descendants' }
-    $excluded = New-FakeFolder -Name 'Deleted Items'
-    $null = $excluded.Folders.Values.Add($script:Source)
-    Invoke-OutlookFolderTree -Folder $excluded -ReviewFolder $script:Destination -ReviewName Review -Exclude @('Deleted Items') -Results $script:Results -Confirm:$false
-    Should -Invoke Optimize-OutlookFolder -Times 0
-  }
 }
 
 Describe 'Archive script preflight' {
@@ -260,7 +273,7 @@ Describe 'Archive script preflight' {
   It 'refuses an existing PST before connecting to Outlook' {
     $path = Join-Path $TestDrive 'existing.pst'
     [IO.File]::WriteAllText($path, 'existing data')
-    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath $path -ReportDirectory $TestDrive -PassThru -WarningAction SilentlyContinue
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName '' -ArchivePath $path -ReportDirectory $TestDrive -PassThru -WarningAction SilentlyContinue
     $LASTEXITCODE | Should -Be 1
     $result.Status | Should -Be Failed
     $result.Detail | Should -Match 'already exists'
@@ -269,16 +282,23 @@ Describe 'Archive script preflight' {
   }
 
   It 'refuses conflicting date bounds before connecting to Outlook' {
-    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'new.pst') -ReportDirectory $TestDrive -EndDate '2024-12-31' -EndBefore '2025-01-01' -PassThru -WarningAction SilentlyContinue
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName '' -ArchivePath (Join-Path $TestDrive 'new.pst') -ReportDirectory $TestDrive -EndDate '2024-12-31' -EndBefore '2025-01-01' -PassThru -WarningAction SilentlyContinue
     $result.Status | Should -Be Failed
     $result.Detail | Should -Match 'not both'
+    Should -Invoke Connect-Outlook -Times 0
+  }
+
+  It 'refuses contradictory attachment options before connecting to Outlook' {
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'conflict.pst') -AddDataFile -DetachWhenDone:$true -PassThru -WarningAction SilentlyContinue
+    $result.Status | Should -Be Failed
+    $result.Detail | Should -Match 'conflicts'
     Should -Invoke Connect-Outlook -Times 0
   }
 
   It 'stops before Outlook when the report directory is not writable' {
     $blocked = Join-Path $TestDrive 'not-a-directory'
     [IO.File]::WriteAllText($blocked, 'keep')
-    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'new.pst') -ReportDirectory $blocked -PassThru -WarningAction SilentlyContinue
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName '' -ArchivePath (Join-Path $TestDrive 'new.pst') -ReportDirectory $blocked -PassThru -WarningAction SilentlyContinue
     $result.Status | Should -Be Failed
     $result.ReportPath | Should -BeNullOrEmpty
     $LASTEXITCODE | Should -Be 1
@@ -289,7 +309,7 @@ Describe 'Archive script preflight' {
   It 'preserves an existing explicitly named report' {
     $reportPath = Join-Path $TestDrive 'existing-report.json'
     [IO.File]::WriteAllText($reportPath, 'original report')
-    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'new.pst') -ReportPath $reportPath -DryRun -WarningAction SilentlyContinue
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName '' -ArchivePath (Join-Path $TestDrive 'new.pst') -ReportPath $reportPath -DryRun -WarningAction SilentlyContinue
     $result.Status | Should -Be Failed
     $result.Detail | Should -Match 'already exists'
     $result.ReportPath | Should -BeNullOrEmpty
@@ -300,7 +320,7 @@ Describe 'Archive script preflight' {
   It 'rejects conflicting report options without creating either destination' {
     $reportPath = Join-Path $TestDrive 'conflict.json'
     $reportDirectory = Join-Path $TestDrive 'conflict-directory'
-    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'new.pst') -ReportPath $reportPath -ReportDirectory $reportDirectory -PassThru -WarningAction SilentlyContinue
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName '' -ArchivePath (Join-Path $TestDrive 'new.pst') -ReportPath $reportPath -ReportDirectory $reportDirectory -PassThru -WarningAction SilentlyContinue
     $result.Status | Should -Be Failed
     $result.Detail | Should -Match 'not both'
     Test-Path -LiteralPath $reportPath | Should -BeFalse
@@ -310,7 +330,7 @@ Describe 'Archive script preflight' {
 
   It 'rejects a report path that resolves to the archive destination' {
     $path = Join-Path $TestDrive 'same.pst'
-    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath $path -ReportPath $path -DryRun -WarningAction SilentlyContinue
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName '' -ArchivePath $path -ReportPath $path -DryRun -WarningAction SilentlyContinue
     $result.Status | Should -Be Failed
     $result.Detail | Should -Match 'different files'
     Test-Path -LiteralPath $path | Should -BeFalse
@@ -364,6 +384,7 @@ Describe 'Repair tool launch safety' {
 
 Describe 'Outlook store selection and preview' {
   BeforeEach {
+    Mock Get-OutlookStandardFolderIdentity -ModuleName PSFoundation { @() }
     Mock Get-UserInfo { @{ UserName = 'TEST\MailboxUser'; IsAdministrator = $false } }
     Mock Write-Progress { }
     Mock Import-Module { }
@@ -383,6 +404,25 @@ Describe 'Outlook store selection and preview' {
       App       = $app
       Namespace = [PSCustomObject]@{ DefaultStore = $store; Stores = (New-FakeCollection @($store, $store)) }
     }
+    $script:FakeContext.Namespace | Add-Member ScriptMethod GetFolderFromID {
+      param($Id, $StoreId)
+      if ($StoreId -ne $this.DefaultStore.Root.StoreID) {
+        throw 'Wrong store identifier'
+      }
+      $queue = New-Object Collections.Queue
+      $queue.Enqueue($this.DefaultStore.Root)
+      while ($queue.Count) {
+        $folder = $queue.Dequeue()
+        if ($folder.EntryID -eq $Id) {
+          return $folder
+        }
+        foreach ($child in $folder.Folders.Values) {
+          $queue.Enqueue($child)
+        }
+      }
+      throw 'Folder not found'
+    }
+
     $global:WinkitSafetyTestContext = $script:FakeContext
     Mock Connect-Outlook { $global:WinkitSafetyTestContext }
   }
@@ -391,9 +431,233 @@ Describe 'Outlook store selection and preview' {
     Remove-Variable -Name WinkitSafetyTestContext -Scope Global -ErrorAction SilentlyContinue
   }
 
+  It 'defaults to Inbox alone and visits descendants only with Recurse' {
+    $inbox = New-FakeFolder -Name Inbox
+    $nested = New-FakeFolder -Name Nested
+    $protected = New-FakeFolder -Name Protected
+    $inbox.FolderPath = $script:Source.FolderPath + '\Inbox'
+    $nested.FolderPath = $inbox.FolderPath + '\Nested'
+    $protected.FolderPath = $script:Source.FolderPath + '\Protected'
+    Mock Get-OutlookStandardFolderIdentity -ModuleName PSFoundation {
+      [PSCustomObject]@{ Kind = 'Inbox'; EntryID = 'folder-Inbox'; StoreID = 'source-store'; State = 'Resolved' }
+    }
+    $null = $inbox.Folders.Values.Add($nested)
+    $null = $script:Source.Folders.Values.Add($inbox)
+    $null = $script:Source.Folders.Values.Add($protected)
+    Mock Get-OutlookSubFolder {
+      param($ParentFolder, $Name)
+      @($ParentFolder.Folders.Values | Where-Object Name -EQ $Name)[0]
+    }
+    $single = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'inbox.pst') -ReportDirectory $TestDrive -DryRun
+    $single.Status | Should -Be Preview
+    $single.FoldersRead | Should -Be 1
+    $report = Get-Content -LiteralPath $single.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $report.Settings.SourceFolder | Should -Be '\\Test\Root\Inbox'
+    $report.Settings.FolderName | Should -BeNullOrEmpty
+    $report.Settings.FolderSelection | Should -Be DefaultInbox
+    $report.Settings.Recurse | Should -BeFalse
+
+    $recursive = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'recursive.pst') -ReportDirectory $TestDrive -Recurse -DryRun
+    $recursive.Status | Should -Be Preview
+    $recursive.FoldersRead | Should -Be 2
+
+    $all = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName '' -Recurse -ArchivePath (Join-Path $TestDrive 'all.pst') -ReportDirectory $TestDrive -DryRun
+    $all.FoldersRead | Should -Be 4
+    $rootReport = Get-Content -LiteralPath $all.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $rootReport.Settings.SourceFolder | Should -Be '\\Test\Root'
+    $rootReport.Settings.FolderName | Should -BeExactly ''
+    $rootReport.Settings.FolderSelection | Should -Be ExplicitPath
+    Should -Invoke Get-OutlookSubFolder -Times 0 -ParameterFilter { $Create }
+  }
+
+  It 'selects the implicit <InboxName> Inbox independently of a literal Inbox for <ScriptName>' -ForEach @(
+    @{ ScriptName = 'New-OutlookArchive'; InboxName = 'Posteingang' }
+    @{ ScriptName = 'New-OutlookArchive'; InboxName = 'Renamed' }
+    @{ ScriptName = 'Optimize-Outlook'; InboxName = 'Posteingang' }
+    @{ ScriptName = 'Optimize-Outlook'; InboxName = 'Renamed' }
+  ) {
+    $inbox = New-FakeFolder -Name $InboxName -Mail @((New-FakeMail 'standard-inbox-mail'))
+    $inbox.EntryID = 'standard-inbox'
+    $inbox.FolderPath = $script:Source.FolderPath + '\' + $InboxName
+    $literal = New-FakeFolder -Name Inbox -Mail @((New-FakeMail 'literal-inbox-mail'))
+    $literal.FolderPath = $script:Source.FolderPath + '\Inbox'
+    $null = $script:Source.Folders.Values.Add($inbox)
+    $null = $script:Source.Folders.Values.Add($literal)
+    Mock Get-OutlookStandardFolderIdentity -ModuleName PSFoundation {
+      [PSCustomObject]@{ Kind = 'Inbox'; EntryID = 'standard-inbox'; StoreID = 'source-store'; State = 'Resolved' }
+    }
+    $script:FakeContext.Namespace | Add-Member ScriptMethod GetItemFromID {
+      param($Id, $StoreId)
+      foreach ($folder in $this.DefaultStore.Root.Folders.Values) {
+        if ($folder.StoreID -eq $StoreId) {
+          foreach ($mail in $folder.Items.Values) {
+            if ($mail.EntryID -eq $Id) { return $mail }
+          }
+        }
+      }
+      throw 'Item not found'
+    }
+
+    $arguments = @{ DryRun = $true; PassThru = $true }
+    if ($ScriptName -eq 'New-OutlookArchive') {
+      $arguments.ArchivePath = Join-Path $TestDrive 'identity.pst'
+      $arguments.ReportDirectory = $TestDrive
+    }
+    $implicit = & (Join-Path $script:OfficePath "$ScriptName.ps1") @arguments
+    $explicit = & (Join-Path $script:OfficePath "$ScriptName.ps1") @arguments -FolderName Inbox
+    if ($ScriptName -eq 'New-OutlookArchive') {
+      $implicit.Status | Should -Be Preview
+      $explicit.Status | Should -Be Preview
+      $implicitReport = Get-Content -LiteralPath $implicit.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      $explicitReport = Get-Content -LiteralPath $explicit.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      $implicitReport.Settings.SourceFolder | Should -Be $inbox.FolderPath
+      $explicitReport.Settings.SourceFolder | Should -Be $literal.FolderPath
+      $explicitReport.Settings.FolderSelection | Should -Be ExplicitPath
+      $explicitReport.Settings.FolderName | Should -Be Inbox
+      $implicit = $implicitReport.Results
+      $explicit = $explicitReport.Results
+    }
+    @($implicit).Count | Should -Be 1
+    $implicit.Target | Should -Be 'standard-inbox-mail'
+    @($explicit).Count | Should -Be 1
+    $explicit.Target | Should -Be 'literal-inbox-mail'
+    Should -Invoke Add-OutlookStoreRoot -Times 0
+    Should -Invoke Get-OutlookSubFolder -Times 0 -ParameterFilter { $Create }
+  }
+
+  It 'stops <ScriptName> before mutation when implicit selection is <Case>' -ForEach @(
+    @{ ScriptName = 'New-OutlookArchive'; Case = 'unresolved'; Excluded = $null }
+    @{ ScriptName = 'Optimize-Outlook'; Case = 'unresolved'; Excluded = $null }
+    @{ ScriptName = 'New-OutlookArchive'; Case = 'excluded'; Excluded = 'Parent\Posteingang' }
+    @{ ScriptName = 'Optimize-Outlook'; Case = 'excluded'; Excluded = 'Parent\Posteingang' }
+    @{ ScriptName = 'New-OutlookArchive'; Case = 'ancestor excluded'; Excluded = 'Parent' }
+    @{ ScriptName = 'Optimize-Outlook'; Case = 'ancestor excluded'; Excluded = 'Parent' }
+  ) {
+    $parent = New-FakeFolder -Name Parent
+    $parent.FolderPath = $script:Source.FolderPath + '\Parent'
+    $inbox = New-FakeFolder -Name Posteingang
+    $inbox.FolderPath = $parent.FolderPath + '\Posteingang'
+    $null = $parent.Folders.Values.Add($inbox)
+    $null = $script:Source.Folders.Values.Add($parent)
+    if ($Excluded) {
+      Mock Get-OutlookStandardFolderIdentity -ModuleName PSFoundation {
+        [PSCustomObject]@{ Kind = 'Inbox'; EntryID = 'folder-Posteingang'; StoreID = 'source-store'; State = 'Resolved' }
+      }
+    }
+    $arguments = @{ PassThru = $true; Confirm = $false; WarningAction = 'SilentlyContinue' }
+    if ($Excluded) {
+      $arguments.Exclusions = @($Excluded)
+    }
+    if ($ScriptName -eq 'New-OutlookArchive') {
+      $arguments.ArchivePath = Join-Path $TestDrive 'blocked.pst'
+      $arguments.ReportDirectory = $TestDrive
+    }
+    $result = & (Join-Path $script:OfficePath "$ScriptName.ps1") @arguments
+    $result.Status | Should -Be Failed
+    if ($Excluded) {
+      $result.Detail | Should -Match 'CustomExclusion'
+    }
+    else {
+      $result.Detail | Should -Match 'Cannot resolve.*Inbox identity'
+    }
+    Should -Invoke Add-OutlookStoreRoot -Times 0
+    Should -Invoke Get-OutlookSubFolder -Times 0 -ParameterFilter { $Create }
+  }
+
+  It 'resolves localized nested paths and refuses missing folders without broadening scope' {
+    $inbox = New-FakeFolder -Name Posteingang
+    $nested = New-FakeFolder -Name Kunden
+    $null = $inbox.Folders.Values.Add($nested)
+    $null = $script:Source.Folders.Values.Add($inbox)
+    Mock Get-OutlookSubFolder {
+      param($ParentFolder, $Name)
+      $found = @($ParentFolder.Folders.Values | Where-Object Name -EQ $Name)
+      if ($found.Count) {
+        $found[0]
+      }
+    }
+
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName 'Posteingang\Kunden' -ArchivePath (Join-Path $TestDrive 'nested.pst') -ReportDirectory $TestDrive -DryRun
+    $result.Status | Should -Be Preview
+    $result.FoldersRead | Should -Be 1
+    $missing = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName 'missing' -ArchivePath (Join-Path $TestDrive 'missing.pst') -ReportDirectory $TestDrive -DryRun -WarningAction SilentlyContinue
+    $missing.Status | Should -Be Failed
+    $missing.Detail | Should -Match 'not found'
+    $missing.FoldersRead | Should -Be 0
+    Should -Invoke Add-OutlookStoreRoot -Times 0
+  }
+
+  It 'forwards inclusion flags while custom exclusions still protect localized folders' {
+    $inbox = New-FakeFolder -Name Posteingang
+    $sent = New-FakeFolder -Name Gesendet
+    $junk = New-FakeFolder -Name Unerwuenscht
+    foreach ($folder in @($inbox, $sent, $junk)) {
+      $null = $script:Source.Folders.Values.Add($folder)
+    }
+    Mock Get-OutlookStandardFolderIdentity -ModuleName PSFoundation {
+      [PSCustomObject]@{ Kind = 'Inbox'; EntryID = 'folder-Posteingang'; State = 'Resolved' }
+      [PSCustomObject]@{ Kind = 'SentItems'; EntryID = 'folder-Gesendet'; State = 'Resolved' }
+      [PSCustomObject]@{ Kind = 'Junk'; EntryID = 'folder-Unerwuenscht'; State = 'Resolved' }
+    }
+
+    $arguments = @{
+      FolderName       = ''
+      Recurse          = $true
+      IncludeInbox     = $false
+      IncludeSentItems = $true
+      IncludeJunk      = $true
+      Exclusions       = @('Unerwuenscht')
+      DryRun           = $true
+    }
+    $archive = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') @arguments -ArchivePath (Join-Path $TestDrive 'policy.pst') -ReportDirectory $TestDrive
+    $archive.Status | Should -Be Preview
+    $archive.FoldersRead | Should -Be 2
+    $report = Get-Content -LiteralPath $archive.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    ($report.FolderPlan | Where-Object StandardKind -EQ Inbox).Process | Should -BeFalse
+    ($report.FolderPlan | Where-Object StandardKind -EQ SentItems).Process | Should -BeTrue
+    ($report.FolderPlan | Where-Object StandardKind -EQ Junk).Reason | Should -Be CustomExclusion
+
+    $mail = New-FakeMail -Id 'sent-mail'
+    $null = $sent.Items.Values.Add($mail)
+    $csvPath = Join-Path $TestDrive 'policy.csv'
+    $optimizer = @(& (Join-Path $script:OfficePath 'Optimize-Outlook.ps1') @arguments -ReportPath $csvPath)
+    @($optimizer | Where-Object Detail -EQ CustomExclusion).Count | Should -Be 1
+    @($optimizer | Where-Object { $_.Detail -like '*IncludeInbox*' }).Count | Should -Be 1
+    $csvMail = Import-Csv -LiteralPath $csvPath | Where-Object Target -EQ 'sent-mail'
+    $csvMail.PSObject.Properties.Name | Should -Contain MessageId
+    $csvMail.Received | Should -Not -BeNullOrEmpty
+    Should -Invoke Add-OutlookStoreRoot -Times 0
+  }
+
+  It 'keeps a requested data file attached with its filename or explicit display name' {
+    $destination = New-FakeFolder -Name Archive
+    $destination.StoreID = 'archive-store'
+    $script:FakeContext | Add-Member NoteProperty ArchiveRoot $destination
+    Mock Add-OutlookStoreRoot { $global:WinkitSafetyTestContext.ArchiveRoot }
+
+    $arguments = @{
+      ArchivePath     = Join-Path $TestDrive 'Archive - 2018.pst'
+      ReportDirectory = $TestDrive
+      FolderName      = ''
+      AddDataFile     = $true
+      PassThru        = $true
+      Confirm         = $false
+    }
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') @arguments
+    $result.Status | Should -Be Completed
+    $destination.Name | Should -Be 'Archive - 2018'
+    $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $report.Settings.DetachWhenDone | Should -BeFalse
+    $report.Settings.AddDataFile | Should -BeTrue
+
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') @arguments -DataFileName 'Custom archive'
+    $result.Status | Should -Be Completed
+    $destination.Name | Should -Be 'Custom archive'
+  }
+
   It 'previews all three scripts using the default store without creating folders or quitting Outlook' {
-    $archiveResults = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'preview.pst') -ReportDirectory $TestDrive -DryRun -QuitOutlook
-    $dedupResults = & (Join-Path $script:OfficePath 'Optimize-Outlook.ps1') -DryRun -QuitOutlook
+    $archiveResults = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName '' -ArchivePath (Join-Path $TestDrive 'preview.pst') -ReportDirectory $TestDrive -DryRun -QuitOutlook
+    $dedupResults = & (Join-Path $script:OfficePath 'Optimize-Outlook.ps1') -FolderName '' -DryRun -QuitOutlook
     $generatorResults = & (Join-Path $script:OfficePath 'New-TestOutlookMessage.ps1') -Count 1 -DryRun -QuitOutlook
     @($archiveResults | Where-Object Status -EQ Failed).Count | Should -Be 0
     @($dedupResults | Where-Object Status -EQ Failed).Count | Should -Be 0
@@ -423,7 +687,7 @@ Describe 'Outlook store selection and preview' {
   }
 
   It 'writes an empty Results array and returns one preview summary' {
-    $result = @(& (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'empty.pst') -ReportDirectory $TestDrive -WhatIf -PassThru)
+    $result = @(& (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName '' -ArchivePath (Join-Path $TestDrive 'empty.pst') -ReportDirectory $TestDrive -WhatIf -PassThru)
     $result.Count | Should -Be 1
     $result[0].Status | Should -Be Preview
     $result[0].Planned | Should -Be 0
@@ -436,7 +700,7 @@ Describe 'Outlook store selection and preview' {
   It 'resolves an exact relative report path and creates its parent during WhatIf' {
     Push-Location $TestDrive
     try {
-      $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'relative.pst') -ReportPath '.\reports\archive-report.json' -WhatIf
+      $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName '' -ArchivePath (Join-Path $TestDrive 'relative.pst') -ReportPath '.\reports\archive-report.json' -WhatIf
       $result.Status | Should -Be Preview
       $result.ReportPath | Should -Be (Join-Path $TestDrive 'reports\archive-report.json')
       $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -468,6 +732,7 @@ Describe 'Outlook store selection and preview' {
     }
 
     $arguments = @{
+      FolderName      = ''
       ArchivePath     = Join-Path $TestDrive 'large.pst'
       ReportDirectory = Join-Path $TestDrive 'reports'
       StartDate       = '2024-01-01'
@@ -500,7 +765,7 @@ Describe 'Outlook store selection and preview' {
 
   It 'reports JSON serialization failure instead of claiming a report was saved' {
     Mock ConvertTo-Json { throw 'Report write failed' }
-    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -ArchivePath (Join-Path $TestDrive 'failed-report.pst') -ReportDirectory $TestDrive -DryRun -WarningAction SilentlyContinue
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName '' -ArchivePath (Join-Path $TestDrive 'failed-report.pst') -ReportDirectory $TestDrive -DryRun -WarningAction SilentlyContinue
     $result.Status | Should -Be Failed
     $result.ReportPath | Should -BeNullOrEmpty
     $result.Detail | Should -Match 'Report write failed'
@@ -533,6 +798,7 @@ Describe 'Outlook store selection and preview' {
 
     Mock Add-OutlookStoreRoot { $global:WinkitSafetyTestContext.ArchiveRoot }
     $arguments = @{
+      FolderName      = ''
       ArchivePath     = Join-Path $TestDrive 'partial.pst'
       ReportDirectory = $TestDrive
       Mode            = $Mode

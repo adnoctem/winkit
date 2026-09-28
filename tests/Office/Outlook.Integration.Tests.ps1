@@ -58,7 +58,7 @@ BeforeAll {
     Write-Verbose 'No ScanPST discovery result; repair tests will be skipped.'
   }
 
-  $script:OptimizeSupported = [bool](Get-Module PSFoundation -ListAvailable | Where-Object { $_.Version -ge [version]'1.3.0' })
+  $script:OptimizeSupported = [bool](Get-Module PSFoundation -ListAvailable | Where-Object { $_.Version -ge [version]'1.7.0' })
 
   $script:Context = Connect-Outlook
   $script:StoreRoot = Add-OutlookStoreRoot -Namespace $script:Context.Namespace -Path $script:TestStorePst
@@ -109,7 +109,7 @@ Describe 'New-TestOutlookMessage' {
 Describe 'Optimize-Outlook deduplication' {
   It 'walks the generated folder and counts mail items' {
     if (-not $script:OptimizeSupported) {
-      Set-ItResult -Skipped -Because 'Optimize-Outlook requires PSFoundation 1.3.0 (Get-TransportMessageId).'
+      Set-ItResult -Skipped -Because 'Optimize-Outlook requires PSFoundation 1.7.0 (Outlook folder selection).'
       return
     }
 
@@ -143,7 +143,7 @@ Describe 'Optimize-Outlook deduplication' {
 
   It 'flags exactly the seeded duplicates in a dry run' {
     if (-not $script:OptimizeSupported) {
-      Set-ItResult -Skipped -Because 'Optimize-Outlook requires PSFoundation 1.3.0 (Get-TransportMessageId).'
+      Set-ItResult -Skipped -Because 'Optimize-Outlook requires PSFoundation 1.7.0 (Outlook folder selection).'
       return
     }
 
@@ -185,7 +185,7 @@ Describe 'Optimize-Outlook deduplication' {
         return
       }
 
-      $_results = & $script:Optimizer -StoreName $script:StoreName -DryRun -PassThru
+      $_results = & $script:Optimizer -FolderName '' -Recurse -StoreName $script:StoreName -DryRun -PassThru
       @($_results | Where-Object { $_.Action -eq 'MoveDuplicate' -and $_.Detail -eq 'DryRun' }).Count | Should -Be 5
       @($_results | Where-Object { $_.Status -eq 'Kept' }).Count | Should -Be 15
     }
@@ -197,11 +197,11 @@ Describe 'Optimize-Outlook deduplication' {
 
   It 'moves the seeded duplicates to the review folder' {
     if (-not $script:OptimizeSupported) {
-      Set-ItResult -Skipped -Because 'Optimize-Outlook requires PSFoundation 1.3.0 (Get-TransportMessageId).'
+      Set-ItResult -Skipped -Because 'Optimize-Outlook requires PSFoundation 1.7.0 (Outlook folder selection).'
       return
     }
 
-    $_results = & $script:Optimizer -StoreName $script:StoreName -Confirm:$false -PassThru
+    $_results = & $script:Optimizer -FolderName '' -Recurse -StoreName $script:StoreName -Confirm:$false -PassThru
     @($_results | Where-Object { $_.Action -eq 'MoveDuplicate' -and $_.Status -eq 'Moved' }).Count | Should -Be 5
   }
 }
@@ -226,7 +226,7 @@ Describe 'New-TestOutlookMessage determinism' {
 
 Describe 'New-OutlookArchive' {
   It 'previews the copy without creating a PST' {
-    $_summary = & $script:Archiver -ArchivePath $script:ArchiveCopyPst -ReportDirectory $script:TempRoot -StoreName $script:StoreName -Mode Copy -DryRun -PassThru
+    $_summary = & $script:Archiver -FolderName '' -Recurse -ArchivePath $script:ArchiveCopyPst -ReportDirectory $script:TempRoot -StoreName $script:StoreName -Mode Copy -DryRun -PassThru
     $_results = (Get-Content -LiteralPath $_summary.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json).Results
     @($_results | Where-Object { $_.Detail -eq 'DryRun' }).Count | Should -BeGreaterThan 0
     Test-Path -LiteralPath $script:ArchiveCopyPst | Should -BeFalse
@@ -234,7 +234,7 @@ Describe 'New-OutlookArchive' {
 
   It 'copies the generated mail into the archive PST' {
     $_before = Get-TestMailCount -Folder $script:StoreRoot
-    $_summary = & $script:Archiver -ArchivePath $script:ArchiveCopyPst -ReportDirectory $script:TempRoot -StoreName $script:StoreName -Mode Copy -PassThru
+    $_summary = & $script:Archiver -FolderName '' -Recurse -ArchivePath $script:ArchiveCopyPst -ReportDirectory $script:TempRoot -StoreName $script:StoreName -Mode Copy -PassThru
     $_results = (Get-Content -LiteralPath $_summary.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json).Results
     @($_results | Where-Object { $_.Status -eq 'Copied' }).Count | Should -Be $_before
     Get-TestMailCount -Folder $script:StoreRoot | Should -Be $_before
@@ -268,14 +268,14 @@ Describe 'New-OutlookArchive' {
     }
 
     $_datedArchive = Join-Path $script:TempRoot 'dated-archive.pst'
-    $_summary = & $script:Archiver -ArchivePath $_datedArchive -ReportDirectory $script:TempRoot -StoreName $script:StoreName -Mode Copy -StartDate '2024-07-01' -EndBefore '2025-01-01' -PassThru
+    $_summary = & $script:Archiver -FolderName '' -Recurse -ArchivePath $_datedArchive -ReportDirectory $script:TempRoot -StoreName $script:StoreName -Mode Copy -StartDate '2024-07-01' -EndBefore '2025-01-01' -PassThru
     $_results = (Get-Content -LiteralPath $_summary.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json).Results
     @($_results | Where-Object { $_.Status -eq 'Copied' }).Count | Should -Be 5
   }
 
   It 'moves the generated mail into the archive PST' {
     $_before = Get-TestMailCount -Folder $script:StoreRoot
-    $_summary = & $script:Archiver -ArchivePath $script:ArchiveMovePst -ReportDirectory $script:TempRoot -StoreName $script:StoreName -Mode Move -PassThru
+    $_summary = & $script:Archiver -FolderName '' -Recurse -ArchivePath $script:ArchiveMovePst -ReportDirectory $script:TempRoot -StoreName $script:StoreName -Mode Move -PassThru
     $_results = (Get-Content -LiteralPath $_summary.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json).Results
     @($_results | Where-Object { $_.Status -eq 'Moved' }).Count | Should -Be $_before
     Get-TestMailCount -Folder $script:StoreRoot | Should -Be 0

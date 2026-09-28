@@ -1,11 +1,13 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.3.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.7.0' }
 
 <#
 .SYNOPSIS
   Deduplicates Outlook mail items per folder using the transport Message-ID.
 .DESCRIPTION
-  Walks every mail folder in the target Outlook store, keys each received mail
+  Processes Inbox by default, with optional FolderName and Recurse selection.
+  Standard folders other than Inbox require their Include switch; custom
+  Exclusions always take precedence. Keys each received mail
   item by its RFC Message-ID, and moves every occurrence after the first into a
   review folder. It never hard-deletes messages.
 
@@ -13,13 +15,59 @@
   two different folders is preserved.
   Shows folder traversal and throttled item progress while inspecting headers
   and processing duplicates. ProgressPreference controls the progress display.
+.PARAMETER IncludeInbox
+  Permit the standard Inbox folder within the selected scope. Enabled unless explicitly set to false.
+.PARAMETER IncludeSentItems
+  Permit the standard SentItems folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeDeletedItems
+  Permit the standard DeletedItems folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeJunk
+  Permit the standard Junk folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeOutbox
+  Permit the standard Outbox folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeDrafts
+  Permit the standard Drafts folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeCalendar
+  Permit the standard Calendar folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeContacts
+  Permit the standard Contacts folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeJournal
+  Permit the standard Journal folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeNotes
+  Permit the standard Notes folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeTasks
+  Permit the standard Tasks folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeAllPublicFolders
+  Permit the standard AllPublicFolders folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeConflicts
+  Permit the standard Conflicts folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeSyncIssues
+  Permit the standard SyncIssues folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeLocalFailures
+  Permit the standard LocalFailures folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeServerFailures
+  Permit the standard ServerFailures folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeRssFeeds
+  Permit the standard RssFeeds folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeToDo
+  Permit the standard ToDo folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeManagedEmail
+  Permit the standard ManagedEmail folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER IncludeSuggestedContacts
+  Permit the standard SuggestedContacts folder within the selected scope. Excluded unless explicitly included.
+.PARAMETER Exclusions
+  Exact store-relative paths excluded with their descendants. Exclusions win over Include switches.
 .PARAMETER StoreName
   Display name of the Outlook store to process. If omitted, the default
   delivery store is used. Run with -Verbose to list detected stores.
 .PARAMETER ReviewFolderName
   Top-level folder created under the store root for duplicate review.
-.PARAMETER ExcludeFolders
-  Folder display names to skip entirely.
+.PARAMETER FolderName
+  Exact store-relative folder path, or empty for the store root.
+  When omitted, selects Inbox by identity, including localized or renamed Inboxes.
+  Explicit Inbox or Posteingang selects that literal path; no name fallback is used.
+.PARAMETER Recurse
+  Visit descendants of the selected folder. Otherwise process its direct mail only.
 .PARAMETER ReportPath
   Optional CSV path containing Keep, MoveDuplicate, and SkipNoMessageId results.
 .PARAMETER DryRun
@@ -53,20 +101,80 @@ param (
   [string]
   $StoreName,
 
+  [switch]
+  $IncludeInbox,
+
+  [Alias('IncludeSentMail')]
+  [switch]
+  $IncludeSentItems,
+
+  [switch]
+  $IncludeDeletedItems,
+
+  [switch]
+  $IncludeJunk,
+
+  [switch]
+  $IncludeOutbox,
+
+  [switch]
+  $IncludeDrafts,
+
+  [switch]
+  $IncludeCalendar,
+
+  [switch]
+  $IncludeContacts,
+
+  [switch]
+  $IncludeJournal,
+
+  [switch]
+  $IncludeNotes,
+
+  [switch]
+  $IncludeTasks,
+
+  [switch]
+  $IncludeAllPublicFolders,
+
+  [switch]
+  $IncludeConflicts,
+
+  [switch]
+  $IncludeSyncIssues,
+
+  [switch]
+  $IncludeLocalFailures,
+
+  [switch]
+  $IncludeServerFailures,
+
+  [switch]
+  $IncludeRssFeeds,
+
+  [switch]
+  $IncludeToDo,
+
+  [switch]
+  $IncludeManagedEmail,
+
+  [switch]
+  $IncludeSuggestedContacts,
+
+  [Alias('ExcludeFolders')]
+  [string[]]
+  $Exclusions = @(),
+
+  [AllowEmptyString()]
+  [string]
+  $FolderName = 'Inbox',
+
+  [switch]
+  $Recurse,
+
   [string]
   $ReviewFolderName = '_Duplicates_Review',
-
-  [string[]]
-  $ExcludeFolders = @(
-    'Deleted Items',
-    'Junk Email',
-    'Junk E-mail',
-    'Outbox',
-    'Sync Issues',
-    'Conflicts',
-    'Local Failures',
-    'Server Failures'
-  ),
 
   [string]
   $ReportPath,
@@ -171,8 +279,23 @@ function Add-OutlookItemResult {
 
   $_subject = ''
   $_received = $null
-  try { $_subject = [string]$Item.Subject } catch { $_subject = '' }
-  try { $_received = $Item.ReceivedTime } catch { $_received = $null }
+  try {
+    $_subject = [string]$Item.Subject
+  }
+  catch {
+    $_subject = ''
+  }
+
+  if ([string]::IsNullOrWhiteSpace($_subject)) {
+    $_subject = '<No Subject>'
+  }
+
+  try {
+    $_received = $Item.ReceivedTime
+  }
+  catch {
+    $_received = $null
+  }
 
   $_property = @{
     Received  = $_received
@@ -271,62 +394,6 @@ function Optimize-OutlookFolder {
   }
 }
 
-function Invoke-OutlookFolderTree {
-  [CmdletBinding(SupportsShouldProcess = $true)]
-  param (
-    [object]
-    $Folder,
-
-    [object]
-    $ReviewFolder,
-
-    [string]
-    $ReviewName,
-
-    [string[]]
-    $Exclude,
-
-    [System.Collections.IList]
-    $Results
-  )
-
-  Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Inspecting folder and applying exclusions' -CurrentOperation $Folder.FolderPath -PercentComplete -1
-
-  if ($Folder.Name -eq $ReviewName) { return }
-
-  if ($Exclude -contains $Folder.Name) {
-    Write-Verbose "Skipping excluded folder: $($Folder.Name)"
-    return
-  }
-  else {
-    Write-Verbose "Processing: $($Folder.FolderPath)"
-    $_accessor = $Folder.PropertyAccessor
-    try {
-      if ($_accessor.GetProperty('http://schemas.microsoft.com/mapi/proptag/0x36010003') -eq 2) { return }
-    }
-    finally { Remove-ComObject $_accessor }
-    if ($Folder.DefaultItemType -ne 0) { return }
-    Optimize-OutlookFolder -Folder $Folder -ReviewFolder $ReviewFolder -Results $Results -WhatIf:$WhatIfPreference -Confirm:$false
-  }
-
-  Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Enumerating subfolders' -CurrentOperation $Folder.FolderPath -PercentComplete -1
-  $_folders = $Folder.Folders
-  try {
-    for ($_index = 1; $_index -le $_folders.Count; $_index++) {
-      $_child = $_folders.Item($_index)
-      try {
-        Invoke-OutlookFolderTree -Folder $_child -ReviewFolder $ReviewFolder -ReviewName $ReviewName -Exclude $Exclude -Results $Results -WhatIf:$WhatIfPreference -Confirm:$false
-      }
-      finally {
-        Remove-ComObject $_child
-      }
-    }
-  }
-  finally {
-    Remove-ComObject $_folders
-  }
-}
-
 $_context = $null
 $_storeRoot = $null
 $_reviewFolder = $null
@@ -368,27 +435,87 @@ try {
   }
   Write-Verbose "Store root: $($_storeRoot.FolderPath)"
 
+  if ([string]::IsNullOrWhiteSpace($ReviewFolderName) -or $ReviewFolderName.Contains('\')) {
+    throw 'ReviewFolderName must name one top-level folder.'
+  }
+  $Exclusions = @($Exclusions) + @($ReviewFolderName)
+  $_includedKinds = @('Inbox')
+  $_standardKinds = @(
+    'Inbox',
+    'SentItems',
+    'DeletedItems',
+    'Junk',
+    'Outbox',
+    'Drafts',
+    'Calendar',
+    'Contacts',
+    'Journal',
+    'Notes',
+    'Tasks',
+    'AllPublicFolders',
+    'Conflicts',
+    'SyncIssues',
+    'LocalFailures',
+    'ServerFailures',
+    'RssFeeds',
+    'ToDo',
+    'ManagedEmail',
+    'SuggestedContacts'
+  )
+  foreach ($_kind in $_standardKinds) {
+    $_parameter = 'Include' + $_kind
+    if ($PSBoundParameters.ContainsKey($_parameter)) {
+      $_includedKinds = @($_includedKinds | Where-Object { $_ -ne $_kind })
+      if ($PSBoundParameters[$_parameter]) {
+        $_includedKinds += $_kind
+      }
+    }
+  }
+
+  if (-not (Get-Command -Name Get-OutlookFolderPlan -Module PSFoundation -ErrorAction SilentlyContinue)) {
+    throw 'The loaded PSFoundation version does not provide Get-OutlookFolderPlan. Install the PSFoundation release containing the Outlook folder-selection API before using this script.'
+  }
+  $_planArguments = @{
+    Namespace  = $_context.Namespace
+    StoreRoot  = $_storeRoot
+    Recurse    = [bool]$Recurse
+    Include    = $_includedKinds
+    Exclusions = $Exclusions
+    ProgressId = 20
+  }
+
+  if ($PSBoundParameters.ContainsKey('FolderName')) {
+    $_planArguments.FolderName = $FolderName
+  }
+
+  $_folderPlan = @(Get-OutlookFolderPlan @_planArguments)
+  $_sourcePath = [string]$_folderPlan[0].FolderPath
+
   if (-not $WhatIfPreference) {
-    if (-not $PSCmdlet.ShouldProcess($_storeRoot.FolderPath, "Move suspected duplicates to '$ReviewFolderName' for review")) { return }
+    if (-not $PSCmdlet.ShouldProcess($_sourcePath, "Move suspected duplicates to '$ReviewFolderName' for review")) {
+      return
+    }
+
     Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Preparing duplicate review folder' -CurrentOperation $ReviewFolderName -PercentComplete -1
     $_reviewFolder = Get-OutlookSubFolder -ParentFolder $_storeRoot -Name $ReviewFolderName -Create
   }
 
-  Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Enumerating source folders' -CurrentOperation $_storeRoot.FolderPath -PercentComplete -1
-  $_folders = $_storeRoot.Folders
-  try {
-    for ($_index = 1; $_index -le $_folders.Count; $_index++) {
-      $_child = $_folders.Item($_index)
-      try {
-        Invoke-OutlookFolderTree -Folder $_child -ReviewFolder $_reviewFolder -ReviewName $ReviewFolderName -Exclude $ExcludeFolders -Results $_results -WhatIf:$WhatIfPreference -Confirm:$false
-      }
-      finally {
-        Remove-ComObject $_child
-      }
+  foreach ($_entry in $_folderPlan) {
+    if (-not $_entry.Process) {
+      Add-OperationResult -Results $_results -Target $_entry.FolderPath -Source 'Outlook' -Action 'SelectFolder' -Status 'Skipped' -Detail $_entry.Reason
+      continue
     }
-  }
-  finally {
-    Remove-ComObject $_folders
+
+    $_folder = $_context.Namespace.GetFolderFromID($_entry.EntryID, $_entry.StoreID)
+    try {
+      if ($_folder.StoreID -ne $_entry.StoreID -or $_folder.EntryID -ne $_entry.EntryID) {
+        throw 'Resolved source folder no longer matches the reviewed folder plan.'
+      }
+      Optimize-OutlookFolder -Folder $_folder -ReviewFolder $_reviewFolder -Results $_results -WhatIf:$WhatIfPreference -Confirm:$false
+    }
+    finally {
+      Remove-ComObject $_folder
+    }
   }
 }
 catch {
@@ -436,10 +563,14 @@ try {
     $_reportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ReportPath)
     $_reportRoot = Split-Path -Path $_reportPath -Parent
     if (-not [string]::IsNullOrWhiteSpace($_reportRoot) -and -not (Test-Path -LiteralPath $_reportRoot)) {
-      $null = New-Item -Path $_reportRoot -ItemType Directory -Force
+      $null = [IO.Directory]::CreateDirectory($_reportRoot)
     }
 
-    $_results | Export-Csv -Path $_reportPath -NoTypeInformation -Encoding UTF8
+    # Folder-selection records have fewer properties than message records.
+    # Preserve every column even when an excluded folder is the first result.
+    $_columns = @($_results | ForEach-Object { $_.PSObject.Properties.Name } | Select-Object -Unique)
+    $_results | Select-Object -Property $_columns |
+      Export-Csv -LiteralPath $_reportPath -NoTypeInformation -Encoding UTF8 -NoClobber -WhatIf:$false -Confirm:$false -ErrorAction Stop
     Write-Log -Message "Report: $_reportPath" -Color Gray
   }
 
