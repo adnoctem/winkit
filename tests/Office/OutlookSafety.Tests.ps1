@@ -763,6 +763,136 @@ Describe 'Outlook store selection and preview' {
     Test-Path -LiteralPath $result.ReportPath | Should -BeTrue
   }
 
+  It 'sorts archive dates <Order> while preserving ties and putting failures last' -ForEach @(
+    @{ Order = 'OldToNew'; Expected = @('oldest', 'tie-first', 'tie-second', 'newest') }
+    @{ Order = 'NewToOld'; Expected = @('newest', 'tie-first', 'tie-second', 'oldest') }
+    @{ Order = 'Default'; Expected = @('newest', 'tie-first', 'tie-second', 'oldest') }
+  ) {
+    $messages = @(
+      @{ Id = 'tie-first'; Date = '2024-06-01' }
+      @{ Id = 'oldest'; Date = '2024-01-01' }
+      @{ Id = 'tie-second'; Date = '2024-06-01' }
+      @{ Id = 'newest'; Date = '2025-01-01' }
+    )
+    foreach ($message in $messages) {
+      $mail = New-FakeMail -Id $message.Id
+      $mail.ReceivedTime = [datetime]$message.Date
+      $null = $script:Source.Items.Values.Add($mail)
+    }
+    $script:FakeContext.Namespace | Add-Member ScriptMethod GetItemFromID {
+      param($Id, $StoreId)
+      if ($StoreId -ne $this.DefaultStore.Root.StoreID) {
+        throw 'Wrong store identifier'
+      }
+      @($this.DefaultStore.Root.Items.Values | Where-Object EntryID -EQ $Id)[0]
+    }
+
+    # A later folder fails after the first folder's results have been recorded.
+    $broken = New-FakeMail -Id 'unreadable-date'
+    $broken.ReceivedTime = $null
+    $child = New-FakeFolder -Name Later -Mail @($broken)
+    $child.FolderPath = $script:Source.FolderPath + '\Later'
+    $null = $script:Source.Folders.Values.Add($child)
+    $arguments = @{
+      ArchivePath     = Join-Path $TestDrive 'sorted.pst'
+      ReportDirectory = $TestDrive
+      StartDate       = '2024-01-01'
+      FolderName      = ''
+      Recurse         = $true
+      DryRun          = $true
+      WarningAction   = 'SilentlyContinue'
+    }
+    if ($Order -ne 'Default') {
+      $arguments.Sort = $Order
+    }
+
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') @arguments
+    $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $report.Results.Count | Should -Be 5
+    @($report.Results[0..3].Target) | Should -Be $Expected
+    $report.Results[-1].Status | Should -Be Failed
+    $report.Summary.Planned | Should -Be 4
+    $report.Settings.Sort | Should -Be $(if ($Order -eq 'Default') { 'NewToOld' } else { $Order })
+    @($script:Source.Items.Values.EntryID) | Should -Be @('tie-first', 'oldest', 'tie-second', 'newest')
+    @($script:Source.Items.Values | Where-Object { $_.Copies -or $_.Moves }).Count | Should -Be 0
+    Should -Invoke Add-OutlookStoreRoot -Times 0
+  }
+
+  It 'sorts optimizer CSV, log, and output <Order> without changing duplicate selection' -ForEach @(
+    @{ Order = 'OldToNew'; Expected = @('oldest', 'tie-second', 'tie-first', 'newest') }
+    @{ Order = 'NewToOld'; Expected = @('newest', 'tie-second', 'tie-first', 'oldest') }
+    @{ Order = 'Default'; Expected = @('newest', 'tie-second', 'tie-first', 'oldest') }
+  ) {
+    Mock Get-MessageId {
+      param($Item)
+      $Item.MessageId
+    }
+
+    $messages = @(
+      @{ Id = 'tie-first'; Date = '2024-06-01' }
+      @{ Id = 'oldest'; Date = '2024-01-01' }
+      @{ Id = 'tie-second'; Date = '2024-06-01' }
+      @{ Id = 'newest'; Date = '2025-01-01' }
+    )
+    foreach ($message in $messages) {
+      $mail = New-FakeMail -Id $message.Id
+      $mail.ReceivedTime = [datetime]$message.Date
+      $null = $script:Source.Items.Values.Add($mail)
+    }
+    $child = New-FakeFolder -Name Excluded
+    $child.FolderPath = $script:Source.FolderPath + '\Excluded'
+    $null = $script:Source.Folders.Values.Add($child)
+    $arguments = @{
+      FolderName = ''
+      Recurse    = $true
+      Exclusions = @('Excluded')
+      ReportPath = Join-Path $TestDrive ('sorted-' + $Order + '.csv')
+      DryRun     = $true
+    }
+    if ($Order -ne 'Default') {
+      $arguments.Sort = $Order
+    }
+
+    $result = @(& (Join-Path $script:OfficePath 'Optimize-Outlook.ps1') @arguments)
+    $result.Count | Should -Be 5
+    @($result[0..3].Target) | Should -Be $Expected
+    $result[-1].Action | Should -Be SelectFolder
+    ($result | Where-Object Status -EQ Kept).Target | Should -Be newest
+    $csv = @(Import-Csv -LiteralPath $arguments.ReportPath)
+    @($csv.Target) | Should -Be @($result.Target)
+    $script:ExpectedSortedTargets = @($result.Target)
+    Should -Invoke Write-OperationResultLog -Times 1 -Exactly -ParameterFilter {
+      (@($Results.Target) -join '|') -eq ($script:ExpectedSortedTargets -join '|')
+    }
+    @($script:Source.Items.Values | Where-Object { $_.Copies -or $_.Moves }).Count | Should -Be 0
+    Should -Invoke Get-OutlookSubFolder -Times 0 -ParameterFilter { $Create }
+  }
+
+  It 'sorts synthetic-message reports <Order> using planned received dates' -ForEach @(
+    @{ Order = 'OldToNew'; First = 'Winkit synthetic 1 (seed 1)' }
+    @{ Order = 'NewToOld'; First = 'Winkit synthetic 3 (seed 1)' }
+    @{ Order = 'Default'; First = 'Winkit synthetic 3 (seed 1)' }
+  ) {
+    $arguments = @{
+      Count     = 3
+      StartDate = '2024-01-01'
+      EndDate   = '2024-12-31'
+      DryRun    = $true
+    }
+    if ($Order -ne 'Default') {
+      $arguments.Sort = $Order
+    }
+
+    $result = @(& (Join-Path $script:OfficePath 'New-TestOutlookMessage.ps1') @arguments)
+    $result.Count | Should -Be 3
+    $result[0].Target | Should -Be $First
+    $script:ExpectedSortedTargets = @($result.Target)
+    Should -Invoke Write-OperationResultLog -Times 1 -Exactly -ParameterFilter {
+      (@($Results.Target) -join '|') -eq ($script:ExpectedSortedTargets -join '|')
+    }
+    Should -Invoke Get-OutlookSubFolder -Times 0
+  }
+
   It 'reports JSON serialization failure instead of claiming a report was saved' {
     Mock ConvertTo-Json { throw 'Report write failed' }
     $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName '' -ArchivePath (Join-Path $TestDrive 'failed-report.pst') -ReportDirectory $TestDrive -DryRun -WarningAction SilentlyContinue

@@ -453,6 +453,21 @@ is no translated-name guessing. Unexpected provider errors stop planning before 
 The optimizer always excludes its top-level review folder. These scanning controls do not apply to the test-message generator, which writes
 only to its explicit target folder, or to backup/repair, which operate on whole data files. Office deployment has no mailbox-folder scope.
 
+### Report ordering
+
+The three message scripts (`New-OutlookArchive.ps1`, `Optimize-Outlook.ps1`, and `New-TestOutlookMessage.ps1`) accept `-Sort NewToOld` (the
+default, newest received date first) or `-Sort OldToNew` (oldest first). Sorting applies across the complete result list, including when
+multiple folders were selected; use each record's `Scope` to identify its folder. Equal dates retain processing order. Records without a
+usable received date, such as folder-selection records or general failures, follow the dated messages in their original order. The archive
+JSON `Results`, optimizer CSV and operation log, and test-message operation log use this order, as do per-message `-PassThru` results. The
+archive still returns one summary object. Sorting does not change processing order, folder selection, or which duplicate the optimizer
+keeps. Test-message reports use the planned received dates; actual injection remains subject to the limitations below.
+
+```powershell
+.\scripts\Office\New-OutlookArchive.ps1 -ArchivePath 'D:\Archive\mail-2024.pst' -Sort NewToOld -DryRun
+.\scripts\Office\Optimize-Outlook.ps1 -ReportPath .\oldest-first.csv -Sort OldToNew -DryRun
+```
+
 ### Archive mail
 
 `New-OutlookArchive.ps1` creates a new local Unicode PST, preserves selected store-relative folder paths, and copies or moves mail into it.
@@ -508,12 +523,12 @@ includes non-mail items inspected in processed folders; `ItemsMatched` counts ma
 partial.
 
 The report contains run timestamps, source folder and filter settings, inclusion/exclusion choices, a `FolderPlan` with selection reasons,
-the summary, and a `Results` array with the individual operation records. `Settings.SourceFolder` records the effective source path;
-`FolderSelection` is `DefaultInbox` for implicit selection or `ExplicitPath` when `FolderName` was supplied. The requested `FolderName` is
-null for implicit selection and an empty string for explicit store-root selection. Each message record retains its subject (`Target`),
-folder (`Scope`), received date (`Received`, ISO 8601), action, status, and detail. Preview entries use `Status = 'Skipped'` and
-`Detail = 'DryRun'`; no per-message WhatIf lines or result objects are printed. The JSON report is the archive's detailed operation record.
-It contains message metadata, not message bodies or attachments.
+the summary, and a `Results` array with the individual operation records. `Settings.Sort` records the chosen date order.
+`Settings.SourceFolder` records the effective source path; `FolderSelection` is `DefaultInbox` for implicit selection or `ExplicitPath` when
+`FolderName` was supplied. The requested `FolderName` is null for implicit selection and an empty string for explicit store-root selection.
+Each message record retains its subject (`Target`), folder (`Scope`), received date (`Received`, ISO 8601), action, status, and detail.
+Preview entries use `Status = 'Skipped'` and `Detail = 'DryRun'`; no per-message WhatIf lines or result objects are printed. The JSON report
+is the archive's detailed operation record. It contains message metadata, not message bodies or attachments.
 
 Archive and deduplication reports display `<No Subject>` when a message subject is missing, empty, or whitespace-only. This is a report
 label; the message's subject is not changed.

@@ -20,9 +20,10 @@ is tested separately in the PSFoundation repository.
 The folder-policy tests require PSFoundation 1.7.0. Its module tests cover standard identities, the Outlook 2007 MAPI fallback, search
 folders, exact path selection, and ancestor exclusions. winkit tests cover implicit German/renamed Inbox selection, explicit literal names
 and store roots, failure before mutation for missing identities or excluded ancestors, archive attachment, and JSON reports. Subject
-reporting checks cover null, empty, whitespace-only, and nonblank subjects in JSON and CSV without changing source messages.
-`OutlookBackup.Tests.ps1` covers profile discovery with mocked COM objects and real temporary-file copies, locks, hashes, collision
-handling, previews, and conflicting parameter sets. These checks never open Outlook.
+reporting checks cover null, empty, whitespace-only, and nonblank subjects in JSON and CSV without changing source messages. Report-order
+checks cover `NewToOld`, `OldToNew`, and default received-date ordering, stable ties, undated failures, CSV/log/output consistency, and
+unchanged duplicate selection. `OutlookBackup.Tests.ps1` covers profile discovery with mocked COM objects and real temporary-file copies,
+locks, hashes, collision handling, previews, and conflicting parameter sets. These checks never open Outlook.
 
 `OfficeDeployment.Tests.ps1` covers the Install, Remove, and Switch wrappers: mode validation, ordered/default/automatic locales, module
 dispatch, preview and confirmation forwarding, recovery scope, preparation results, and exit codes. Deployment commands are mocked; these

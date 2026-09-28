@@ -72,6 +72,10 @@
   Optional CSV path containing Keep, MoveDuplicate, and SkipNoMessageId results.
 .PARAMETER DryRun
   Preview changes without moving duplicate messages.
+.PARAMETER Sort
+  Order report results by received date: NewToOld (default) is newest first;
+  OldToNew is oldest first. Undated records follow dated messages. Equal dates
+  retain processing order. This affects reports only, not message processing.
 .PARAMETER PassThru
   Return structured operation result objects.
 .PARAMETER QuitOutlook
@@ -181,6 +185,10 @@ param (
 
   [switch]
   $DryRun,
+
+  [ValidateSet('OldToNew', 'NewToOld')]
+  [string]
+  $Sort = 'NewToOld',
 
   [switch]
   $PassThru,
@@ -559,6 +567,42 @@ else {
 
 try {
   Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Writing reports and operation log' -PercentComplete -1
+  # Sort a presentation copy only. Ordinal keeps ties stable on PowerShell 5.1.
+  $_reportRows = for ($_ordinal = 0; $_ordinal -lt $_results.Count; $_ordinal++) {
+    $_result = $_results[$_ordinal]
+    $_receivedProperty = $_result.PSObject.Properties['Received']
+    $_receivedDate = $null
+    if ($_receivedProperty -and $null -ne $_receivedProperty.Value) {
+      try {
+        $_receivedDate = ([datetimeoffset]$_receivedProperty.Value).UtcDateTime
+      }
+      catch {
+        # Unreadable dates remain visible with the other undated records.
+        $_receivedDate = $null
+      }
+    }
+
+    [PSCustomObject]@{
+      Result   = $_result
+      Undated  = $null -eq $_receivedDate
+      Received = $_receivedDate
+      Ordinal  = $_ordinal
+    }
+  }
+
+  $_sortProperties = @(
+    @{
+      Expression = 'Undated'
+      Descending = $false
+    }
+    @{
+      Expression = 'Received'
+      Descending = $Sort -eq 'NewToOld'
+    }
+    'Ordinal'
+  )
+  $_reportResults = @($_reportRows | Sort-Object -Property $_sortProperties | ForEach-Object { $_.Result })
+
   if ($ReportPath) {
     $_reportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ReportPath)
     $_reportRoot = Split-Path -Path $_reportPath -Parent
@@ -569,12 +613,12 @@ try {
     # Folder-selection records have fewer properties than message records.
     # Preserve every column even when an excluded folder is the first result.
     $_columns = @($_results | ForEach-Object { $_.PSObject.Properties.Name } | Select-Object -Unique)
-    $_results | Select-Object -Property $_columns |
+    $_reportResults | Select-Object -Property $_columns |
       Export-Csv -LiteralPath $_reportPath -NoTypeInformation -Encoding UTF8 -NoClobber -WhatIf:$false -Confirm:$false -ErrorAction Stop
     Write-Log -Message "Report: $_reportPath" -Color Gray
   }
 
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Optimize-Outlook'
+  $_operationLog = Write-OperationResultLog -Results $_reportResults -ScriptName 'Optimize-Outlook'
   if ($_operationLog) {
     Write-Log -Message "Operation log: $_operationLog" -Color Gray
   }
@@ -584,7 +628,7 @@ finally {
 }
 
 if ($PassThru -or $DryRun) {
-  $_results
+  $_reportResults
 }
 
 if ($_failed -gt 0) {

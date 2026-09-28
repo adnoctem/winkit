@@ -38,6 +38,10 @@
   Fails when Redemption.RDOSession is not registered.
 .PARAMETER DryRun
   Preview the item plan without creating anything.
+.PARAMETER Sort
+  Order report results by received date: NewToOld (default) is newest first;
+  OldToNew is oldest first. Undated records follow dated messages. Equal dates
+  retain processing order. This affects reports only, not message processing.
 .PARAMETER PassThru
   Return structured operation result objects.
 .PARAMETER QuitOutlook
@@ -95,6 +99,10 @@ param (
 
   [switch]
   $DryRun,
+
+  [ValidateSet('OldToNew', 'NewToOld')]
+  [string]
+  $Sort = 'NewToOld',
 
   [switch]
   $PassThru,
@@ -486,7 +494,43 @@ if (-not $UseRedemption -and $_created -gt 0 -and $_injected -eq 0) {
 
 try {
   Write-Progress -Id 30 -Activity 'Outlook test messages' -Status 'Writing operation log' -PercentComplete -1
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'New-TestOutlookMessage'
+  # Sort a presentation copy only. Ordinal keeps ties stable on PowerShell 5.1.
+  $_reportRows = for ($_ordinal = 0; $_ordinal -lt $_results.Count; $_ordinal++) {
+    $_result = $_results[$_ordinal]
+    $_receivedProperty = $_result.PSObject.Properties['Received']
+    $_receivedDate = $null
+    if ($_receivedProperty -and $null -ne $_receivedProperty.Value) {
+      try {
+        $_receivedDate = ([datetimeoffset]$_receivedProperty.Value).UtcDateTime
+      }
+      catch {
+        # Unreadable dates remain visible with the other undated records.
+        $_receivedDate = $null
+      }
+    }
+
+    [PSCustomObject]@{
+      Result   = $_result
+      Undated  = $null -eq $_receivedDate
+      Received = $_receivedDate
+      Ordinal  = $_ordinal
+    }
+  }
+
+  $_sortProperties = @(
+    @{
+      Expression = 'Undated'
+      Descending = $false
+    }
+    @{
+      Expression = 'Received'
+      Descending = $Sort -eq 'NewToOld'
+    }
+    'Ordinal'
+  )
+  $_reportResults = @($_reportRows | Sort-Object -Property $_sortProperties | ForEach-Object { $_.Result })
+
+  $_operationLog = Write-OperationResultLog -Results $_reportResults -ScriptName 'New-TestOutlookMessage'
 }
 finally {
   Write-Progress -Id 30 -Activity 'Outlook test messages' -Completed
@@ -496,7 +540,7 @@ if ($_operationLog) {
 }
 
 if ($PassThru -or $DryRun) {
-  $_results
+  $_reportResults
 }
 
 if ($_failed -gt 0) {

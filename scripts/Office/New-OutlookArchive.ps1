@@ -91,6 +91,10 @@
   Remove the PST store from the profile at the end.
 .PARAMETER DryRun
   Preview changes without copying or moving messages.
+.PARAMETER Sort
+  Order report results by received date: NewToOld (default) is newest first;
+  OldToNew is oldest first. Undated records follow dated messages. Equal dates
+  retain processing order. This affects reports only, not message processing.
 .PARAMETER PassThru
   Return one summary with counts and ReportPath. Per-message results are in
   the JSON report's Results array. DryRun and WhatIf also return this summary.
@@ -233,6 +237,10 @@ param (
 
   [switch]
   $DryRun,
+
+  [ValidateSet('OldToNew', 'NewToOld')]
+  [string]
+  $Sort = 'NewToOld',
 
   [switch]
   $PassThru,
@@ -864,6 +872,42 @@ try {
   }
 
   Write-OutlookArchiveProgress -Phase 'Writing JSON report' -Folder $_reportPath -Force
+  # Sort a presentation copy only. Ordinal keeps ties stable on PowerShell 5.1.
+  $_reportRows = for ($_ordinal = 0; $_ordinal -lt $_results.Count; $_ordinal++) {
+    $_result = $_results[$_ordinal]
+    $_receivedProperty = $_result.PSObject.Properties['Received']
+    $_receivedDate = $null
+    if ($_receivedProperty -and $null -ne $_receivedProperty.Value) {
+      try {
+        $_receivedDate = ([datetimeoffset]$_receivedProperty.Value).UtcDateTime
+      }
+      catch {
+        # Unreadable dates remain visible with the other undated records.
+        $_receivedDate = $null
+      }
+    }
+
+    [PSCustomObject]@{
+      Result   = $_result
+      Undated  = $null -eq $_receivedDate
+      Received = $_receivedDate
+      Ordinal  = $_ordinal
+    }
+  }
+
+  $_sortProperties = @(
+    @{
+      Expression = 'Undated'
+      Descending = $false
+    }
+    @{
+      Expression = 'Received'
+      Descending = $Sort -eq 'NewToOld'
+    }
+    'Ordinal'
+  )
+  $_reportResults = @($_reportRows | Sort-Object -Property $_sortProperties | ForEach-Object { $_.Result })
+
   $_report = [ordered]@{
     SchemaVersion = 1
     Script        = 'New-OutlookArchive'
@@ -874,6 +918,7 @@ try {
       StoreName       = $StoreName
       SourceFolder    = $_sourcePath
       FolderName      = if ($PSBoundParameters.ContainsKey('FolderName')) { $FolderName } else { $null }
+      Sort            = $Sort
       FolderSelection = if ($PSBoundParameters.ContainsKey('FolderName')) { 'ExplicitPath' } else { 'DefaultInbox' }
       Recurse         = [bool]$Recurse
       Include         = @($_includedKinds)
@@ -888,7 +933,7 @@ try {
     }
     Summary       = $_summary
     FolderPlan    = @($_folderPlan)
-    Results       = @($_results.ToArray())
+    Results       = $_reportResults
   }
 
   $_json = ConvertTo-Json -InputObject $_report -Depth 8 -ErrorAction Stop

@@ -2,7 +2,8 @@
 
 ### Features
 
-* **scripts:** add Outlook folder selection and PST backups ([33badff](https://github.com/adnoctem/winkit/commit/33badff377b9bccf96fb8ae2162f8108ddcdb94e))
+- **scripts:** add Outlook folder selection and PST backups
+  ([33badff](https://github.com/adnoctem/winkit/commit/33badff377b9bccf96fb8ae2162f8108ddcdb94e))
 
 ## [1.4.4](https://github.com/adnoctem/winkit/compare/v1.4.3...v1.4.4) (2026-09-28)
 
