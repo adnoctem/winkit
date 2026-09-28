@@ -1,12 +1,12 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.6.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.6.1' }
 
 <#
 .SYNOPSIS
   Plans, prepares, executes, or resumes an explicit Office migration.
 .DESCRIPTION
-  Delegates deployment to PSFoundation 1.6.0. Mode is mandatory.
+  Delegates deployment to PSFoundation 1.6.1. Mode is mandatory.
   Check is read-only; with a target it returns the complete plan and blockers.
   Prepare publishes verified media. Migrate uses the module's validated plan.
   Recover resumes only the original migration journal.
@@ -51,7 +51,7 @@
 .PARAMETER PilotMigration
   Explicit Office Enterprise 2007 to German Standard 2019 x64 pilot on Windows 10
   build 19045. Check/Migrate only; requires Language de-de and RemoveMsi.
-  Requires a PSFoundation build exposing PilotMigration on both public commands.
+  Requires PSFoundation 1.6.1 or later with PilotMigration on both public commands.
   AppliedUnverified requires manual review and is never an automatic retry signal.
 .PARAMETER OdtPath
   Existing Microsoft-signed Office Deployment Tool setup.exe. Required for
@@ -215,7 +215,7 @@ try {
       $_command = Get-Command -Name $_commandName -Module PSFoundation -ErrorAction Stop
 
       if (-not $_command.Parameters.ContainsKey('PilotMigration')) {
-        throw 'This PSFoundation build does not provide PilotMigration. Load the audited pilot build or its released successor first.'
+        throw 'This PSFoundation build does not provide PilotMigration. Install PSFoundation 1.6.1 or later and start a fresh PowerShell session.'
       }
     }
 

@@ -1,12 +1,12 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.6.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.6.1' }
 
 <#
 .SYNOPSIS
   Plans, prepares, installs, or resumes an Office deployment.
 .DESCRIPTION
-  Delegates deployment to PSFoundation 1.6.0. Mode is mandatory.
+  Delegates deployment to PSFoundation 1.6.1. Mode is mandatory.
   Check is read-only; with a target it returns the complete plan and blockers.
   Prepare publishes verified media. Install uses the module's validated plan.
   Recover resumes only the original installation journal.

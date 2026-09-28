@@ -20,7 +20,7 @@ is tested separately in the PSFoundation repository.
 `OfficeDeployment.Tests.ps1` covers the Install, Remove, and Switch wrappers: mode validation, ordered/default/automatic locales, module
 dispatch, preview and confirmation forwarding, recovery scope, preparation results, and exit codes. Deployment commands are mocked; these
 tests never invoke ODT. PSFoundation owns tests for native deployment behavior and inventory/media verification. The wrapper tests require
-its Office API from version 1.6.0 or later.
+its Office API from version 1.6.1 or later.
 
 ## Tier 1 - integration suite
 

@@ -33,7 +33,7 @@ Office desktop applications and these profile operations are not supported on Se
 
 ## Office deployment
 
-The deployment scripts require **PSFoundation 1.6.0 or later** and an existing Microsoft-signed Office Deployment Tool (ODT) setup.exe. They
+The deployment scripts require **PSFoundation 1.6.1 or later** and an existing Microsoft-signed Office Deployment Tool (ODT) setup.exe. They
 share PSFoundation's inventory, planning, media validation, execution, and recovery APIs. They do not purchase licenses, upgrade Windows,
 convert Outlook profiles, or provide automatic rollback.
 
@@ -83,14 +83,8 @@ before fleet deployment.
 
 ### Office Enterprise 2007 to Standard 2019 pilot
 
-`Switch-OfficeVersion.ps1 -PilotMigration` is available in **Check and Migrate only**. It requires an audited PSFoundation build that
-exposes `PilotMigration` on both `Get-OfficeDeploymentPlan` and `Switch-OfficeDeployment`. The ordinary minimum/pin remains 1.6.0 until a
-release containing this API exists; the wrapper checks capabilities and fails before planning on an older build. Do not assume installing
-the current 1.6.0 Gallery package enables the pilot. Update the dependency pin to the actual published release when adopting it.
-
-For an immediate local rehearsal, copy the audited PSFoundation `src` directory to a dedicated `Modules\PSFoundation` directory on the pilot
-VM. Prepend the parent `Modules` directory to `$env:PSModulePath` in the elevated 64-bit PowerShell session, import PSFoundation, and verify
-`(Get-Module PSFoundation).Path` points to that copy. Keep the whole module intact; do not copy only office.ps1 or change its version.
+`Switch-OfficeVersion.ps1 -PilotMigration` requires **PSFoundation 1.6.1 or later** and is available in **Check and Migrate only**. The
+wrapper passes this explicit authorization to both planning and execution; ordinary migrations retain their strict defaults.
 
 The profile is restricted to x64 Windows 10 desktop build 19045, the reported Enterprise 2007 MSI suite/resources, and Standard2019Volume
 x64 on PerpetualVL2019. German UI must be selected explicitly. Installed-office auto-discovery remains unavailable. The plan separately
