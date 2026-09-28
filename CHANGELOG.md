@@ -1,3 +1,9 @@
+## [1.6.1](https://github.com/adnoctem/winkit/compare/v1.6.0...v1.6.1) (2026-09-28)
+
+### Bug Fixes
+
+* **scripts:** require corrected ODT validation for Office deployment ([7c4e12d](https://github.com/adnoctem/winkit/commit/7c4e12db693b58f0c446fe92f67b644de26bed40))
+
 ## [1.6.0](https://github.com/adnoctem/winkit/compare/v1.5.1...v1.6.0) (2026-09-28)
 
 ### Features
