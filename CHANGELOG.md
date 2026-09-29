@@ -1,3 +1,9 @@
+## [1.6.2](https://github.com/adnoctem/winkit/compare/v1.6.1...v1.6.2) (2026-09-29)
+
+### Bug Fixes
+
+* **scripts:** require PSFoundation 1.7.4 for Office deployment ([553a3c3](https://github.com/adnoctem/winkit/commit/553a3c3c285cf52b669dbc4e23e4b3b7c695da92))
+
 ## [1.6.1](https://github.com/adnoctem/winkit/compare/v1.6.0...v1.6.1) (2026-09-28)
 
 ### Bug Fixes
