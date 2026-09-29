@@ -1,4 +1,4 @@
-﻿# Office
+# Office
 
 Scripts for deploying Microsoft Office and maintaining Outlook mail stores and data files on Windows.
 
@@ -8,6 +8,7 @@ Scripts for deploying Microsoft Office and maintaining Outlook mail stores and d
 | [Remove-Office.ps1](Remove-Office.ps1)                   | Inventory or remove selected Click-to-Run Office products.                              |
 | [Switch-OfficeVersion.ps1](Switch-OfficeVersion.ps1)     | Inventory Office, prepare installation media, and migrate to a selected Office product. |
 | [New-OutlookArchive.ps1](New-OutlookArchive.ps1)         | Copy or move mail into a new Unicode PST archive.                                       |
+| [Checkpoint-Outlook.ps1](Checkpoint-Outlook.ps1)         | Capture user data files, Office settings, and a checkpoint manifest.                    |
 | [Backup-Outlook.ps1](Backup-Outlook.ps1)                 | Create verified, closed-file copies of PST data files.                                  |
 | [Optimize-Outlook.ps1](Optimize-Outlook.ps1)             | Move duplicate messages into a review folder.                                           |
 | [New-TestOutlookMessage.ps1](New-TestOutlookMessage.ps1) | Create synthetic messages for testing in an Outlook folder.                             |
@@ -44,7 +45,7 @@ ordinary status messages, warnings, and returned results remain available.
 
 ## Office deployment
 
-The deployment scripts require **PSFoundation 1.7.4 or later** and an existing Microsoft-signed Office Deployment Tool (ODT) setup.exe. They
+The deployment scripts require **PSFoundation 1.8.0 or later** and an existing Microsoft-signed Office Deployment Tool (ODT) setup.exe. They
 share PSFoundation's inventory, planning, media validation, execution, and recovery APIs. They do not purchase licenses, upgrade Windows,
 convert Outlook profiles, or provide automatic rollback.
 
@@ -62,7 +63,7 @@ signature, publisher, and minimum supported version. Renaming a different execut
 Run this read-only preflight on the same file that Prepare or Migrate will use:
 
 ```powershell
-Import-Module PSFoundation -MinimumVersion 1.7.4 -Force
+Import-Module PSFoundation -MinimumVersion 1.8.0 -Force
 $tool = Test-OfficeDeploymentTool -OdtPath 'C:\Tools\ODT\setup.exe'
 $tool | Format-List Valid, Version, SignatureStatus, OriginalFilename, FileDescription, Detail
 if (-not $tool.Valid) {
@@ -103,33 +104,27 @@ verification of the full configuration, including languages and application sele
 
 ### Backend availability
 
-The current native execution backend targets elevated **x64 Windows 11 desktop** hosts, including deployment of 32-bit Office there. Server,
-ARM, and ordinary Windows 10 execution are outside that gate. The narrowly scoped pilot below is the only Windows 10 exception. Product IDs
-identify targets; their availability is not a vendor lifecycle or product/OS support guarantee. Check OS support, licensing, add-ins, VBA,
-and Outlook compatibility for the destination.
+PSFoundation evaluates host compatibility, installed products, media, and observable configuration. The wrappers preserve its blockers and
+never bypass them. Run Check to inspect the plan, then a deployment DryRun to assess execution prerequisites before approving changes. An
+eligible plan is not proof that execution or post-install verification will succeed. Product IDs do not establish vendor lifecycle or
+product/OS support.
 
-Native inventory currently reports Languages and PrimaryLanguage as verification limitations. Install/Migrate plans return
-UnsupportedNativeVerification before mutation when these postconditions cannot be verified. Installed-Office automatic locale sourcing also
-remains blocked where this evidence is unavailable. Explicit language selection sets the target; it does not bypass native verification. The
-scripts preserve these module blockers by default. PilotMigration waives only the named language limitations for its exact profile.
+The minimum module version, PSFoundation 1.8.0, permits ordinary execution on x64 Windows 11 desktop. Additional host support depends on the
+installed module; the wrappers do not override host restrictions. Use 64-bit PowerShell on a 64-bit OS even when replacing 32-bit Office.
 
-Standalone MSI removal is unsupported. Recovery supports pre-launch continuation, verification of a completed deployment, and certain
-migration checkpoints after verified Click-to-Run removal. Uncertain partial-installer states return UnsupportedRecoveryState. Recover does
-not implement Quick Repair, Online Repair, journal-free mutation, or rollback. Validate supported operations on disposable pilot machines
-before fleet deployment.
+Native inventory derives Click-to-Run languages from active product registrations and primary language from corroborated evidence.
+Incomplete observations remain unknown. Installed build, application exclusions, proofing resources, and other postconditions can still
+require investigation on installations whose registrations do not expose sufficient evidence. MSI locale preservation is not inferred from a
+single LCID. Choose explicit languages when automatic sourcing cannot establish the intended configuration.
 
-### Office Enterprise 2007 to Standard 2019 pilot
+Standalone MSI removal and uncertain partial-installer recovery are not supported by the minimum module version. Recover is not Quick
+Repair, Online Repair, journal-free mutation, or rollback. Recovery records carrying obsolete or unsupported authorization/schema are not
+converted into ordinary migrations. A journal or RecoveryRequired flag alone is not permission to replay a completed deployment.
 
-`Switch-OfficeVersion.ps1 -PilotMigration` requires **PSFoundation 1.7.4 or later** and is available in **Check and Migrate only**. The
-wrapper passes this explicit authorization to both planning and execution; ordinary migrations retain their strict defaults.
+### Review and execute a migration
 
-The profile is restricted to x64 Windows 10 desktop build 19045, the reported Enterprise 2007 MSI suite/resources, and Standard2019Volume
-x64 on PerpetualVL2019. German UI must be selected explicitly. Installed-office auto-discovery remains unavailable. The plan separately
-records German, English, French and Italian companion proofing intent, which still requires post-install review. Additional full UI packs
-are not silently installed. This pilot does not establish vendor support for Office 2019 or readiness for unattended workforce deployment.
-
-Use a fresh ABB backup plus a short-lived pre-migration VM snapshot, with working hypervisor console/revert access. Keep users off the VM
-through acceptance; reverting loses subsequent guest changes. Preparing media may be done before the snapshot. Example from the winkit root:
+Use a recoverable machine backup and reviewed user-data checkpoint. Keep the target configuration identical through preparation, Check,
+preview, and execution. SourcePath is a prepared media package, not the application's installation directory. From the winkit root:
 
 ```powershell
 $target = @{
@@ -139,19 +134,19 @@ $target = @{
   OdtPath         = 'C:\Tools\ODT\setup.exe'
   SourcePath      = 'C:\Tools\ODT\Media\Office2019'
 }
-# Create only the media parent; Prepare creates the verified package.
 New-Item -ItemType Directory -Path (Split-Path -Parent $target.SourcePath) -Force | Out-Null
 $checkTarget = $target.Clone()
 $checkTarget.Remove('OdtPath')
 
 .\scripts\Office\Switch-OfficeVersion.ps1 -Mode Prepare @target -PassThru
-.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Check @checkTarget -RemoveMsi -PilotMigration -PassThru
-.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target -RemoveMsi -PilotMigration -DryRun -PassThru
-# After reviewing the plan, removal scope, and rollback point:
-$mak = Read-Host 'Office Standard 2019 MAK' -AsSecureString
+.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Check @checkTarget -RemoveMsi -PassThru
+.\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target -RemoveMsi -DryRun -PassThru
+
+# After reviewing the plan, removal scope, and backup/recovery arrangements:
+$mak = Read-Host 'Office volume key' -AsSecureString
 try {
   $result = .\scripts\Office\Switch-OfficeVersion.ps1 -Mode Migrate @target `
-    -RemoveMsi -PilotMigration -ProductKey $mak -PassThru -Confirm
+    -RemoveMsi -ProductKey $mak -PassThru -Confirm
 }
 finally {
   $mak.Dispose()
@@ -160,20 +155,14 @@ finally {
 $result | ConvertTo-Json -Depth 30
 ```
 
-`Check` rejects `OdtPath` because it does not launch ODT; the separate `checkTarget` retains the same product, language, architecture, and
-media path. Do not also pass `-OdtPath` explicitly when it is already in `target`. For KMS activation, omit the MAK prompt and `-ProductKey`
-instead of supplying a placeholder key.
+This example authorizes broad MSI removal. For a Click-to-Run source, including a 32-bit to 64-bit change of the same edition, select its
+exact installed ProductId with RemoveProductId in Check, preview, and execution instead of RemoveMsi. Omitting that selection does not
+implicitly authorize removal. Review edition/application differences and add-in architecture compatibility.
 
-Use the same ExcludeApp/ExcludePublisher settings for preparation, Check and Migrate if desired. Standard is a different application set
-from Enterprise; review required applications and 32-bit add-in compatibility before accepting the migration. Prepare has no pilot flag. Do
-not use Recover for this pilot: its schema-2 journal is inspectable evidence, and the module refuses replay.
-
-Native exit 0 or 3010 with unresolved observations returns **AppliedUnverified**, wrapper exit **1**, and detailed `Verification.Unknowns`.
-Native codes and `RebootRequired` survive unchanged; unverified exit 1 takes precedence over 3010. This is a manual review point, never a
-signal to rerun the migration. Known mismatches and native errors remain failures. Journal/JSONL paths are in the result. Save these, the
-result JSON, a fresh collector report and relevant native ODT logs **off the VM before any revert**; native logs may contain secrets. Check
-Standard 2019 x64/build, German UI, all four proofing languages, activation, applications, add-ins and the existing Outlook profile. Reboot
-explicitly if required and collect evidence again. Do not change the reference 2019 workstation.
+Check accepts no OdtPath because it does not launch ODT. For KMS activation omit the MAK prompt and ProductKey instead of supplying a
+placeholder key. Preserve the resulting JSON, journal, and relevant native diagnostics before any revert. Read native exit codes,
+verification discrepancies/unknowns, activation, and reboot requirements separately: native success with incomplete verification is a manual
+review point, not a signal to rerun the migration. Review the installed applications, user profile and data after any deployment.
 
 ### Products, languages, and configuration
 
@@ -391,6 +380,7 @@ profile's user; SYSTEM is not suitable for these operations.
 | Script                       | Minimum classic Outlook         | Requirement                                                                           |
 | ---------------------------- | ------------------------------- | ------------------------------------------------------------------------------------- |
 | `New-OutlookArchive.ps1`     | 2007 (12)                       | Unicode PST creation through `NameSpace.AddStoreEx`.                                  |
+| `Checkpoint-Outlook.ps1`     | 2007 (12) for discovery         | StorePaths avoids Outlook; current-user settings are always included.                 |
 | `Backup-Outlook.ps1`         | 2007 (12) for discovery         | No Outlook required in direct `-PSTPath` mode.                                        |
 | `Optimize-Outlook.ps1`       | 2007 (12)                       | Transport-header access through `Item.PropertyAccessor`.                              |
 | `New-TestOutlookMessage.ps1` | 2007 (12)                       | Outlook object model and optional registered Redemption component.                    |
@@ -781,6 +771,52 @@ relying on a backup. No Outlook account settings, rules stored outside the PST, 
 still connect to Outlook. `-PassThru` returns a summary with `Status`, `Copied`, `Failed`, `BackupDirectory`, `ReportPath`, and `Results`.
 Progress identifies discovery, shutdown waiting, copying, and hashing. Keep a verified backup unopened; copy it back to a local working
 location before attaching it for recovery.
+
+### Checkpoint user data and settings
+
+`Checkpoint-Outlook.ps1` captures the invoking Windows user's Outlook data files and Office settings into a unique directory under
+Destination. Run it as the affected user in a non-elevated session. IgnoreAdministrator permits that same account's deliberate elevated
+execution; it does not choose another user's HKCU or profile. SYSTEM and service accounts are rejected.
+
+```powershell
+.\scripts\Office\Checkpoint-Outlook.ps1 -Destination 'E:\Checkpoints' -ExcludeOst -DryRun
+.\scripts\Office\Checkpoint-Outlook.ps1 -Destination 'E:\Checkpoints' -ExcludeOst -QuitOutlook -PassThru
+
+# Explicit files: no Outlook connection. User settings still come from the current account.
+.\scripts\Office\Checkpoint-Outlook.ps1 -Destination '\\server\backups' `
+  -StorePaths 'D:\Mail\mail.pst', 'D:\Archive\archive.pst' -PassThru
+```
+
+Default discovery enumerates local PST/OST files attached to the current classic Outlook profile; it may start Outlook. Explicit StorePaths
+selects existing files without COM and cannot be combined with QuitOutlook or WaitSeconds. There is no guessed-directory fallback. Detached
+data files require explicit selection. Server-only stores and credentials are not captured. ExcludeOst omits cache files; retaining an OST
+is not a portable mailbox backup and does not guarantee it can be reattached or restored on another machine.
+
+The checkpoint includes selected data files plus signatures, templates, dictionaries, roaming Outlook application data, AutoComplete cache,
+and Ribbon/Quick Access Toolbar customizations. It exports existing HKCU Office 12.0/14.0/15.0/16.0 keys and the legacy Outlook Profiles
+key. Settings-directory scans do not silently select additional PST/OST files. Missing optional settings locations are recorded as skipped;
+unreadable locations and selected missing files fail. Directory links are not traversed, and Destination cannot be inside a captured
+settings tree. Local and UNC destinations are supported; choose access-restricted storage for the personal data and registry exports.
+
+Close other Office applications in the current session. QuitOutlook requests graceful shutdown after discovery; otherwise close Outlook
+manually during the wait. Settings files are enumerated after Outlook exits so shutdown-created caches are included. All source files are
+locked exclusively before copying begins, and remain locked through verification. No process is force-killed. Close/check/copy is not an
+atomic system snapshot, and registry export is not a transaction across files and registry state.
+
+Each completed copy records its original path, relative checkpoint path, length, original modification time, and matching SHA-256 hashes.
+SkipHash explicitly reduces verification to lengths; Hashed=false and Verification=LengthOnly identify that choice. Registry exports have an
+output hash when hashing is enabled. A matching hash proves copy integrity, not PST health. Unique run directories preserve earlier
+checkpoints; failed copies retain partial artifacts and the manifest records failure when it can be written.
+
+The final message identifies `manifest.json`. PassThru returns one summary with Status, Copied, Failed, CheckpointDirectory, ReportPath,
+Warnings and Results. The manifest also contains user identity, Office inventory and structured activation status, without raw licensing
+output. Activation-query failures are recorded as unknown metadata and do not discard the data checkpoint. Missing or failed capture is not
+reported as success. DryRun/WhatIf returns the capture plan without creating files, exporting registry data, or quitting Outlook.
+
+Restore is manual: inspect the manifest and hashes, close Office, and review each original path and registry export for the intended user
+and Office version before restoring anything. Importing old settings can overwrite newer configuration; an Office 2007 profile export is not
+automatically compatible with Office 2019. This checkpoint does not replace a tested machine backup or preserve server mailbox state,
+passwords, activation entitlement, or every setting stored by third-party add-ins. `Backup-Outlook.ps1` remains the narrower PST-only tool.
 
 ### Repair a data file
 

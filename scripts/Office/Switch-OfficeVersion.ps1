@@ -1,18 +1,18 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.7.4' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.0' }
 
 <#
 .SYNOPSIS
   Plans, prepares, executes, or resumes an explicit Office migration.
 .DESCRIPTION
-  Delegates deployment to PSFoundation 1.7.4. Mode is mandatory.
+  Delegates deployment to PSFoundation 1.8.0. Mode is mandatory.
   Check is read-only; with a target it returns the complete plan and blockers.
   Prepare publishes verified media. Migrate uses the module's validated plan.
   Recover resumes only the original migration journal.
   Removal requires explicit product selections or broad MSI consent.
   No automatic reboot, rollback, or Outlook profile conversion is provided.
-  Preserve backups and installation media; test deployments on a recoverable pilot.
+  Preserve backups and installation media; test deployments on a recoverable workstation.
 .PARAMETER Mode
   Check, Prepare, Migrate, or Recover. No operation is selected implicitly.
 .PARAMETER TargetProductId
@@ -48,11 +48,6 @@
   Exact Click-to-Run IDs authorized for removal in Check/Migrate.
 .PARAMETER RemoveMsi
   Authorize ALL supported MSI Office removals during migration, including ancillary products.
-.PARAMETER PilotMigration
-  Explicit Office Enterprise 2007 to German Standard 2019 x64 pilot on Windows 10
-  build 19045. Check/Migrate only; requires Language de-de and RemoveMsi.
-  Requires PSFoundation 1.7.4 or later with PilotMigration on both public commands.
-  AppliedUnverified requires manual review and is never an automatic retry signal.
 .PARAMETER OdtPath
   Existing Microsoft-signed Office Deployment Tool setup.exe. Required for
   execution and preparation; never downloaded implicitly.
@@ -134,9 +129,6 @@ param (
   [switch]
   $RemoveMsi,
 
-  [switch]
-  $PilotMigration,
-
   [ValidateNotNullOrEmpty()]
   [string]
   $OdtPath,
@@ -196,33 +188,19 @@ try {
   )
 
   $_operationNames = $_configurationNames + @(
-    'SourcePath', 'OdtPath', 'LogRoot', 'ForceCloseApps', 'ProductKey', 'RunId', 'RemoveProductId', 'RemoveMsi', 'PilotMigration'
+    'SourcePath', 'OdtPath', 'LogRoot', 'ForceCloseApps', 'ProductKey', 'RunId', 'RemoveProductId', 'RemoveMsi'
   )
 
   $_allowed = switch ($Mode) {
-    'Check' { $_configurationNames + @('SourcePath', 'RemoveProductId', 'RemoveMsi', 'PilotMigration') }
+    'Check' { $_configurationNames + @('SourcePath', 'RemoveProductId', 'RemoveMsi') }
     'Prepare' { $_configurationNames + @('SourcePath', 'OdtPath') }
-    'Migrate' { $_configurationNames + @('SourcePath', 'OdtPath', 'LogRoot', 'ForceCloseApps', 'ProductKey', 'RemoveProductId', 'RemoveMsi', 'PilotMigration') }
+    'Migrate' { $_configurationNames + @('SourcePath', 'OdtPath', 'LogRoot', 'ForceCloseApps', 'ProductKey', 'RemoveProductId', 'RemoveMsi') }
     'Recover' { @('RunId', 'OdtPath', 'LogRoot', 'ForceCloseApps', 'ProductKey') }
   }
 
   foreach ($_name in $_operationNames) {
     if ($PSBoundParameters.ContainsKey($_name) -and $_name -notin $_allowed) {
       throw "Parameter $_name is not valid in Mode $Mode."
-    }
-  }
-
-  if ($PilotMigration) {
-    foreach ($_commandName in @('Get-OfficeDeploymentPlan', 'Switch-OfficeDeployment')) {
-      $_command = Get-Command -Name $_commandName -Module PSFoundation -ErrorAction Stop
-
-      if (-not $_command.Parameters.ContainsKey('PilotMigration')) {
-        throw 'This PSFoundation build does not provide PilotMigration. Install PSFoundation 1.7.4 or later and start a fresh PowerShell session.'
-      }
-    }
-
-    if (-not $TargetProductId -or -not $PSBoundParameters.ContainsKey('Language') -or $AutoSourceLocales) {
-      throw 'PilotMigration requires TargetProductId and explicit Language de-de; automatic locale discovery remains strict.'
     }
   }
 
@@ -397,10 +375,6 @@ try {
         $_planArgs.RemoveProductId = @($RemoveProductId)
         $_planArgs.RemoveMsi = [bool]$RemoveMsi
 
-        if ($PilotMigration) {
-          $_planArgs.PilotMigration = $true
-        }
-
         Write-Progress -Id 52 -Activity 'Office migration' -Status 'Evaluating deployment compatibility and media' -PercentComplete -1
         $_plan = Get-OfficeDeploymentPlan @_planArgs
       }
@@ -449,10 +423,6 @@ try {
       else {
         # The module revalidates inventory/media and owns the confirmation boundary.
         $_phase = 'Migrate'
-        if ($PilotMigration) {
-          $_execution.PilotMigration = $true
-        }
-
         $_mayHaveChanged = -not $_preview
         $_progressStatus = if ($_preview) { 'Previewing Office migration' } else { 'Validating and migrating Office; confirmation may be required' }
         Write-Log -Message $_progressStatus -Color Cyan

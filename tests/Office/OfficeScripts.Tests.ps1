@@ -14,6 +14,7 @@ Describe 'Office script file conventions' {
   It 'contains the expected script set' {
     @($script:Scripts | ForEach-Object { $_.Name }) | Should -Be @(
       'Backup-Outlook.ps1',
+      'Checkpoint-Outlook.ps1',
       'Install-Office.ps1',
       'New-OutlookArchive.ps1',
       'New-TestOutlookMessage.ps1',

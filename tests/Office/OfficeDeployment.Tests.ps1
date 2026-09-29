@@ -5,70 +5,6 @@
 BeforeAll {
   Import-Module PSFoundation -Force
 
-  # Contract-only signatures let these wrapper tests run before the pilot API is
-  # published. Every invocation is mocked; unmocked calls fail rather than deploy.
-  # With a capable module, Pester uses the actual public signatures instead.
-  if (-not (Get-Command Get-OfficeDeploymentPlan).Parameters.ContainsKey('PilotMigration')) {
-    function Get-OfficeDeploymentPlan {
-      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'Test-only API signature for Pester mocks; the body must never run.')]
-      [CmdletBinding()]
-      param (
-        [string]
-        $Action,
-
-        [object]
-        $Configuration,
-
-        [object]
-        $Inventory,
-
-        [string]
-        $SourcePath,
-
-        [string[]]
-        $RemoveProductId,
-
-        [switch]
-        $RemoveMsi,
-
-        [switch]
-        $PilotMigration
-      )
-
-      throw 'Unmocked Office plan contract.'
-    }
-
-    function Switch-OfficeDeployment {
-      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'Test-only API signature for Pester mocks; the body must never run.')]
-      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '', Justification = 'Test-only signature preserves confirmation metadata but always throws without mutation.')]
-      [CmdletBinding(SupportsShouldProcess = $true)]
-      param (
-        [object]
-        $Plan,
-
-        [string]
-        $OdtPath,
-
-        [string]
-        $LogRoot,
-
-        [Security.SecureString]
-        $ProductKey,
-
-        [switch]
-        $ForceCloseApps,
-
-        [switch]
-        $DryRun,
-
-        [switch]
-        $PilotMigration
-      )
-
-      throw 'Unmocked Office execution contract.'
-    }
-  }
-
   $script:EntryPoints = @{}
   $script:ScriptAsts = @{}
   $officePath = Join-Path $PSScriptRoot '../../scripts/Office'
@@ -125,6 +61,10 @@ BeforeAll {
 }
 
 Describe 'Office wrapper contracts' {
+  It 'does not expose the retired migration opt-in' {
+    $script:ScriptAsts['Switch-OfficeVersion'].ParamBlock.Parameters.Name.VariablePath.UserPath | Should -Not -Contain 'PilotMigration'
+  }
+
   BeforeEach {
     $script:Inventory = [PSCustomObject]@{
       Products = @()
@@ -173,85 +113,11 @@ Describe 'Office wrapper contracts' {
     Mock Remove-Item { throw 'Wrapper must not remove files.' }
   }
 
-  It 'forwards pilot consent in <Mode> and preserves an unverified reboot result' -ForEach @(
-    @{ Mode = 'Check' }, @{ Mode = 'Migrate' }
-  ) {
-    Mock Get-Command {
-      [PSCustomObject]@{ Parameters = @{ PilotMigration = $true } }
-    } -ParameterFilter { $Name -in @('Get-OfficeDeploymentPlan', 'Switch-OfficeDeployment') -and $Module -eq 'PSFoundation' }
-    $script:Outcome.Status = 'AppliedUnverified'
-    $script:Outcome.WrapperExitCode = 1
-    $script:Outcome.RebootRequired = $true
-    $script:Outcome.NativeResults = @([PSCustomObject]@{ ExitCode = 3010 })
-    $arguments = @{
-      Mode            = $Mode
-      TargetProductId = 'Standard2019Volume'
-      Architecture    = '64'
-      Language        = @('de-de')
-      SourcePath      = 'C:\Media\Office2019'
-      RemoveMsi       = $true
-      PilotMigration  = $true
-      PassThru        = $true
-      Confirm         = $false
-    }
-
-    if ($Mode -eq 'Migrate') {
-      $arguments.OdtPath = 'C:\ODT\setup.exe'
-    }
-
-    $run = Invoke-OfficeWrapperTest 'Switch-OfficeVersion' $arguments
-    Should -Invoke Get-OfficeDeploymentPlan -Times 1 -ParameterFilter { $PilotMigration -and $RemoveMsi -and $Configuration.Language -eq 'de-de' }
-
-    if ($Mode -eq 'Migrate') {
-      Should -Invoke Switch-OfficeDeployment -Times 1 -ParameterFilter { $PilotMigration }
-      $run.ExitCode | Should -Be 1
-      $run.Result | Should -Be $script:Outcome
-      $run.Result.Status | Should -Be AppliedUnverified
-      $run.Result.RebootRequired | Should -BeTrue
-      $run.Result.NativeResults[0].ExitCode | Should -Be 3010
-    }
-    else {
-      $run.ExitCode | Should -Be 0
-      Should -Invoke Switch-OfficeDeployment -Times 0
-    }
-  }
-
-  It 'rejects pilot consent in <Mode>' -ForEach @(
-    @{ Mode = 'Prepare' }, @{ Mode = 'Recover' }
-  ) {
-    $run = Invoke-OfficeWrapperTest 'Switch-OfficeVersion' @{
-      Mode           = $Mode
-      PilotMigration = $true
-      PassThru       = $true
-    }
-    $run.ExitCode | Should -Be 1
-    $run.Result.Error | Should -Match 'PilotMigration is not valid'
-    Should -Invoke Save-OfficeDeploymentMedia -Times 0
-    Should -Invoke Resume-OfficeMigration -Times 0
-  }
-
-  It 'rejects an installed module without the pilot capability before planning' {
-    Mock Get-Command {
-      [PSCustomObject]@{ Parameters = @{} }
-    } -ParameterFilter { $Name -in @('Get-OfficeDeploymentPlan', 'Switch-OfficeDeployment') -and $Module -eq 'PSFoundation' }
-    $run = Invoke-OfficeWrapperTest 'Switch-OfficeVersion' @{
-      Mode            = 'Check'
-      TargetProductId = 'Standard2019Volume'
-      Language        = @('de-de')
-      PilotMigration  = $true
-      PassThru        = $true
-    }
-    $run.ExitCode | Should -Be 1
-    $run.Result.Error | Should -Match 'does not provide PilotMigration'
-    Should -Invoke Get-OfficeDeploymentPlan -Times 0
-    Should -Invoke Switch-OfficeDeployment -Times 0
-  }
-
-  It 'requires PSFoundation 1.7.4 and a mandatory mode in <Entry>' -ForEach @(
+  It 'requires PSFoundation 1.8.0 and a mandatory mode in <Entry>' -ForEach @(
     @{ Entry = 'Install-Office' }, @{ Entry = 'Remove-Office' }, @{ Entry = 'Switch-OfficeVersion' }
   ) {
     $ast = $script:ScriptAsts[$Entry]
-    $ast.ScriptRequirements.RequiredModules[0].Version | Should -Be ([version]'1.7.4')
+    $ast.ScriptRequirements.RequiredModules[0].Version | Should -Be ([version]'1.8.0')
     $mode = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Mode' }
     $mode.Extent.Text | Should -Match 'Mandatory = \$true'
     $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $true).Count | Should -Be 0
