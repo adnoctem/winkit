@@ -417,7 +417,7 @@ try {
         while (($_read = $_handle.Stream.Read($_buffer, 0, $_buffer.Length)) -gt 0) {
           $_output.Write($_buffer, 0, $_read)
           if ($_timer.ElapsedMilliseconds -ge 200) {
-            $_percent = [int](100.0 * $_handle.Stream.Position / [math]::Max(1, $_handle.Stream.Length))
+            $_percent = [int](100.0 * $_handle.Stream.Position / [math]::Max([long]1, $_handle.Stream.Length))
             Write-Progress -Id 61 -Activity 'Outlook checkpoint' -Status "Copying $($_copied + 1) / $($_plan.Count)" -CurrentOperation $_entry.OriginalPath -PercentComplete $_percent
             $_timer.Restart()
           }

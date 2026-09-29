@@ -2,7 +2,8 @@
 
 ### Features
 
-* **scripts:** add Outlook checkpoints and retire migration pilot interface ([4e3fa8b](https://github.com/adnoctem/winkit/commit/4e3fa8ba1b5ccd8e80f8c6caa6fbaa1189e7d2ff))
+- **scripts:** add Outlook checkpoints and retire migration pilot interface
+  ([4e3fa8b](https://github.com/adnoctem/winkit/commit/4e3fa8ba1b5ccd8e80f8c6caa6fbaa1189e7d2ff))
 
 ## [1.6.2](https://github.com/adnoctem/winkit/compare/v1.6.1...v1.6.2) (2026-09-29)
 
