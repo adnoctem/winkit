@@ -1,3 +1,9 @@
+## [1.7.1](https://github.com/adnoctem/winkit/compare/v1.7.0...v1.7.1) (2026-09-29)
+
+### Bug Fixes
+
+* **scripts:** handle large Outlook files in backup progress ([375dbe8](https://github.com/adnoctem/winkit/commit/375dbe8a60097b9c28f7e5a19f76f300aaed0f3a))
+
 ## [1.7.0](https://github.com/adnoctem/winkit/compare/v1.6.2...v1.7.0) (2026-09-29)
 
 ### Features
