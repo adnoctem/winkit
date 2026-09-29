@@ -247,11 +247,11 @@ Describe 'Office wrapper contracts' {
     Should -Invoke Switch-OfficeDeployment -Times 0
   }
 
-  It 'requires PSFoundation 1.7.3 and a mandatory mode in <Entry>' -ForEach @(
+  It 'requires PSFoundation 1.7.4 and a mandatory mode in <Entry>' -ForEach @(
     @{ Entry = 'Install-Office' }, @{ Entry = 'Remove-Office' }, @{ Entry = 'Switch-OfficeVersion' }
   ) {
     $ast = $script:ScriptAsts[$Entry]
-    $ast.ScriptRequirements.RequiredModules[0].Version | Should -Be ([version]'1.7.3')
+    $ast.ScriptRequirements.RequiredModules[0].Version | Should -Be ([version]'1.7.4')
     $mode = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Mode' }
     $mode.Extent.Text | Should -Match 'Mandatory = \$true'
     $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $true).Count | Should -Be 0

@@ -44,7 +44,7 @@ ordinary status messages, warnings, and returned results remain available.
 
 ## Office deployment
 
-The deployment scripts require **PSFoundation 1.7.3 or later** and an existing Microsoft-signed Office Deployment Tool (ODT) setup.exe. They
+The deployment scripts require **PSFoundation 1.7.4 or later** and an existing Microsoft-signed Office Deployment Tool (ODT) setup.exe. They
 share PSFoundation's inventory, planning, media validation, execution, and recovery APIs. They do not purchase licenses, upgrade Windows,
 convert Outlook profiles, or provide automatic rollback.
 
@@ -62,7 +62,7 @@ signature, publisher, and minimum supported version. Renaming a different execut
 Run this read-only preflight on the same file that Prepare or Migrate will use:
 
 ```powershell
-Import-Module PSFoundation -MinimumVersion 1.7.3 -Force
+Import-Module PSFoundation -MinimumVersion 1.7.4 -Force
 $tool = Test-OfficeDeploymentTool -OdtPath 'C:\Tools\ODT\setup.exe'
 $tool | Format-List Valid, Version, SignatureStatus, OriginalFilename, FileDescription, Detail
 if (-not $tool.Valid) {
@@ -120,7 +120,7 @@ before fleet deployment.
 
 ### Office Enterprise 2007 to Standard 2019 pilot
 
-`Switch-OfficeVersion.ps1 -PilotMigration` requires **PSFoundation 1.7.3 or later** and is available in **Check and Migrate only**. The
+`Switch-OfficeVersion.ps1 -PilotMigration` requires **PSFoundation 1.7.4 or later** and is available in **Check and Migrate only**. The
 wrapper passes this explicit authorization to both planning and execution; ordinary migrations retain their strict defaults.
 
 The profile is restricted to x64 Windows 10 desktop build 19045, the reported Enterprise 2007 MSI suite/resources, and Standard2019Volume
