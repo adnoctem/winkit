@@ -113,11 +113,11 @@ Describe 'Office wrapper contracts' {
     Mock Remove-Item { throw 'Wrapper must not remove files.' }
   }
 
-  It 'requires PSFoundation 1.8.0 and a mandatory mode in <Entry>' -ForEach @(
+  It 'requires PSFoundation 1.8.1 and a mandatory mode in <Entry>' -ForEach @(
     @{ Entry = 'Install-Office' }, @{ Entry = 'Remove-Office' }, @{ Entry = 'Switch-OfficeVersion' }
   ) {
     $ast = $script:ScriptAsts[$Entry]
-    $ast.ScriptRequirements.RequiredModules[0].Version | Should -Be ([version]'1.8.0')
+    $ast.ScriptRequirements.RequiredModules[0].Version | Should -Be ([version]'1.8.1')
     $mode = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Mode' }
     $mode.Extent.Text | Should -Match 'Mandatory = \$true'
     $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $true).Count | Should -Be 0
@@ -273,6 +273,57 @@ Describe 'Office wrapper contracts' {
     $script:ScriptAsts['Install-Office'].ParamBlock.Parameters.Name.VariablePath.UserPath | Should -Not -Contain 'RemoveProductId'
     $script:ScriptAsts['Install-Office'].ParamBlock.Parameters.Name.VariablePath.UserPath | Should -Not -Contain 'RemoveMsi'
     $script:ScriptAsts['Remove-Office'].ParamBlock.Parameters.Name.VariablePath.UserPath | Should -Not -Contain 'RemoveMsi'
+  }
+
+  It 'preserves native build evidence in an inventory-only check' {
+    $script:Inventory.Products = @([PSCustomObject]@{
+        ProductId     = 'Standard2019Volume'
+        Architecture  = '32'
+        Version       = '16.0.10417.20211'
+        VersionSource = 'ActiveProductResources'
+        Evidence      = @('Agreeing active product resource registrations')
+      })
+
+    $run = Invoke-OfficeWrapperTest 'Switch-OfficeVersion' @{
+      Mode     = 'Check'
+      PassThru = $true
+    }
+
+    $run.Result.Inventory.Products[0].VersionSource | Should -Be 'ActiveProductResources'
+    $run.Result.Inventory.Products[0].Evidence | Should -Be $script:Inventory.Products[0].Evidence
+    Should -Invoke Switch-OfficeDeployment -Times 0
+  }
+
+  It 'preserves a compliant same-product architecture request without launching another executor' {
+    $script:Outcome.NativeResults = @()
+    $run = Invoke-OfficeWrapperTest 'Switch-OfficeVersion' @{
+      Mode            = 'Migrate'
+      TargetProductId = 'Standard2019Volume'
+      Architecture    = '64'
+      Language        = @('de-de')
+      Version         = '16.0.10417.20211'
+      ExcludeApp      = @('Groove', 'OneDrive', 'Publisher')
+      RemoveProductId = @('Standard2019Volume')
+      OdtPath         = 'C:\Managed\ODT\setup.exe'
+      SourcePath      = 'C:\Managed\Media\Office2019'
+      PassThru        = $true
+      Confirm         = $false
+    }
+
+    Should -Invoke Get-OfficeDeploymentPlan -Times 1 -Exactly -ParameterFilter {
+      $Action -eq 'Migrate' -and -not $RemoveMsi -and
+      ($RemoveProductId -join ',') -eq 'Standard2019Volume' -and
+      $Configuration.Architecture -eq '64' -and $Configuration.Version -eq '16.0.10417.20211' -and
+      ($Configuration.Language -join ',') -eq 'de-de' -and
+      ($Configuration.ExcludeApp -join ',') -eq 'Groove,OneDrive,Publisher'
+    }
+    $run.Result.AlreadyCompliant | Should -BeTrue
+    $run.Result.Changed | Should -BeFalse
+    $run.Result.NativeResults.Count | Should -Be 0
+    Should -Invoke Switch-OfficeDeployment -Times 1 -Exactly
+    Should -Invoke Install-Office -Times 0
+    Should -Invoke Uninstall-Office -Times 0
+    Should -Invoke Start-Process -Times 0
   }
 
   It 'preserves module exit code <Code> and unknown changes' -ForEach @(

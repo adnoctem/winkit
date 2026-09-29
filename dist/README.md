@@ -25,7 +25,7 @@ scope. When both scopes are registered, select one explicitly. HKCU always means
 credentials does not grant discovery of the original user's HKCU installation.
 
 ```powershell
-$env:WINKIT_INSTALL_PATH = 'D:\Tools\winkit'
+$env:WINKIT_INSTALL_PATH = 'C:\Managed\Tools\winkit'
 $env:WINKIT_DRY_RUN = '1'
 irm https://raw.githubusercontent.com/adnoctem/winkit/main/dist/install.ps1 | iex
 
@@ -36,6 +36,21 @@ irm https://raw.githubusercontent.com/adnoctem/winkit/main/dist/install.ps1 | ie
 
 To inspect the source before execution, download it with `Invoke-RestMethod -OutFile`, review it, then run that file. The same environment
 settings apply to file and pipeline execution. No public command-line parameters are accepted.
+
+### Managed directory layout and relocation
+
+For a common local layout, explicitly select `C:\Managed\Tools\winkit` for winkit, `C:\Managed\ODT` for the Office Deployment Tool, and
+`C:\Managed\Media` for verified installation packages. This convention does not change the installer's scope-based default paths or Office's
+application installation directory. Keep reports, checkpoints and personal files outside the managed winkit tree.
+
+Repeating installation at the registered location updates it. Setting a different WINKIT_INSTALL_PATH in the same scope fails; there is no
+same-scope relocation mode. To move such an installation, first ensure the desired release is available, preserve personal files, then
+preview and uninstall the exact registered old path. Clear WINKIT_UNINSTALL, select the new path and scope, and preview/install there.
+Shared PSFoundation modules remain installed. Do not manually move the directory or edit registration to bypass the ownership manifest. For
+a simultaneous scope change, use the supported scope-change operation below with the new destination instead.
+
+A Git checkout is separate from a managed installation. Preserve its local changes and use Git to establish it in the new location; do not
+overlay a checkout on the installer's managed directory. The web installer always selects a published release, not local or unpushed code.
 
 ## Environment settings
 

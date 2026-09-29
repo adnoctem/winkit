@@ -45,7 +45,7 @@ ordinary status messages, warnings, and returned results remain available.
 
 ## Office deployment
 
-The deployment scripts require **PSFoundation 1.8.0 or later** and an existing Microsoft-signed Office Deployment Tool (ODT) setup.exe. They
+The deployment scripts require **PSFoundation 1.8.1 or later** and an existing Microsoft-signed Office Deployment Tool (ODT) setup.exe. They
 share PSFoundation's inventory, planning, media validation, execution, and recovery APIs. They do not purchase licenses, upgrade Windows,
 convert Outlook profiles, or provide automatic rollback.
 
@@ -63,8 +63,8 @@ signature, publisher, and minimum supported version. Renaming a different execut
 Run this read-only preflight on the same file that Prepare or Migrate will use:
 
 ```powershell
-Import-Module PSFoundation -MinimumVersion 1.8.0 -Force
-$tool = Test-OfficeDeploymentTool -OdtPath 'C:\Tools\ODT\setup.exe'
+Import-Module PSFoundation -MinimumVersion 1.8.1 -Force
+$tool = Test-OfficeDeploymentTool -OdtPath 'C:\Managed\ODT\setup.exe'
 $tool | Format-List Valid, Version, SignatureStatus, OriginalFilename, FileDescription, Detail
 if (-not $tool.Valid) {
   throw "ODT validation failed: $($tool.Detail)"
@@ -109,13 +109,18 @@ never bypass them. Run Check to inspect the plan, then a deployment DryRun to as
 eligible plan is not proof that execution or post-install verification will succeed. Product IDs do not establish vendor lifecycle or
 product/OS support.
 
-The minimum module version, PSFoundation 1.8.0, permits ordinary execution on x64 Windows 11 desktop. Additional host support depends on the
-installed module; the wrappers do not override host restrictions. Use 64-bit PowerShell on a 64-bit OS even when replacing 32-bit Office.
+PSFoundation 1.8.1 permits ordinary execution on x64 Windows 10 22H2 (build 19045) and later desktop hosts, including Windows 11. Windows
+Server, ARM and older Windows 10 builds remain unsupported. The wrappers do not override host restrictions. Use 64-bit PowerShell on a
+64-bit OS even when replacing 32-bit Office.
 
 Native inventory derives Click-to-Run languages from active product registrations and primary language from corroborated evidence.
-Incomplete observations remain unknown. Installed build, application exclusions, proofing resources, and other postconditions can still
-require investigation on installations whose registrations do not expose sufficient evidence. MSI locale preservation is not inferred from a
-single LCID. Choose explicit languages when automatic sourcing cannot establish the intended configuration.
+Products[].VersionSource and Evidence identify installed-build observations: ClickToRunInventory uses documented installed inventory;
+ActiveProductResources derives the build from agreeing version values across the active product's resource registrations. The fallback
+applies when documented inventory is absent, not when it conflicts or is malformed. VersionToReport remains telemetry, not installation
+evidence. The wrappers preserve these observations in Check results, and Checkpoint-Outlook includes them in its manifest. Incomplete
+observations remain unknown. Installed build, application exclusions, proofing resources, and other postconditions can still require
+investigation on installations whose registrations do not expose sufficient evidence. MSI locale preservation is not inferred from a single
+LCID. Choose explicit languages when automatic sourcing cannot establish the intended configuration.
 
 Standalone MSI removal and uncertain partial-installer recovery are not supported by the minimum module version. Recover is not Quick
 Repair, Online Repair, journal-free mutation, or rollback. Recovery records carrying obsolete or unsupported authorization/schema are not
@@ -131,8 +136,8 @@ $target = @{
   TargetProductId = 'Standard2019Volume'
   Architecture    = '64'
   Language        = @('de-de')
-  OdtPath         = 'C:\Tools\ODT\setup.exe'
-  SourcePath      = 'C:\Tools\ODT\Media\Office2019'
+  OdtPath         = 'C:\Managed\ODT\setup.exe'
+  SourcePath      = 'C:\Managed\Media\Office2019'
 }
 New-Item -ItemType Directory -Path (Split-Path -Parent $target.SourcePath) -Force | Out-Null
 $checkTarget = $target.Clone()
@@ -168,7 +173,7 @@ review point, not a signal to rerun the migration. Review the installed applicat
 
 `SourcePath` selects the verified installation-media package, not Office's installed application directory. Office setup chooses its normal
 application location. Raw ODT can download beside `setup.exe` when SourcePath is omitted, but these scripts require a dedicated, explicit
-package directory for preparation and media verification, such as `C:\Tools\ODT\Media\Office2019`. Its parent must already exist. See
+package directory for preparation and media verification, such as `C:\Managed\Media\Office2019`. Its parent must already exist. See
 [Microsoft's SourcePath documentation](https://learn.microsoft.com/en-us/deployoffice/office-deployment-tool-configuration-options).
 
 | Product family     | TargetProductId                       | Channel                                             |
@@ -181,6 +186,12 @@ package directory for preparation and media verification, such as `C:\Tools\ODT\
 -Architecture accepts 32 or 64 and defaults to 64. Volume channels are derived from the product. -Version optionally selects an exact 16.0
 build; preparation otherwise resolves and pins a build. -ExcludeApp selects omitted applications; -ExcludePublisher adds Publisher.
 PSFoundation validates allowed configuration values.
+
+OneDrive and Groove are distinct ExcludeApp IDs; select both when intending to omit both sync-client payloads. Neither setting means that an
+independently installed OneDrive client is uninstalled. Teams application selection and Outlook meeting-add-in operation are separate
+acceptance checks. See
+[Microsoft's ODT options](https://learn.microsoft.com/en-us/microsoft-365-apps/deploy/office-deployment-tool-configuration-options) and
+[Groove deployment controls](https://learn.microsoft.com/en-us/sharepoint/exclude-or-uninstall-previous-sync-client).
 
 Language defaults to exactly **en-us**, independently of Windows or the execution account. Use -Language de-de for German, or an ordered
 list such as -Language en-us,de-de. Order is preserved; the first language is the primary shell language. This does not change Windows
@@ -204,6 +215,23 @@ Obtain an official Microsoft ODT setup.exe. PSFoundation checks its Microsoft si
 package directory whose parent already exists. Valid compatible packages can be verified and reused; incompatible or incomplete packages
 require a new directory.
 
+ODT acquisition is an explicit separate action. Test-OfficeDeploymentToolSourceAvailability checks the reviewed download endpoint before
+provisioning a verified tool. The HEAD request checks reachability only; acquisition checks the Microsoft signatures of both the extractor
+and extracted setup.exe and rejects incomplete extraction. An existing trusted setup.exe is reused rather than implicitly updated. Create
+C:\Managed first; the tool directory must permit protected ownership and permissions.
+
+```powershell
+$source = Test-OfficeDeploymentToolSourceAvailability
+if (-not $source.Available) {
+  throw 'The reviewed ODT download is unavailable.'
+}
+Install-OfficeDeploymentTool -Destination 'C:\Managed\ODT' -DryRun
+$tool = Install-OfficeDeploymentTool -Destination 'C:\Managed\ODT' -Confirm
+if (-not $tool.Valid) {
+  throw 'ODT acquisition did not return a verified tool.'
+}
+```
+
 The package and manifest must have Administrators/SYSTEM ownership and protected write access. Restrict share access appropriately and
 ensure the actual execution identity can reach UNC media. SYSTEM or remote sessions may lack the operator's network access or mapped drives.
 Keep the package unchanged while it is being staged.
@@ -213,7 +241,7 @@ $target = @{
   TargetProductId = 'Standard2024Volume'
   Architecture   = '64'
   SourcePath     = '\\srv\deploy\Office2024'
-  OdtPath        = 'C:\ODT\setup.exe'
+  OdtPath        = 'C:\Managed\ODT\setup.exe'
 }
 
 # Include both language payloads in a reusable package.
@@ -286,6 +314,15 @@ The module validates and stages destination media before removal, then rechecks 
 the destination ODT configuration. A removal failure or reboot requirement stops continuation; inspect the result and recovery record before
 retrying. Failure after removal may require manual recovery.
 
+For a same-product architecture change, select the installed product itself with RemoveProductId, for example Standard2019Volume when
+changing Standard 2019 from 32-bit to 64-bit. Keep the exact build, languages, exclusions and media consistent across preparation, Check,
+preview and execution. Review applications and add-ins for the destination architecture.
+
+After native verification and manual acceptance, preview the identical request again. A fully compliant request returns Completed with
+ReasonCode=AlreadyCompliant, AlreadyCompliant=true, Changed=false, ChangeKnown=true and no NativeResults; this also applies to DryRun. It
+returns before installer execution and does not reapply a key. Only perform a real repeat after that preview establishes the expected no-op.
+Unknown verification, activation failures or a new removal/installation confirmation require investigation, not an automatic retry.
+
 ### Remove selected products
 
 Remove-Office supports selected Click-to-Run products and their installed languages. It has no default selection and no RemoveMsi switch.
@@ -295,7 +332,7 @@ return AlreadyAbsent with Changed=false.
 ```powershell
 $removal = @{
   RemoveProductId = @('O365ProPlusRetail')
-  OdtPath         = 'C:\ODT\setup.exe'
+  OdtPath         = 'C:\Managed\ODT\setup.exe'
 }
 
 .\scripts\Office\Remove-Office.ps1 -Mode Check -RemoveProductId $removal.RemoveProductId -PassThru
@@ -314,7 +351,7 @@ AutoSourceLocales: recovery never redetects languages.
 ```powershell
 $recovery = @{
   RunId   = '0123456789abcdef0123456789abcdef'
-  OdtPath = 'C:\ODT\setup.exe'
+  OdtPath = 'C:\Managed\ODT\setup.exe'
   LogRoot = 'C:\ProgramData\PSFoundation-Office'
 }
 

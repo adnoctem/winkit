@@ -1,12 +1,12 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.1' }
 
 <#
 .SYNOPSIS
   Plans, prepares, executes, or resumes an explicit Office migration.
 .DESCRIPTION
-  Delegates deployment to PSFoundation 1.8.0. Mode is mandatory.
+  Delegates deployment to PSFoundation 1.8.1. Mode is mandatory.
   Check is read-only; with a target it returns the complete plan and blockers.
   Prepare publishes verified media. Migrate uses the module's validated plan.
   Recover resumes only the original migration journal.
@@ -34,6 +34,8 @@
   Optional exact 16.0 build. Prepare resolves a build; deployment uses the media manifest.
 .PARAMETER ExcludeApp
   Applications to exclude. Values are validated by PSFoundation.
+  OneDrive and Groove are distinct ODT IDs; neither implies removing a separately
+  installed sync client. Keep the same exclusions for preparation and execution.
 .PARAMETER ExcludePublisher
   Add Publisher to ExcludeApp.
 .PARAMETER SourcePath
@@ -46,6 +48,8 @@
   Recovery uses its recorded target, languages, media, and authority.
 .PARAMETER RemoveProductId
   Exact Click-to-Run IDs authorized for removal in Check/Migrate.
+  Include the current target ID for an architecture change of the same product.
+  A fully verified identical repeat request returns AlreadyCompliant without removal.
 .PARAMETER RemoveMsi
   Authorize ALL supported MSI Office removals during migration, including ancillary products.
 .PARAMETER OdtPath
@@ -63,11 +67,11 @@
 .EXAMPLE
   .\Switch-OfficeVersion.ps1 -Mode Check -PassThru
 .EXAMPLE
-  .\Switch-OfficeVersion.ps1 -Mode Prepare -TargetProductId Standard2024Volume -SourcePath C:\Media\Office2024 -OdtPath C:\ODT\setup.exe -Language en-us,de-de
+  .\Switch-OfficeVersion.ps1 -Mode Prepare -TargetProductId Standard2024Volume -SourcePath C:\Managed\Media\Office2024 -OdtPath C:\Managed\ODT\setup.exe -Language en-us,de-de
 .EXAMPLE
-  .\Switch-OfficeVersion.ps1 -Mode Migrate -TargetProductId Standard2024Volume -SourcePath C:\Media\Office2024 -OdtPath C:\ODT\setup.exe -RemoveMsi -DryRun
+  .\Switch-OfficeVersion.ps1 -Mode Migrate -TargetProductId Standard2024Volume -SourcePath C:\Managed\Media\Office2024 -OdtPath C:\Managed\ODT\setup.exe -RemoveMsi -DryRun
 .EXAMPLE
-  .\Switch-OfficeVersion.ps1 -Mode Recover -RunId 0123456789abcdef0123456789abcdef -OdtPath C:\ODT\setup.exe -DryRun
+  .\Switch-OfficeVersion.ps1 -Mode Recover -RunId 0123456789abcdef0123456789abcdef -OdtPath C:\Managed\ODT\setup.exe -DryRun
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT

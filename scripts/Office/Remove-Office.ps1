@@ -1,12 +1,12 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.1' }
 
 <#
 .SYNOPSIS
   Inventories or removes explicitly selected Click-to-Run Office products.
 .DESCRIPTION
-  Uses PSFoundation 1.8.0 for removal planning, confirmation, execution, and
+  Uses PSFoundation 1.8.1 for removal planning, confirmation, execution, and
   verification. Never defaults to removing all Office. Selected products already
   absent are a successful no-op. Unselected products must remain unchanged.
   Standalone MSI removal is unsupported; use an approved migration where applicable.
@@ -33,9 +33,9 @@
 .EXAMPLE
   .\Remove-Office.ps1 -Mode Check -RemoveProductId O365ProPlusRetail -PassThru
 .EXAMPLE
-  .\Remove-Office.ps1 -Mode Remove -RemoveProductId O365ProPlusRetail -OdtPath C:\ODT\setup.exe -DryRun
+  .\Remove-Office.ps1 -Mode Remove -RemoveProductId O365ProPlusRetail -OdtPath C:\Managed\ODT\setup.exe -DryRun
 .EXAMPLE
-  .\Remove-Office.ps1 -Mode Remove -RemoveProductId O365ProPlusRetail -OdtPath C:\ODT\setup.exe -Confirm:$false -PassThru
+  .\Remove-Office.ps1 -Mode Remove -RemoveProductId O365ProPlusRetail -OdtPath C:\Managed\ODT\setup.exe -Confirm:$false -PassThru
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT

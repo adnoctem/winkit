@@ -1,18 +1,18 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.1' }
 
 <#
 .SYNOPSIS
   Plans, prepares, installs, or resumes an Office deployment.
 .DESCRIPTION
-  Delegates deployment to PSFoundation 1.8.0. Mode is mandatory.
+  Delegates deployment to PSFoundation 1.8.1. Mode is mandatory.
   Check is read-only; with a target it returns the complete plan and blockers.
   Prepare publishes verified media. Install uses the module's validated plan.
   Recover resumes only the original installation journal.
   Conflicting installations are not replaced; a verified compliant target is a no-op.
   No automatic reboot, rollback, or Outlook profile conversion is provided.
-  Preserve backups and installation media; test deployments on a recoverable pilot.
+  Preserve backups and installation media; test deployments on a recoverable workstation.
 .PARAMETER Mode
   Check, Prepare, Install, or Recover. No operation is selected implicitly.
 .PARAMETER TargetProductId
@@ -34,6 +34,8 @@
   Optional exact 16.0 build. Prepare resolves a build; deployment uses the media manifest.
 .PARAMETER ExcludeApp
   Applications to exclude. Values are validated by PSFoundation.
+  OneDrive and Groove are distinct ODT IDs; neither implies removing a separately
+  installed sync client. Keep the same exclusions for preparation and execution.
 .PARAMETER ExcludePublisher
   Add Publisher to ExcludeApp.
 .PARAMETER SourcePath
@@ -59,11 +61,11 @@
 .EXAMPLE
   .\Install-Office.ps1 -Mode Check -PassThru
 .EXAMPLE
-  .\Install-Office.ps1 -Mode Prepare -TargetProductId Standard2024Volume -SourcePath C:\Media\Office2024 -OdtPath C:\ODT\setup.exe -Language en-us,de-de
+  .\Install-Office.ps1 -Mode Prepare -TargetProductId Standard2024Volume -SourcePath C:\Managed\Media\Office2024 -OdtPath C:\Managed\ODT\setup.exe -Language en-us,de-de
 .EXAMPLE
-  .\Install-Office.ps1 -Mode Install -TargetProductId Standard2024Volume -SourcePath C:\Media\Office2024 -OdtPath C:\ODT\setup.exe -DryRun
+  .\Install-Office.ps1 -Mode Install -TargetProductId Standard2024Volume -SourcePath C:\Managed\Media\Office2024 -OdtPath C:\Managed\ODT\setup.exe -DryRun
 .EXAMPLE
-  .\Install-Office.ps1 -Mode Recover -RunId 0123456789abcdef0123456789abcdef -OdtPath C:\ODT\setup.exe -DryRun
+  .\Install-Office.ps1 -Mode Recover -RunId 0123456789abcdef0123456789abcdef -OdtPath C:\Managed\ODT\setup.exe -DryRun
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
