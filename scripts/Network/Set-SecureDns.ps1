@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -177,7 +177,7 @@ if ($Undo) {
     exit 1
   }
 
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-SecureDns'
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-SecureDns' -Name 'winkit'
   if ($_operationLog) { Write-Log -Message "Operation log: $_operationLog" -Color Gray }
   if ($PassThru -or $DryRun) { $_results }
   exit 0
@@ -257,7 +257,7 @@ else {
   Write-Log -Message 'DNS-over-HTTPS cmdlet not available on this Windows build. DNS servers are set, but DoH was not configured.' -Color Yellow
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-SecureDns'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-SecureDns' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

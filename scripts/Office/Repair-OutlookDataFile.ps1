@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.7.1' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -195,7 +195,7 @@ finally {
   Write-Progress -Id 40 -Activity 'Outlook data-file repair' -Completed
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Repair-OutlookDataFile'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Repair-OutlookDataFile' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -107,7 +107,7 @@ foreach ($_name in $LogName) {
 
 if ($_targets.Count -eq 0) {
   Write-Log -Message 'No matching event logs found; nothing to clear.' -Color Yellow
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Clear-EventLogs'
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Clear-EventLogs' -Name 'winkit'
   if ($_operationLog) { Write-Log -Message "Operation log: $_operationLog" -Color Gray }
   if ($PassThru -or $DryRun) { $_results }
   exit 0
@@ -124,7 +124,7 @@ if (-not $DryRun -and -not $Force) {
     foreach ($_target in $_targets) {
       Add-OperationResult -Results $_results -Target $_target.Name -Source 'EventLog' -Action 'Clear' -Status 'Skipped' -Detail 'Declined by user.'
     }
-    $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Clear-EventLogs'
+    $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Clear-EventLogs' -Name 'winkit'
     if ($_operationLog) { Write-Log -Message "Operation log: $_operationLog" -Color Gray }
     if ($PassThru -or $DryRun) { $_results }
     exit 1
@@ -154,7 +154,7 @@ $_skipped = @($_results | Where-Object { $_.Status -eq 'Skipped' }).Count
 $_completed = @($_results | Where-Object { $_.Status -notin @('Failed', 'Skipped') }).Count
 $_color = if ($_failed -gt 0) { 'Yellow' } else { 'Green' }
 Write-Log -Message "`nEvent log clearing complete. Cleared: $_completed | Skipped: $_skipped | Failed: $_failed" -Color $_color
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Clear-EventLogs'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Clear-EventLogs' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

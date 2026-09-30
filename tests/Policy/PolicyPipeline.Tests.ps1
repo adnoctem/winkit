@@ -7,7 +7,7 @@
 # is required. The LGPO text rules asserted here were verified against LGPO 3.0.
 
 BeforeAll {
-  Import-Module PSFoundation -MinimumVersion 1.4.0 -Force
+  Import-Module PSFoundation -MinimumVersion 1.8.2 -Force
 
   $script:PolicyScripts = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath((Join-Path $PSScriptRoot '..\..\scripts\Policy'))
   $script:ExportScript = Join-Path $script:PolicyScripts 'Export-LocalPolicy.ps1'
@@ -79,11 +79,11 @@ Describe 'Policy script conventions' {
     )
   }
 
-  It 'pins PSFoundation 1.4.0, which provides the registry.pol converters' {
+  It 'pins PSFoundation 1.8.2, which provides the registry.pol converters and named operation logs' {
     foreach ($_script in $script:Scripts) {
       $_header = Get-Content -LiteralPath $_script.FullName -TotalCount 3
       $_header -match '^#Requires -Version' | Should -Not -BeNullOrEmpty -Because "$($_script.Name) must declare the PowerShell version"
-      $_header -match "^#Requires -Modules @\{ ModuleName = 'PSFoundation'; ModuleVersion = '1\.4\.0' \}" | Should -Not -BeNullOrEmpty -Because "$($_script.Name) must pin PSFoundation 1.4.0"
+      $_header -match "^#Requires -Modules @\{ ModuleName = 'PSFoundation'; ModuleVersion = '1\.8\.2' \}" | Should -Not -BeNullOrEmpty -Because "$($_script.Name) must pin PSFoundation 1.8.2"
     }
   }
 

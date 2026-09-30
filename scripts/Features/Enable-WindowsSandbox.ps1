@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -117,7 +117,7 @@ catch {
   Add-OperationResult -Results $_results -Target $_featureName -Source 'WindowsFeature' -Action 'Enable' -Status 'Failed' -Detail $_.Exception.Message
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Enable-WindowsSandbox'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Enable-WindowsSandbox' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

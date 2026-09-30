@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -499,7 +499,7 @@ $_skipped = @($_results | Where-Object { $_.Status -eq 'Skipped' }).Count
 $_completed = @($_results | Where-Object { $_.Status -notin @('Failed', 'Skipped') }).Count
 $_color = if ($_failed -gt 0) { 'Yellow' } else { 'Green' }
 Write-Log -Message "`nTeams removal workflow complete. Completed: $_completed | Skipped: $_skipped | Failed: $_failed" -Color $_color
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Remove-Teams'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Remove-Teams' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

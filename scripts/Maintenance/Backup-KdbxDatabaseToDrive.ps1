@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -118,7 +118,7 @@ $_emitResults = $PassThru -or $DryRun
 $_backupScript = Join-Path -Path $PSScriptRoot -ChildPath 'Backup-KdbxDatabase.ps1'
 
 function Complete-DriveBackup {
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Backup-KdbxDatabaseToDrive'
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Backup-KdbxDatabaseToDrive' -Name 'winkit'
   if ($_operationLog) {
     Write-Log -Message "Operation log: $_operationLog" -Color Gray
   }

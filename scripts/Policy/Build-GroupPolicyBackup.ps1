@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -609,7 +609,7 @@ finally {
   }
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Build-GroupPolicyBackup'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Build-GroupPolicyBackup' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

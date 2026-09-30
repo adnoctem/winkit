@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -331,7 +331,7 @@ if ($Undo) {
 
   Write-Log -Message '  -> Winkit blocklist removed.' -Color Green
   Add-OperationResult -Results $_results -Target $_hostsFile -Source 'HostsFile' -Action 'Remove' -Status 'Completed' -Detail 'Blocklist removed.'
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-HostsBlocklist'
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-HostsBlocklist' -Name 'winkit'
   if ($_operationLog) { Write-Log -Message "Operation log: $_operationLog" -Color Gray }
   if ($PassThru -or $DryRun) { $_results }
   exit 0
@@ -401,7 +401,7 @@ catch {
   exit 1
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-HostsBlocklist'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-HostsBlocklist' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

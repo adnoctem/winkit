@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -501,7 +501,7 @@ if ($Repair) {
   if ($health.Healthy) {
     Write-Log -Message "winget is installed and healthy ($($health.Version)). No repair needed." -Color Green
     Add-OperationResult -Results $_results -Target 'WinGet' -Source 'Winget' -Action 'Repair' -Status 'Skipped' -Detail 'AlreadyHealthy'
-    $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Install-WinGet'
+    $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Install-WinGet' -Name 'winkit'
     if ($_operationLog) { Write-Log -Message "Operation log: $_operationLog" -Color Gray }
     if ($PassThru -or $DryRun) { $_results }
     exit 0
@@ -538,7 +538,7 @@ if ($Repair) {
   $afterHealth = Get-WingetHealth
   Add-OperationResult -Results $_results -Target 'WinGet' -Source 'Winget' -Action 'Verify' -Status $(if ($afterHealth.Healthy) { 'Completed' } else { 'Failed' }) -Detail "winget: $($afterHealth.Version -or 'not found'), sources ok: $($afterHealth.SourcesOk), source package present: $($afterHealth.SourcePackagePresent)"
 
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Install-WinGet'
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Install-WinGet' -Name 'winkit'
   if ($_operationLog) { Write-Log -Message "Operation log: $_operationLog" -Color Gray }
   if ($PassThru -or $DryRun) { $_results }
 
@@ -581,7 +581,7 @@ if (-not $ForceManual) {
       if (Test-WinGetDetected) {
         Write-Log -Message '  -> winget installed successfully via Repair-WinGetPackageManager.' -Color Green
         Add-OperationResult -Results $_results -Target 'WinGet' -Source 'Winget' -Action 'Install' -Status 'Completed' -Detail 'Installed via Repair-WinGetPackageManager.'
-        $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Install-WinGet'
+        $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Install-WinGet' -Name 'winkit'
         if ($_operationLog) { Write-Log -Message "Operation log: $_operationLog" -Color Gray }
         if ($PassThru -or $DryRun) { $_results }
         exit 0
@@ -602,7 +602,7 @@ if (-not $ForceManual) {
 if ($DryRun) {
   Write-Log -Message '[DRY RUN] Would download winget assets from GitHub and provision via DISM.' -Color Yellow
   Add-OperationResult -Results $_results -Target 'WinGet' -Source 'Winget' -Action 'Install' -Status 'Skipped' -Detail 'DryRun - manual fallback.'
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Install-WinGet'
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Install-WinGet' -Name 'winkit'
   if ($_operationLog) { Write-Log -Message "Operation log: $_operationLog" -Color Gray }
   if ($PassThru -or $DryRun) { $_results }
   exit 0
@@ -774,7 +774,7 @@ finally {
   Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Install-WinGet'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Install-WinGet' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

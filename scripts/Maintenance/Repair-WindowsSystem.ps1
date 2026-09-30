@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -466,7 +466,7 @@ $_skipped = @($_results | Where-Object { $_.Status -eq 'Skipped' }).Count
 $_completed = @($_results | Where-Object { $_.Status -notin @('Failed', 'Skipped', 'Unknown') }).Count
 $_color = if ($_failed -gt 0) { 'Yellow' } else { 'Green' }
 Write-Log -Message "`nRepair workflow complete. Completed: $_completed | Skipped: $_skipped | Failed: $_failed" -Color $_color
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Repair-WindowsSystem'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Repair-WindowsSystem' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -111,7 +111,7 @@ $_utf8 = New-Object System.Text.UTF8Encoding($false)
 $_kdbxSignature = [byte[]](0x03, 0xD9, 0xA2, 0x9A, 0x67, 0xFB, 0x4B, 0xB5)
 
 function Complete-Backup {
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Backup-KdbxDatabase'
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Backup-KdbxDatabase' -Name 'winkit'
   if ($_operationLog) {
     Write-Log -Message "Operation log: $_operationLog" -Color Gray
   }

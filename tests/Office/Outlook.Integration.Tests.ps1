@@ -58,7 +58,7 @@ BeforeAll {
     Write-Verbose 'No ScanPST discovery result; repair tests will be skipped.'
   }
 
-  $script:OptimizeSupported = [bool](Get-Module PSFoundation -ListAvailable | Where-Object { $_.Version -ge [version]'1.7.0' })
+  $script:OptimizeSupported = [bool](Get-Module PSFoundation -ListAvailable | Where-Object { $_.Version -ge [version]'1.8.2' })
 
   $script:Context = Connect-Outlook
   $script:StoreRoot = Add-OutlookStoreRoot -Namespace $script:Context.Namespace -Path $script:TestStorePst
@@ -109,7 +109,7 @@ Describe 'New-TestOutlookMessage' {
 Describe 'Optimize-Outlook deduplication' {
   It 'walks the generated folder and counts mail items' {
     if (-not $script:OptimizeSupported) {
-      Set-ItResult -Skipped -Because 'Optimize-Outlook requires PSFoundation 1.7.0 (Outlook folder selection).'
+      Set-ItResult -Skipped -Because 'Optimize-Outlook requires PSFoundation 1.8.2 (Outlook folder selection and named operation logs).'
       return
     }
 
@@ -143,7 +143,7 @@ Describe 'Optimize-Outlook deduplication' {
 
   It 'flags exactly the seeded duplicates in a dry run' {
     if (-not $script:OptimizeSupported) {
-      Set-ItResult -Skipped -Because 'Optimize-Outlook requires PSFoundation 1.7.0 (Outlook folder selection).'
+      Set-ItResult -Skipped -Because 'Optimize-Outlook requires PSFoundation 1.8.2 (Outlook folder selection and named operation logs).'
       return
     }
 
@@ -197,7 +197,7 @@ Describe 'Optimize-Outlook deduplication' {
 
   It 'moves the seeded duplicates to the review folder' {
     if (-not $script:OptimizeSupported) {
-      Set-ItResult -Skipped -Because 'Optimize-Outlook requires PSFoundation 1.7.0 (Outlook folder selection).'
+      Set-ItResult -Skipped -Because 'Optimize-Outlook requires PSFoundation 1.8.2 (Outlook folder selection and named operation logs).'
       return
     }
 

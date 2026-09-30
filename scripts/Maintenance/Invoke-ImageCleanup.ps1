@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -179,7 +179,7 @@ $_skippedCount = @($_results | Where-Object { $_.Status -ne 'Completed' -and $_.
 if ($DryRun) { Write-Log -Message "`nDRY RUN COMPLETE - no cleanup was performed" -Color Yellow }
 else { Write-Log -Message "`nCleanup: $_completedCount completed | $_skippedCount skipped | $_failedCount failed" -Color $(if ($_failedCount -gt 0) { 'Yellow' } else { 'Green' }) }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Invoke-ImageCleanup'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Invoke-ImageCleanup' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

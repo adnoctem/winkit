@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -531,7 +531,7 @@ try {
   )
   $_reportResults = @($_reportRows | Sort-Object -Property $_sortProperties | ForEach-Object { $_.Result })
 
-  $_operationLog = Write-OperationResultLog -Results $_reportResults -ScriptName 'New-TestOutlookMessage'
+  $_operationLog = Write-OperationResultLog -Results $_reportResults -ScriptName 'New-TestOutlookMessage' -Name 'winkit'
 }
 finally {
   Write-Progress -Id 30 -Activity 'Outlook test messages' -Completed

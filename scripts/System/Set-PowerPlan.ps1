@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -152,7 +152,7 @@ if ($Undo) {
   Write-Log -Message '  -> Default timers restored.' -Color Green
   Add-OperationResult -Results $_results -Target 'PowerPlan' -Source 'PowerPlan' -Action 'Restore' -Status 'Completed' -Detail 'Balanced plan + default timers restored.'
 
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-PowerPlan'
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-PowerPlan' -Name 'winkit'
   if ($_operationLog) { Write-Log -Message "Operation log: $_operationLog" -Color Gray }
   if ($PassThru -or $DryRun) { $_results }
   exit 0
@@ -231,7 +231,7 @@ if (-not $DryRun) {
   Write-Log -Message "`nPower plan '$Plan' is now active. A restart is not required." -Color Green
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-PowerPlan'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-PowerPlan' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

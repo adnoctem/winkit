@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -207,7 +207,7 @@ else {
   Write-Log -Message "`nAll registry values were already at the desired target - nothing to do." -Color Green
 }
 
-$_operationLog = Write-OperationResultLog -Results $results -ScriptName 'Disable-PointerAcceleration'
+$_operationLog = Write-OperationResultLog -Results $results -ScriptName 'Disable-PointerAcceleration' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

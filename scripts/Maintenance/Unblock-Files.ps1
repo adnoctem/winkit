@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -160,7 +160,7 @@ else {
   Write-Log -Message "`nUnblocked: $unblocked  |  Failed: $failed  |  Total matched: $($files.Count)" -Color $(if ($failed -gt 0) { 'Yellow' } else { 'Green' })
 }
 
-$_operationLog = Write-OperationResultLog -Results $results -ScriptName 'Unblock-Files'
+$_operationLog = Write-OperationResultLog -Results $results -ScriptName 'Unblock-Files' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -216,7 +216,7 @@ Write-Log -Message "Would send '$Subject' to $($recipients -join ', ') via $Smtp
 
 if (-not $PSCmdlet.ShouldProcess("$($recipients -join ', ')", "Send message via $SmtpServer`:$Port")) {
   Add-OperationResult -Results $_results -Target $Subject -Source 'SMTP' -Action 'Send' -Status 'Skipped' -Detail 'WhatIf - message not sent.'
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Send-SMTPMessage'
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Send-SMTPMessage' -Name 'winkit'
   if ($_operationLog) { Write-Log -Message "Operation log: $_operationLog" -Color Gray }
   if ($PassThru -or $DryRun) { $_results }
   exit 0
@@ -278,7 +278,7 @@ finally {
 
 # ---- Summary ----------------------------------------------------------------
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Send-SMTPMessage'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Send-SMTPMessage' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

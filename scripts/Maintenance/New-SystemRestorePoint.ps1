@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -143,7 +143,7 @@ catch {
   exit 1
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'New-SystemRestorePoint'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'New-SystemRestorePoint' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

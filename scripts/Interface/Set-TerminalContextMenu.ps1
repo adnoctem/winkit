@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', 'Read-JsonFileWithComments', Justification = 'The helper intentionally strips multiple JSON comment lines.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', 'Get-TerminalProfileEntries', Justification = 'The helper returns context-menu entries, not a single Terminal profile object.')]
@@ -652,7 +652,7 @@ $_skipped = @($_results | Where-Object { $_.Status -in @('Skipped', 'AlreadyExis
 $_failed = @($_results | Where-Object { $_.Status -eq 'Failed' }).Count
 Write-Log -Message "Terminal context menu complete. Applied: $_applied | Skipped: $_skipped | Failed: $_failed" -Color $(if ($_failed -gt 0) { 'Yellow' } else { 'Green' })
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-TerminalContextMenu'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Set-TerminalContextMenu' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

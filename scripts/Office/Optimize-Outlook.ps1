@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.7.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -574,7 +574,7 @@ try {
     Write-Log -Message "Report: $_reportPath" -Color Gray
   }
 
-  $_operationLog = Write-OperationResultLog -Results $_reportResults -ScriptName 'Optimize-Outlook'
+  $_operationLog = Write-OperationResultLog -Results $_reportResults -ScriptName 'Optimize-Outlook' -Name 'winkit'
   if ($_operationLog) {
     Write-Log -Message "Operation log: $_operationLog" -Color Gray
   }

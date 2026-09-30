@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -93,7 +93,7 @@ $_markerPath = Join-Path -Path $_root -ChildPath $MarkerName
 $_properties = @{ MarkerId = "$MarkerId"; Path = $_markerPath }
 
 function Complete-Marker {
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'New-DriveMarker'
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'New-DriveMarker' -Name 'winkit'
   if ($_operationLog) {
     Write-Log -Message "Operation log: $_operationLog" -Color Gray
   }

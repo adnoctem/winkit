@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.1.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -113,7 +113,7 @@ catch {
   Write-Log -Message "Offline domain join provisioning failed: $($_.Exception.Message)" -Color Red
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'New-OfflineDomainJoin'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'New-OfflineDomainJoin' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

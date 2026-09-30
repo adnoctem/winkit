@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -149,7 +149,7 @@ foreach ($m in $mappings) {
 Write-Log -Message "`nReconnected: $_reconnected | Skipped (OK): $_skipped | Failed: $_failed | Total: $($mappings.Count)" -Color $(
   if ($_failed -gt 0) { 'Yellow' } else { 'Green' })
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Restore-MappedDrives'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Restore-MappedDrives' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

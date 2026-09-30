@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.1.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -69,7 +69,7 @@ else {
   Add-OperationResult -Results $_results -Target 'PendingReboot' -Source 'PendingReboot' -Action 'Check' -Status 'NotDetected' -Detail 'All indicators clear.'
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Test-PendingReboot'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Test-PendingReboot' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

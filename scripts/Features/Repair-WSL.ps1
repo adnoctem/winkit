@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -360,7 +360,7 @@ if ($Reboot) {
   }
   elseif ($PSCmdlet.ShouldProcess('Computer', 'Restart immediately with shutdown /r /f /t 0')) {
     Add-OperationResult -Results $_results -Target 'Computer' -Source 'Shutdown' -Action 'Restart' -Status 'Completed' -Detail 'shutdown /r /f /t 0'
-    $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Repair-WSL'
+    $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Repair-WSL' -Name 'winkit'
     if ($_operationLog) {
       Write-Log -Message "Operation log: $_operationLog" -Color Gray
     }
@@ -384,7 +384,7 @@ else {
   Write-Log -Message "`nWSL repair: $_completedCount completed | $_skippedCount skipped | $_failedCount failed" -Color $(if ($_failedCount -gt 0) { 'Yellow' } else { 'Green' })
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Repair-WSL'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Repair-WSL' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

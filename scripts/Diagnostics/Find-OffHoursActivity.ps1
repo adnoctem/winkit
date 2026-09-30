@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -853,7 +853,7 @@ else {
   Write-Log -Message "`n$_summary" -Color $(if ($_totalHits -gt 0) { 'Cyan' } else { 'Green' })
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Find-OffHoursActivity'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Find-OffHoursActivity' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

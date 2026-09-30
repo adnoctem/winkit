@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -230,7 +230,7 @@ if ($DryRun) { Write-Log -Message "`nDRY RUN COMPLETE - no changes were made" -C
 elseif ($anyChanges) { Write-Log -Message "`nDiagnostic tracking settings have been processed. Restart Windows for service start changes to take effect." -Color Green }
 else { Write-Log -Message "`nAll registry values were already at the desired target - nothing to do." -Color Green }
 $_operationResults = @(ConvertTo-RegistrySettingResult -Settings $diagnosticSettings -Undo:$Undo -DryRun:$DryRun)
-$_operationLog = Write-OperationResultLog -Results $_operationResults -ScriptName 'Disable-DiagnosticTracking'
+$_operationLog = Write-OperationResultLog -Results $_operationResults -ScriptName 'Disable-DiagnosticTracking' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

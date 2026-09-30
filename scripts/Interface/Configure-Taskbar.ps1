@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -405,7 +405,7 @@ else {
   Write-Log -Message "`nAll registry values were already at the desired target - nothing to do." -Color Green
 }
 $_operationResults = @(ConvertTo-RegistrySettingResult -Settings $_eligibleSettings -Undo:$Undo -DryRun:$DryRun)
-$_operationLog = Write-OperationResultLog -Results $_operationResults -ScriptName 'Configure-Taskbar'
+$_operationLog = Write-OperationResultLog -Results $_operationResults -ScriptName 'Configure-Taskbar' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

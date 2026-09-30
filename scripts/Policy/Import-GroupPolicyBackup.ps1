@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -128,7 +128,7 @@ $_registryCse = '{35378EAC-683F-11D2-A89A-00C04FBBCFA2}'
 function Complete-Import {
   param ([int]$ExitCode = 0)
 
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Import-GroupPolicyBackup'
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Import-GroupPolicyBackup' -Name 'winkit'
   if ($_operationLog) {
     Write-Log -Message "Operation log: $_operationLog" -Color Gray
   }

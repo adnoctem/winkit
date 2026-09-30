@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.1.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -847,7 +847,7 @@ $_removed = @($_results | Where-Object { $_.Status -in @('Removed', 'Disabled') 
 $_skipped = @($_results | Where-Object { $_.Status -eq 'Skipped' }).Count
 $_failed = @($_results | Where-Object { $_.Status -eq 'Failed' }).Count
 Write-Log -Message "Bloatware removal complete. Removed/disabled: $_removed | Skipped: $_skipped | Failed: $_failed" -Color $(if ($_failed -gt 0) { 'Yellow' } else { 'Green' })
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Remove-Bloatware'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Remove-Bloatware' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -289,7 +289,7 @@ $files = @(Get-ChildItem -LiteralPath $Path -Filter $Filter -File -Recurse:$Recu
 if ($files.Count -eq 0) {
   Write-Log -Message "No files matching '$Filter' found in '$Path'." -Color Yellow
   Add-OperationResult -Results $_results -Target $Filter -Source 'Print' -Action 'Collect' -Status 'Skipped' -Detail 'NoFilesFound'
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Invoke-PrintBatch'
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Invoke-PrintBatch' -Name 'winkit'
   if ($_operationLog) { Write-Log -Message "Operation log: $_operationLog" -Color Gray }
   if ($PassThru -or $DryRun) { $_results }
   exit 0
@@ -337,7 +337,7 @@ if (-not $PSCmdlet.ShouldProcess("$($files.Count) file(s)", "Print to $(if ($pri
   foreach ($file in $files) {
     Add-OperationResult -Results $_results -Target $file.Name -Source 'Print' -Action 'Print' -Status 'Skipped' -Detail 'WhatIf - print skipped.'
   }
-  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Invoke-PrintBatch'
+  $_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Invoke-PrintBatch' -Name 'winkit'
   if ($_operationLog) { Write-Log -Message "Operation log: $_operationLog" -Color Gray }
   if ($PassThru -or $DryRun) { $_results }
   exit 0
@@ -395,7 +395,7 @@ Write-Host ("`rPrinted {0}/{1} file(s).{2}" -f ($total - $failedCount), $total, 
 
 # ---- Summary ----------------------------------------------------------------
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Invoke-PrintBatch'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Invoke-PrintBatch' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -197,7 +197,7 @@ elseif ($_hostnames.Count -gt 0) {
     if ($_hostnames.Count -gt 0) { 'Cyan' } else { 'Gray' })
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'New-HostnameScheme'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'New-HostnameScheme' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

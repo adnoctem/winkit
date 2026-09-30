@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.4.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -262,7 +262,7 @@ else {
   Write-Log -Message "`n$_completedCount succeeded | $_skippedCount skipped" -Color Green
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Invoke-Optimizer'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Invoke-Optimizer' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -271,7 +271,7 @@ elseif ($_changed -gt 0) { Write-Log -Message "`nWindows Update settings have be
 else { Write-Log -Message "`nAll registry values were already at the desired target - nothing to do." -Color Green }
 
 Write-Log -Message "Update settings complete. Changed: $_changed | Skipped: $_skipped | Failed: $_failed" -Color $(if ($_failed -gt 0) { 'Yellow' } else { 'Green' })
-$_operationLog = Write-OperationResultLog -Results $results -ScriptName 'Configure-Updates'
+$_operationLog = Write-OperationResultLog -Results $results -ScriptName 'Configure-Updates' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

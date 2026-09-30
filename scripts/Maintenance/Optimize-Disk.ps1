@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.0
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -217,7 +217,7 @@ else {
   Write-Log -Message "`nDisk optimisation: $_completedCount completed | $_skippedCount skipped | $_failedCount failed" -Color $(if ($_failedCount -gt 0) { 'Yellow' } else { 'Green' })
 }
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Optimize-Disk'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Optimize-Disk' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

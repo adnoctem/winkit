@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.2.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -334,7 +334,7 @@ else {
 
 $failedCount = @($_results | Where-Object { $_.Status -eq 'Failed' }).Count
 
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Enable-RemoteDesktopServices'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Enable-RemoteDesktopServices' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }

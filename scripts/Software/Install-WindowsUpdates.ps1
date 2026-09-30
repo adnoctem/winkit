@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.0.0' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
 
 <#
 .SYNOPSIS
@@ -250,7 +250,7 @@ if ($Profile -eq 'StoreOnly' -or $IncludeStore) {
 }
 
 # ---- Summary ----------------------------------------------------------------
-$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Install-WindowsUpdates'
+$_operationLog = Write-OperationResultLog -Results $_results -ScriptName 'Install-WindowsUpdates' -Name 'winkit'
 if ($_operationLog) {
   Write-Log -Message "Operation log: $_operationLog" -Color Gray
 }
