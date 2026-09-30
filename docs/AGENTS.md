@@ -29,8 +29,6 @@ a symlink to this file — edit this one.
 - `scripts/<Area>/README.md` — user documentation for that script family (for example, `scripts/Office/README.md`); keep domain-specific
   guides here rather than in `docs/`. Describe current behavior, requirements, examples, and limitations without development history,
   sketches, change narratives, or old review/test-run reports
-- `secrets/` — local-only scratch/backlog docs, **gitignored**: `PSFoundation.md` (next-version queue for the module),
-  `01-reorganization.md`; completed trackers are archived under `secrets/Trash/`
 - `requirements.psd1` — exact module version pins (also a semantic-release commit asset); bump when adopting newer PSFoundation
   functionality
 - `PSScriptAnalyzerSettings.psd1` — formatter/linter rules; contains a singular-noun allowlist
@@ -88,7 +86,7 @@ Passing the formatter is necessary but does not establish readable structure. Fo
 
 - `docs/CONTRIBUTING.md` still references the retired `lib/` module and a `tests/` directory — both were split out into PSFoundation; trust
   the code over that document
-- Format/lint exclude `secrets/` and `build/`; tracked `dist/` sources are included by default (`-IncludeSecrets` overrides)
+- Format/lint skip generated and gitignored directories; tracked `dist/` sources are included by default
 - Commit messages must be conventional (types `build|ci|docs|feat|fix|perf|refactor|test|chore`; scopes `lib|scripts|tools|config|docs` —
   `lib` is historical) — see `docs/CONTRIBUTING.md`
 - Releases are semantic-release driven: superlint gates the push, then dispatches `release`; a `feat` commit on `main` releases a minor,
