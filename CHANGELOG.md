@@ -2,7 +2,8 @@
 
 ### Bug Fixes
 
-* **scripts:** harden archiving from OST-backed Outlook stores ([39e19f0](https://github.com/adnoctem/winkit/commit/39e19f09d44f65b0e2edeb34c0195817230cdb9c))
+- **scripts:** harden archiving from OST-backed Outlook stores
+  ([39e19f0](https://github.com/adnoctem/winkit/commit/39e19f09d44f65b0e2edeb34c0195817230cdb9c))
 
 ## [1.7.1](https://github.com/adnoctem/winkit/compare/v1.7.0...v1.7.1) (2026-09-29)
 
