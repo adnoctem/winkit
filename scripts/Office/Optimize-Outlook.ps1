@@ -74,7 +74,7 @@
   Server Core: not applicable - Outlook is a desktop client.
   SYSTEM-account execution: not applicable - requires an interactive Outlook profile.
   Outlook version: 2007 (version 12) or later - PropertyAccessor is required.
-  Bitness: Outlook 2007 is 32-bit only - run under 32-bit PowerShell (x86).
+  Bitness: Outlook COM automation supports cross-architecture PowerShell clients.
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]

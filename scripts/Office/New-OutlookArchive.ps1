@@ -18,6 +18,11 @@
   Included non-mail containers allow traversal to their mail subfolders.
   Copy temporarily duplicates each message in its SOURCE store before moving
   the duplicate to the archive. Keep a closed-file backup and adequate headroom.
+  Attached IMAP/Exchange stores are supported with classic Outlook 2010 or later.
+  Move can remove source mail from the server and other synchronized clients;
+  Copy also performs temporary source writes that can synchronize.
+  Matching OST messages must be fully downloaded, including during previews.
+  Only mail exposed by Outlook is considered; server completeness is not verified.
   Shows folder and item progress and writes a JSON report, including previews.
   Per-message results are stored in the report rather than printed to the console.
 .PARAMETER ArchivePath
@@ -50,7 +55,7 @@
   Exact store-relative paths excluded with their descendants. Exclusions win over Include switches.
 .PARAMETER StoreName
   Display name of the source Outlook store. If omitted, the default delivery
-  store is used.
+  store is used. Select an attached PST, IMAP, or Exchange store, not an OST path.
 .PARAMETER FolderName
   Exact folder path relative to the selected store, or empty for the store root.
   When omitted, selects Inbox by identity, including localized or renamed Inboxes.
@@ -67,6 +72,8 @@
   include all of 2024. Cannot be combined with EndDate.
 .PARAMETER Mode
   Copy leaves source mail intact. Move removes archived items from the source.
+  For IMAP/Exchange, removal can synchronize to the server and other clients.
+  Copy temporarily creates duplicates in the source before transferring them.
 .PARAMETER DisplayName
   Display name for the PST. New files default to the filename without .pst.
   Append preserves the existing name unless this parameter is supplied.
@@ -114,8 +121,8 @@
   License: MIT
   Server Core: not applicable - Outlook is a desktop client.
   SYSTEM-account execution: not applicable - requires an interactive Outlook profile.
-  Outlook version: 2007 (version 12) or later - AddStoreEx creates Unicode PSTs.
-  Bitness: Outlook 2007 is 32-bit only - run under 32-bit PowerShell (x86).
+  Outlook version: 2007 for PST sources; 2010 or later for OST/Exchange sources.
+  Bitness: Outlook COM automation supports cross-architecture PowerShell clients.
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
@@ -425,6 +432,72 @@ function Add-OutlookArchiveResult {
     -Property $_property
 }
 
+function Get-OutlookArchiveSourceInfo {
+  param (
+    [object]
+    $Store
+  )
+
+  $_path = [string]$Store.FilePath
+  $_extension = [IO.Path]::GetExtension($_path)
+  $_format = switch ($_extension) {
+    '.pst' {
+      'PST'
+    }
+    '.ost' {
+      'OST'
+    }
+    '' {
+      'None'
+    }
+    default {
+      'Other'
+    }
+  }
+  $_exchangeType = $Store.ExchangeStoreType
+  if ($null -eq $_exchangeType) {
+    throw 'Cannot determine the source ExchangeStoreType. No archive work was started.'
+  }
+
+  # olNotExchange (3) also describes non-Exchange OST providers. An OST
+  # extension alone cannot distinguish IMAP from another synchronized provider.
+  [PSCustomObject]@{
+    DisplayName       = [string]$Store.DisplayName
+    StoreID           = [string]$Store.StoreID
+    FilePath          = $_path
+    DataFileFormat    = $_format
+    ExchangeStoreType = [int]$_exchangeType
+    MaySynchronize    = $_format -eq 'OST' -or [int]$_exchangeType -ne 3
+  }
+}
+
+function Test-OutlookArchiveDownload {
+  [OutputType([bool])]
+  param (
+    [object]
+    $Item,
+
+    [string]
+    $Folder
+  )
+
+  $_identity = "folder '$Folder', EntryID '$($Item.EntryID)'"
+  try {
+    $_state = $Item.DownloadState
+  }
+  catch {
+    throw "Cannot read DownloadState for $_identity. Download full messages in Outlook and retry after synchronization: $($_.Exception.Message)"
+  }
+
+  # OlDownloadState: 0 = headers only, 1 = full item. Missing or unknown values
+  # must not be cast to zero or silently treated as a complete message.
+  if ($null -eq $_state -or $_state -ne 1) {
+    throw "Message is not confirmed fully downloaded in $_identity (DownloadState='$($_state)'). Download full messages, including bodies and attachments, in Outlook before retrying."
+  }
+
+  return $true
+}
+
 function Copy-OutlookFolderItem {
   [CmdletBinding(SupportsShouldProcess = $true)]
   param (
@@ -439,6 +512,9 @@ function Copy-OutlookFolderItem {
 
     [string]
     $ArchiveMode,
+
+    [switch]
+    $RequireFullDownload,
 
     [System.Collections.IList]
     $Results
@@ -461,6 +537,10 @@ function Copy-OutlookFolderItem {
         if (Test-OutlookItemInRange -Item $_item) {
           if (-not $_item.EntryID) {
             throw 'Mail item has no EntryID.'
+          }
+
+          if ($RequireFullDownload) {
+            $null = Test-OutlookArchiveDownload -Item $_item -Folder $_folderPath
           }
 
           $_ids.Add([string]$_item.EntryID)
@@ -488,6 +568,10 @@ function Copy-OutlookFolderItem {
     $_moved = $null
     try {
       $_item = $_context.Namespace.GetItemFromID($_id, $SourceFolder.StoreID)
+      if ($RequireFullDownload) {
+        $null = Test-OutlookArchiveDownload -Item $_item -Folder $_folderPath
+      }
+
       # Move invalidates the original COM item. Capture audit fields first.
       $_metadata = [PSCustomObject]@{
         Subject      = $_item.Subject
@@ -534,7 +618,7 @@ function Copy-OutlookFolderItem {
     }
     catch {
       # A failed Copy().Move() can leave a duplicate in the source. Stop instead
-      # of repeatedly filling a near-limit PST. Do not delete uncertain items.
+      # of repeatedly filling a near-limit store. Do not delete uncertain items.
       throw "Archive stopped in '$($SourceFolder.FolderPath)' at EntryID '$_id': $($_.Exception.Message). A failed copy may remain in the source; inspect before retrying."
     }
     finally {
@@ -556,6 +640,8 @@ $_initialStoreIDs = @()
 $_destinationValidation = 'NotValidated'
 $_archivePath = $ArchivePath
 $_sourcePath = $null
+$_sourceInfo = $null
+$_sourceWarnings = @()
 $_reportPath = $null
 $_reportStream = $null
 $_declined = $false
@@ -668,6 +754,7 @@ try {
   if ([string]::IsNullOrWhiteSpace($StoreName)) {
     $_selectedStore = $_context.Namespace.DefaultStore
     try {
+      $_sourceInfo = Get-OutlookArchiveSourceInfo -Store $_selectedStore
       $_sourceRoot = $_selectedStore.GetRootFolder()
     }
     finally {
@@ -684,6 +771,7 @@ try {
           Write-Verbose "Store: $($_store.DisplayName) | $($_store.FilePath)"
           if ($_store.DisplayName -eq $StoreName) {
             $_matches++
+            $_sourceInfo = Get-OutlookArchiveSourceInfo -Store $_store
           }
         }
         finally {
@@ -702,6 +790,21 @@ try {
     $_sourceRoot = Get-OutlookStoreRoot -Namespace $_context.Namespace -Name $StoreName
   }
   Write-Verbose "Source: $($_sourceRoot.FolderPath)"
+  Write-Log -Message ("Archive source: {0} | Data file: {1} | ExchangeStoreType: {2}" -f $_sourceInfo.DisplayName, $_sourceInfo.DataFileFormat, $_sourceInfo.ExchangeStoreType) -Color Cyan
+  if ($_sourceInfo.MaySynchronize) {
+    $_sourceWarnings += 'Only selected mail exposed by Outlook is considered. Server-mailbox completeness is not verified; check cache history, folder subscriptions, and synchronization before archiving.'
+    if ($Mode -eq 'Move') {
+      $_sourceWarnings += 'Move removes archived messages from the source. Removal can synchronize to the server and other clients, including when Outlook reconnects later.'
+    }
+    else {
+      $_sourceWarnings += 'Copy preserves originals but temporarily creates duplicates in the source before moving them to the PST. These writes can synchronize and require source write access and quota headroom.'
+    }
+
+    foreach ($_warning in $_sourceWarnings) {
+      Write-Warning $_warning
+    }
+  }
+
   if ($Append) {
     # Reuse an existing attachment by file path, never by its display label.
     $_stores = $_context.Namespace.Stores
@@ -898,6 +1001,7 @@ try {
           DestinationFolder       = $_destinationFolder
           DestinationRelativePath = $_destinationRelativePath
           ArchiveMode             = $Mode
+          RequireFullDownload     = $_sourceInfo.DataFileFormat -eq 'OST'
           Results                 = $_results
           WhatIf                  = [bool]$WhatIfPreference
           Confirm                 = $false
@@ -1032,11 +1136,11 @@ try {
   $_reportResults = @($_reportRows | Sort-Object -Property $_sortProperties | ForEach-Object { $_.Result })
 
   $_report = [ordered]@{
-    SchemaVersion = 1
-    Script        = 'New-OutlookArchive'
-    StartedAt     = $_startedAt.ToString('o')
-    FinishedAt    = (Get-Date).ToString('o')
-    Settings      = [ordered]@{
+    SchemaVersion  = 1
+    Script         = 'New-OutlookArchive'
+    StartedAt      = $_startedAt.ToString('o')
+    FinishedAt     = (Get-Date).ToString('o')
+    Settings       = [ordered]@{
       ArchivePath              = $_archivePath
       Append                   = [bool]$Append
       SkipPathPreservation     = [bool]$SkipPathPreservation
@@ -1044,6 +1148,7 @@ try {
       AttachmentCreated        = $_archiveOwned
       DestinationValidation    = $_destinationValidation
       StoreName                = $StoreName
+      SourceStore              = $_sourceInfo
       SourceFolder             = $_sourcePath
       FolderName               = if ($PSBoundParameters.ContainsKey('FolderName')) { $FolderName } else { $null }
       Sort                     = $Sort
@@ -1059,9 +1164,10 @@ try {
       DisplayName              = $DisplayName
       AddDataFile              = [bool]$AddDataFile
     }
-    Summary       = $_summary
-    FolderPlan    = @($_folderPlan)
-    Results       = $_reportResults
+    Summary        = $_summary
+    SourceWarnings = @($_sourceWarnings)
+    FolderPlan     = @($_folderPlan)
+    Results        = $_reportResults
   }
 
   $_json = ConvertTo-Json -InputObject $_report -Depth 8 -ErrorAction Stop

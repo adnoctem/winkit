@@ -32,7 +32,8 @@ BeforeAll {
     $mail = [PSCustomObject]@{
       EntryID = $Id; Subject = $Id; ReceivedTime = [datetime]'2024-12-31T12:00:00'
       Class = 43; MessageId = $MessageId; FailMove = $false; Copies = 0; Moves = 0
-      SourceItems = $null
+      SourceItems   = $null
+      DownloadState = 1
     }
     $mail | Add-Member ScriptMethod Copy {
       $this.Copies++
@@ -507,7 +508,13 @@ Describe 'Outlook store selection and preview' {
     $script:Source = New-FakeFolder -Name Root
     $sourcePath = Join-Path $TestDrive 'source.pst'
     [IO.File]::WriteAllText($sourcePath, 'source fixture')
-    $store = [PSCustomObject]@{ DisplayName = 'Duplicate name'; FilePath = $sourcePath; Root = $script:Source; StoreID = 'source-store' }
+    $store = [PSCustomObject]@{
+      DisplayName       = 'Duplicate name'
+      FilePath          = $sourcePath
+      Root              = $script:Source
+      StoreID           = 'source-store'
+      ExchangeStoreType = 3
+    }
     $store | Add-Member ScriptMethod GetRootFolder { $this.Root }
     $app = [PSCustomObject]@{ Version = '12.0'; QuitCalled = $false }
     $app | Add-Member ScriptMethod Quit { $this.QuitCalled = $true }
@@ -586,6 +593,232 @@ Describe 'Outlook store selection and preview' {
         WarningAction   = 'SilentlyContinue'
       }
       $script:ArchiveScript = Join-Path $script:OfficePath 'New-OutlookArchive.ps1'
+    }
+
+    Context 'Synchronized OST sources' {
+      BeforeEach {
+        $script:FakeContext.App.Version = '16.0'
+        $script:FakeContext.Namespace.DefaultStore.FilePath = Join-Path $TestDrive 'source.ost'
+        [IO.File]::WriteAllText($script:FakeContext.Namespace.DefaultStore.FilePath, 'source OST fixture')
+        Mock Get-OutlookSubFolder {
+          param($ParentFolder, $Name, $Create)
+          $matchingFolders = @($ParentFolder.Folders.Values | Where-Object Name -EQ $Name)
+          if ($matchingFolders.Count) {
+            return $matchingFolders[0]
+          }
+          if ($Create) {
+            $folder = New-FakeFolder -Name $Name
+            $folder.StoreID = $ParentFolder.StoreID
+            $folder.FolderPath = $ParentFolder.FolderPath + '\' + $Name
+            $null = $ParentFolder.Folders.Values.Add($folder)
+            return $folder
+          }
+        }
+      }
+
+      It 'archives <Provider> mail with <ArchiveMode>, filters, preserved paths and disjoint append passes' -ForEach @(
+        @{ Provider = 'IMAP'; ExchangeType = 3; ArchiveMode = 'Copy' }
+        @{ Provider = 'Exchange'; ExchangeType = 0; ArchiveMode = 'Copy' }
+        @{ Provider = 'IMAP'; ExchangeType = 3; ArchiveMode = 'Move' }
+        @{ Provider = 'Exchange'; ExchangeType = 0; ArchiveMode = 'Move' }
+      ) {
+        $script:FakeContext.Namespace.DefaultStore.ExchangeStoreType = $ExchangeType
+        $inbox = New-FakeFolder -Name Posteingang
+        $inbox.FolderPath = $script:Source.FolderPath + '\Posteingang'
+        $leaf = New-FakeFolder -Name Amazon -Mail @((New-FakeMail 'first'), (New-FakeMail 'second'))
+        $leaf.FolderPath = $inbox.FolderPath + '\Amazon'
+        $leaf.Items.Item(2).ReceivedTime = [datetime]'2025-06-01'
+        $excluded = New-FakeFolder -Name Protected -Mail @((New-FakeMail 'excluded'))
+        $excluded.FolderPath = $inbox.FolderPath + '\Protected'
+        # An excluded header-only message must not prevent selected mail archiving.
+        $excluded.Items.Item(1).DownloadState = 0
+        $null = $inbox.Folders.Values.Add($leaf)
+        $null = $inbox.Folders.Values.Add($excluded)
+        $null = $script:Source.Folders.Values.Add($inbox)
+        Mock Get-OutlookStandardFolderIdentity -ModuleName PSFoundation {
+          [PSCustomObject]@{
+            Kind    = 'Inbox'
+            StoreID = 'source-store'
+            EntryID = 'folder-Posteingang'
+            State   = 'Resolved'
+          }
+        }
+        $script:AppendArguments.Remove('FolderName')
+        $script:AppendArguments.Mode = $ArchiveMode
+        $script:AppendArguments.Recurse = $true
+        $script:AppendArguments.Exclusions = @('Posteingang\Protected')
+        $script:AppendArguments.EndBefore = [datetime]'2025-01-01'
+        $first = & $script:ArchiveScript @script:AppendArguments
+        $first.Status | Should -Be Completed
+        ($first.Copied + $first.Moved) | Should -Be 1
+
+        $script:AppendArguments.Remove('EndBefore')
+        $script:AppendArguments.StartDate = [datetime]'2025-01-01'
+        $second = & $script:ArchiveScript @script:AppendArguments
+        $second.Status | Should -Be Completed
+        ($second.Copied + $second.Moved) | Should -Be 1
+        $leaf.Items.Count | Should -Be $(if ($ArchiveMode -eq 'Copy') { 2 } else { 0 })
+        $excluded.Items.Count | Should -Be 1
+        $target = $script:Destination.Folders.Item(1).Folders.Item(1)
+        $target.Name | Should -Be Amazon
+        $target.Items.Count | Should -Be 2
+        $report = Get-Content -LiteralPath $second.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $report.Settings.SourceStore.DataFileFormat | Should -Be OST
+        $report.Settings.SourceStore.ExchangeStoreType | Should -Be $ExchangeType
+        $report.Settings.SourceStore.MaySynchronize | Should -BeTrue
+        $report.Settings.FolderSelection | Should -Be DefaultInbox
+        $report.Results[0].DestinationFolderPath | Should -Be ($script:ArchivePath + '::\Posteingang\Amazon')
+        $report.SourceWarnings -join ' ' | Should -Match 'Server-mailbox completeness is not verified'
+        $script:FakeContext.Namespace.Detached.Count | Should -Be 0
+      }
+
+      It 'previews <Provider> <ArchiveMode> without transfers and reports synchronization consequences' -ForEach @(
+        @{ Provider = 'IMAP'; ExchangeType = 3; ArchiveMode = 'Copy' }
+        @{ Provider = 'Exchange'; ExchangeType = 0; ArchiveMode = 'Copy' }
+        @{ Provider = 'IMAP'; ExchangeType = 3; ArchiveMode = 'Move' }
+        @{ Provider = 'Exchange'; ExchangeType = 0; ArchiveMode = 'Move' }
+      ) {
+        $script:FakeContext.Namespace.DefaultStore.ExchangeStoreType = $ExchangeType
+        $mail = New-FakeMail 'preview'
+        $mail.SourceItems = $script:Source.Items
+        $null = $script:Source.Items.Values.Add($mail)
+        $script:AppendArguments.Mode = $ArchiveMode
+        $script:AppendArguments.Append = $false
+        $script:AppendArguments.ArchivePath = Join-Path $TestDrive 'new.pst'
+        $result = & $script:ArchiveScript @script:AppendArguments -DryRun -WarningVariable warnings
+        $result.Status | Should -Be Preview
+        $result.Planned | Should -Be 1
+        $mail.Copies | Should -Be 0
+        $mail.Moves | Should -Be 0
+        Test-Path -LiteralPath $script:AppendArguments.ArchivePath | Should -BeFalse
+        Should -Invoke Add-OutlookStoreRoot -Times 0
+        $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $report.SourceWarnings.Count | Should -Be 2
+        $expected = if ($ArchiveMode -eq 'Copy') { 'temporarily creates duplicates' } else { 'Removal can synchronize' }
+        ($warnings -join ' ') | Should -Match $expected
+        ($report.SourceWarnings -join ' ') | Should -Match $expected
+      }
+
+      It 'stops on <Case> download state during enumeration in preview and execution' -ForEach @(
+        @{ Case = 'header-only'; State = 0 }
+        @{ Case = 'null'; State = $null }
+        @{ Case = 'unknown'; State = 99 }
+        @{ Case = 'missing'; State = 1 }
+        @{ Case = 'unreadable'; State = 1 }
+      ) {
+        $mail = New-FakeMail 'incomplete'
+        $mail.SourceItems = $script:Source.Items
+        $mail.DownloadState = $State
+        if ($Case -eq 'missing') {
+          $mail.PSObject.Properties.Remove('DownloadState')
+        }
+        elseif ($Case -eq 'unreadable') {
+          $mail | Add-Member ScriptProperty DownloadState { throw 'Provider unavailable' } -Force
+        }
+        $null = $script:Source.Items.Values.Add($mail)
+        foreach ($preview in @($true, $false)) {
+          $result = & $script:ArchiveScript @script:AppendArguments -DryRun:$preview
+          $result.Status | Should -Be Failed
+          $result.Detail | Should -Match 'DownloadState'
+          $result.Detail | Should -Match 'incomplete'
+          $result.Detail | Should -Match ([regex]::Escape($script:Source.FolderPath))
+          ($result.Copied + $result.Moved) | Should -Be 0
+          $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+          $report.Results[-1].Detail | Should -Match 'DownloadState'
+        }
+        $mail.Copies | Should -Be 0
+        $mail.Moves | Should -Be 0
+        $script:Source.Items.Count | Should -Be 1
+        $script:Destination.Items.Count | Should -Be 0
+      }
+
+      It 'rechecks download state immediately before <ArchiveMode> and retains earlier successful transfers' -ForEach @(
+        @{ ArchiveMode = 'Copy' }
+        @{ ArchiveMode = 'Move' }
+      ) {
+        foreach ($id in @('good', 'changed')) {
+          $mail = New-FakeMail $id
+          $mail.SourceItems = $script:Source.Items
+          $null = $script:Source.Items.Values.Add($mail)
+        }
+        $changed = $script:Source.Items.Item(2)
+        $changed | Add-Member NoteProperty DownloadReads 0
+        $changed | Add-Member ScriptProperty DownloadState {
+          $this.DownloadReads++
+          if ($this.DownloadReads -eq 1) { return 1 }
+          return 0
+        } -Force
+        $script:AppendArguments.Mode = $ArchiveMode
+        $result = & $script:ArchiveScript @script:AppendArguments
+        $result.Status | Should -Be Failed
+        ($result.Copied + $result.Moved) | Should -Be 1
+        $result.Detail | Should -Match 'changed'
+        $changed.Copies | Should -Be 0
+        $changed.Moves | Should -Be 0
+        $script:Destination.Items.Count | Should -Be 1
+        $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        @($report.Results | Where-Object { $_.Status -in @('Copied', 'Moved') }).Count | Should -Be 1
+      }
+
+      It 'retains partial results and a source duplicate when a downloaded OST copy fails to transfer' {
+        foreach ($id in @('good', 'bad')) {
+          $mail = New-FakeMail $id
+          $mail.SourceItems = $script:Source.Items
+          $mail.FailMove = $id -eq 'bad'
+          $null = $script:Source.Items.Values.Add($mail)
+        }
+        $script:AppendArguments.Mode = 'Copy'
+        $result = & $script:ArchiveScript @script:AppendArguments
+        $result.Status | Should -Be Failed
+        $result.Copied | Should -Be 1
+        $result.Detail | Should -Match 'Disk full'
+        $script:Source.Items.Count | Should -Be 3
+        $script:Destination.Items.Count | Should -Be 1
+      }
+    }
+
+    It 'does not require download metadata for a PST source' {
+      $mail = New-FakeMail 'local'
+      $mail.SourceItems = $script:Source.Items
+      $mail | Add-Member ScriptProperty DownloadState { throw 'PST download metadata must not be used' } -Force
+      $null = $script:Source.Items.Values.Add($mail)
+      $result = & $script:ArchiveScript @script:AppendArguments
+      $result.Status | Should -Be Completed
+      $result.Moved | Should -Be 1
+      $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      $report.Settings.SourceStore.DataFileFormat | Should -Be PST
+      $report.Settings.SourceStore.MaySynchronize | Should -BeFalse
+      $report.SourceWarnings.Count | Should -Be 0
+    }
+
+    It 'captures the named source observations instead of classifying the default store' {
+      $script:FakeContext.App.Version = '16.0'
+      $script:FakeContext.Namespace.DefaultStore.FilePath = Join-Path $TestDrive 'selected.ost'
+      [IO.File]::WriteAllText($script:FakeContext.Namespace.DefaultStore.FilePath, 'source OST fixture')
+      $selectedStore = $script:FakeContext.Namespace.DefaultStore
+      $script:FakeContext.Namespace.DefaultStore = $script:FakeContext.Namespace.Stores.Item(2)
+      $script:AppendArguments.StoreName = $selectedStore.DisplayName
+      Mock Get-OutlookStoreRoot {
+        $global:WinkitSafetyTestContext.Namespace.Stores.Item(1).Root
+      }
+      Mock Get-OutlookFolderPlan {
+        $root = $global:WinkitSafetyTestContext.Namespace.Stores.Item(1).Root
+        [PSCustomObject]@{
+          EntryID      = $root.EntryID
+          StoreID      = $root.StoreID
+          FolderPath   = $root.FolderPath
+          RelativePath = ''
+          Process      = $false
+          Reason       = 'Empty source fixture'
+        }
+      }
+      $result = & $script:ArchiveScript @script:AppendArguments -DryRun
+      $result.Status | Should -Be Preview
+      $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      $report.Settings.SourceStore.StoreID | Should -Be 'source-store'
+      $report.Settings.SourceStore.DataFileFormat | Should -Be OST
+      $report.Settings.SourceStore.ExchangeStoreType | Should -Be 3
+      $report.Settings.SourceStore.MaySynchronize | Should -BeTrue
     }
 
     It 'requires Append for an existing file and refuses a missing Append target' {

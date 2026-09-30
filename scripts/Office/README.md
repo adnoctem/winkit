@@ -27,9 +27,9 @@ Install the repository dependencies with `.\winkit.ps1 init`. Scripts declare th
 `#Requires`. All support `-DryRun`, `-WhatIf`, and `-PassThru`; previews and required privileges depend on the operation.
 
 Office deployment requires elevated PowerShell and uses 64-bit PowerShell on a 64-bit OS, including when the installed Office suite is
-32-bit. Outlook profile operations require an interactive user session and PowerShell matching Outlook's architecture. These are different
-requirements: Outlook 2007 profile operations use 32-bit PowerShell, while migrating that installation on 64-bit Windows uses 64-bit
-PowerShell.
+32-bit. Outlook profile operations require an interactive session as the Outlook user, normally without elevation. Ordinary Outlook COM
+automation supports cross-architecture clients; use 64-bit PowerShell on 64-bit Windows. The optional Redemption/MAPI integration requires
+matching PowerShell, Redemption, and Outlook/MAPI architecture.
 
 Office desktop applications and these profile operations are not supported on Server Core. Back up affected data before making changes.
 
@@ -409,8 +409,7 @@ Microsoft references:
 ## Outlook
 
 The Outlook scripts work with desktop Outlook profiles or local data files. Profile operations use Outlook's COM object model and need
-classic desktop Outlook, an interactive profile, and PowerShell matching Outlook's architecture. Outlook 2007 is 32-bit only. Run as the
-profile's user; SYSTEM is not suitable for these operations.
+classic desktop Outlook and an interactive profile. Run as the profile's user; SYSTEM is not suitable for these operations.
 
 ### Compatibility and session requirements
 
@@ -428,12 +427,11 @@ utility; it does not enforce a client-version check. These are script compatibil
 health. New Outlook is not a target for these COM scripts: being able to open a PST does not establish automation compatibility. See
 [Microsoft's Outlook automation guidance](https://learn.microsoft.com/en-us/microsoft-365-apps/outlook/get-started/vba-alternatives).
 
-Run profile operations as the logged-in Outlook user at the same elevation as Outlook. For an Outlook 2007 rehearsal, use Windows PowerShell
-5.1 x86, especially with 32-bit Redemption. On 64-bit Windows, its executable is:
-
-```text
-C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe
-```
+Run profile operations as the logged-in Outlook user at the same elevation as Outlook. On 64-bit Windows, use 64-bit Windows PowerShell 5.1
+for ordinary COM automation, including with 32-bit Outlook. Outlook runs in a separate process; see
+[Microsoft's cross-architecture COM guidance](https://learn.microsoft.com/en-us/windows/win32/winprog64/process-interoperability). Only
+`New-TestOutlookMessage -UseRedemption` requires the host and Redemption component to match Outlook/MAPI's architecture. For 32-bit Outlook,
+that host is `C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe`.
 
 `New-OutlookArchive`, `Optimize-Outlook`, and `New-TestOutlookMessage` refuse elevated PowerShell sessions before connecting to Outlook or
 writing reports, including during previews. Open PowerShell normally as the mailbox's Windows user. An administrator account using a
@@ -442,10 +440,10 @@ prints a warning and does not select another Windows identity or Outlook profile
 wrong context. Office installation/removal/migration continue to require elevation; data-file repair does not attach to an Outlook profile.
 Backup uses the same elevation guard for profile discovery; direct `-PSTPath` copies have no Outlook identity requirement.
 
-An appropriate 32-bit PowerShell 7 host is another option on an OS that supports it; 64-bit Outlook 2010 or later uses 64-bit PowerShell.
-Although the scripts use PowerShell 5.0-compatible syntax, the pinned PSFoundation module requires PowerShell 5.1. Run initialization and
-verify module visibility in the intended host. Modules installed only for another PowerShell edition, architecture, or user may not be
-available there; the exact dependency versions are in [requirements.psd1](../../requirements.psd1).
+PowerShell 7 is another option on an OS that supports it. Although the scripts use PowerShell 5.0-compatible syntax, the pinned PSFoundation
+module requires PowerShell 5.1. Run initialization and verify module visibility in the intended host. Modules installed only for another
+PowerShell edition, architecture, or user may not be available there; the exact dependency versions are in
+[requirements.psd1](../../requirements.psd1).
 
 `-StoreName` selects a store by its display name. If omitted, the default delivery store is used. Use a unique display name and `-Verbose`
 to inspect detected stores; duplicate display names are rejected. The scripts reuse the running/default Outlook session, do not select a
@@ -640,6 +638,61 @@ notepad.exe $summary.ReportPath
 $report = Get-Content -LiteralPath $summary.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $messages = $report.Results
 ```
+
+### Archive mail from IMAP and Exchange stores
+
+`New-OutlookArchive.ps1` accepts attached IMAP and Exchange source stores through classic Outlook 2010 or later. Use `-StoreName` for the
+source's unique Outlook display name and `-ArchivePath` for the destination PST. There is no standalone OST conversion or OST-path input.
+The same Inbox default, date filters, `-Recurse`, inclusion flags, exclusions, folder-path preservation, append, and report sorting apply.
+Only mail is archived; contacts, calendars, tasks, and other non-mail items remain outside this workflow.
+
+`Copy` remains the default and preserves original messages. It temporarily duplicates each selected message in its source folder before
+moving the duplicate into the PST. Those writes can synchronize and require source write access and quota headroom. Explicit `-Mode Move`
+removes the source message; for IMAP and Exchange that removal can synchronize to the server and other clients, including after Outlook
+reconnects. No additional opt-in switch is required. Both previews and execution display these consequences. See
+[Microsoft's PST archiving guidance](https://support.microsoft.com/en-us/outlook/mail/archive-in-outlook-for-windows).
+
+For OST sources, matching messages must report a full download, including body and attachments. The script checks during folder enumeration
+and again before transfer. Header-only, missing, unknown, or unreadable download state stops the run and identifies the folder and EntryID
+in the failure report. Preview performs the same checks. Previously transferred messages remain archived; a failed copy transfer can leave a
+duplicate in the source. Inspect partial results before retrying; append does not deduplicate.
+
+Before archiving, synchronize the relevant folders and full messages. For cached Exchange, ensure the cached history covers the requested
+date range; for IMAP, check folder subscriptions and download settings. The script does not change these settings or start synchronization.
+A successful run describes only the selected messages Outlook exposes. It does not verify the completeness of the server mailbox, and cannot
+detect older messages absent from the cache. See
+[Microsoft's cached-export limitation](https://support.microsoft.com/en-us/outlook/export-emails-contacts-and-calendar-items-to-outlook-using-a-pst-file)
+and [MailItem.DownloadState](https://learn.microsoft.com/en-us/office/vba/api/outlook.mailitem.downloadstate).
+
+```powershell
+# Either IMAP or Exchange: preview old Inbox mail into a new PST.
+$archive = @{
+  StoreName   = 'user@example.com'
+  ArchivePath = 'C:\Managed\Archives\mail-before-2025.pst'
+  EndBefore   = [datetime]'2025-01-01'
+  Mode        = 'Copy'
+}
+.\scripts\Office\New-OutlookArchive.ps1 @archive -DryRun -PassThru
+
+# After reviewing the preview, copy while keeping the originals.
+.\scripts\Office\New-OutlookArchive.ps1 @archive -PassThru
+
+# Alternative to Copy: use a different PST and deliberately remove source mail.
+# Review this preview separately; removals can propagate to the server.
+$archive.ArchivePath = 'C:\Managed\Archives\moved-before-2025.pst'
+$archive.Mode = 'Move'
+.\scripts\Office\New-OutlookArchive.ps1 @archive -DryRun -PassThru
+.\scripts\Office\New-OutlookArchive.ps1 @archive -Confirm -PassThru
+```
+
+Create the archive parent directory first. Test with disposable messages in a dedicated IMAP or Exchange folder before using production
+mail. Verify the PST's messages, attachments, dates, and folder layout. For Copy, confirm originals remain; for Move, also check the server
+view after synchronization. A raw OST checkpoint is supplementary preservation, not a substitute for verifying a portable PST archive.
+
+The JSON report's `Settings.SourceStore` records the display name, StoreID, file path, observed `DataFileFormat`, numeric
+`ExchangeStoreType`, and `MaySynchronize`. An OST extension alone is not labeled IMAP; `ExchangeStoreType = 3` means non-Exchange.
+`SourceWarnings` preserves the synchronization and coverage notices. A reported transfer is an Outlook operation result, not confirmation of
+completed server synchronization.
 
 ### PST migration and archive rehearsal
 
