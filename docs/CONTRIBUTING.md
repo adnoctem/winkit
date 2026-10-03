@@ -138,13 +138,20 @@ preview boundaries, cleanup, and compatibility; run the existing tests appropria
 
 ### Documentation placement
 
-Keep repository-wide project and contributor documentation in `docs/`. Place user guides for a script family in `scripts/<Area>/README.md`,
-with a top-level area heading and subheadings for related applications or tasks. For example, [Office](../scripts/Office/README.md) contains
-Office migration and Outlook usage. Test-environment setup belongs alongside its tests and can be linked from the user guide.
+Keep repository-wide project and contributor documentation in `docs/`. User documentation lives in `docs/www/<Area>/`, with an area
+`README.md` overview and topic-centered guides grouping adjacent tasks. For example, the [Office overview](www/Office/README.md) links to
+installation/removal, migration, recovery, archival, and backup/repair topics. Keep `scripts/<Area>/README.md` as the source reader's
+concise script catalogue, linking into those topics rather than duplicating them.
+
+Assume users installed winkit with the `dist` installer, which handles dependencies. User examples run from the installed directory and must
+not require Git, development initialization, or a test suite. Define their inputs, use writable report/data locations outside the managed
+installation, and link shared requirements. Prefer succinct explanations with generous copyable examples over long prose or a page per
+script. Contributor setup, automated testing, scratch profiles, and fixture generation belong in this guide or alongside tests; users'
+manual backup, rehearsal, and acceptance steps remain in user documentation. Use relative links between documentation pages.
 
 User documentation describes current requirements, behavior, examples, operational limits, and recovery. Do not include sketches,
 implementation-change narratives, review-machine details, or historical test-run reports. When consolidating guides, compare every source
-section against the destination, retain unique operational information and useful references, correct claims against the current code, and
+section against its destination, retain unique operational information and useful references, correct claims against the current code, and
 update incoming links before removing redundant files.
 
 ### Linting
@@ -216,6 +223,71 @@ Run a specific test file:
 
 Tests require Pester 5.0 or higher, which is installed automatically with `.\winkit.ps1 init`. The test runner exits with the number of
 failed tests as its exit code, making it suitable for CI pipelines.
+
+#### Office and Outlook validation
+
+Run these checks from a source checkout, not an installer-managed copy. The user guides under `docs/www/` describe installed-toolkit
+workflows; development initialization, mocked tests, scratch integration suites, and fixture generation belong here or alongside tests.
+
+Ordinary Outlook COM automation can use a 64-bit host with 32-bit Outlook. Optional Redemption/MAPI fixture injection requires matching
+PowerShell, Redemption, and Outlook architecture; for 32-bit Outlook use `C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe`.
+
+Run `.\winkit.ps1 test` for logic and mocked safety tests without Outlook. Outlook regression tests cover collection mutation, transfer
+failures, date boundaries, store selection, preview behavior, excluded subtrees, repair launch modes, argument quoting, and locks. Transport
+Message-ID parsing belongs to PSFoundation and is tested in that module's repository. Real Office deployment and activation require a
+recoverable workstation.
+
+Office deployment wrapper tests cover mode validation, locale forwarding, confirmation/previews, recovery routing, and module result/exit
+propagation. Native deployment, inventory, and media-verification tests belong to PSFoundation; wrapper tests never execute ODT.
+
+The optional `.\winkit.ps1 test -Outlook` suite generates deterministic subjects, Message-IDs, dates, and seeded duplicates in its scratch
+store. Archive checks reopen output PSTs and compare actual mail counts. These tests require the intended Outlook installation; logic tests
+alone cannot establish real COM compatibility, available PST capacity, fixture-property persistence, or archive integrity. See the
+[Outlook integration testing guide](../tests/Office/README.md) for profile setup, assertions, retained artifacts, and requirements.
+
+From the repository root in the intended PowerShell host:
+
+```powershell
+.\winkit.ps1 init
+.\winkit.ps1 test -Outlook
+```
+
+Use a disposable profile whose default store is a scratch PST. The suite attaches its own uniquely named scratch store to the active
+profile, detaches it afterward, and retains `%TEMP%\winkit-outlook-test-<run-id>` for inspection. It does not create or select a separate
+profile for you. Failed archive/count assertions are a stop condition. A skipped header/date-dependent check is not a pass; complete missing
+checks with real dated mail in a disposable PST or an appropriately licensed Redemption installation.
+
+#### Generate Outlook test messages
+
+`New-TestOutlookMessage.ps1` creates deterministic synthetic messages in `WinkitTestData` by default. It does not send email. Use a
+dedicated test profile or store; rerunning creates additional messages rather than replacing earlier test data.
+
+```powershell
+$messages = @{
+  Count            = 20
+  Seed             = 42
+  DuplicateRatio   = 0.25
+  StoreName        = 'Test Mail'
+  TargetFolderName = 'WinkitTestData'
+}
+
+.\scripts\Office\New-TestOutlookMessage.ps1 @messages -DryRun
+.\scripts\Office\New-TestOutlookMessage.ps1 @messages -UseRedemption -PassThru
+```
+
+`-DuplicateRatio` controls the fraction of items reusing an earlier Message-ID. Optional `-StartDate` and `-EndDate` bound synthetic
+received times. Native Outlook transport-header and received-time writes are best-effort. For reliable Message-ID and backdated-time
+injection, install the Redemption component and use `-UseRedemption`; this mode fails if `Redemption.RDOSession` is not registered. Check
+header-injection results before using the messages to validate deduplication.
+
+Successful fixture injection requires both the header and received-time writes; inspect `HeaderInjected` and verify persistence in the test
+store. Redemption reuses Outlook's MAPI session rather than selecting another profile. Check
+[Redemption's licensing](https://www.dimastr.com/redemption/) for your use; do not generate fixtures in a production mail store.
+
+The generator writes only to its explicit target folder; archive/deduplication folder-selection controls do not apply. It refuses elevated
+sessions unless IgnoreAdministrator deliberately matches the Outlook user's elevated session, including in previews. Progress shows counts
+and clears on exit. Sort NewToOld (default) or OldToNew orders operation logs and per-message output by planned received dates, not actual
+injection order. Equal dates are stable and undated records follow dated ones; validate the persisted received times before relying on them.
 
 ## ℹ️ Commit Message Format
 

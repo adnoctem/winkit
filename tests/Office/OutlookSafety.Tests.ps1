@@ -8,6 +8,38 @@ param ()
 # profile, or real mail is opened. Script-level guards are tested with mocks.
 BeforeAll {
   Import-Module PSFoundation -Force
+  # The PST helper release can lag this consumer branch. Declare only mock
+  # boundaries when unavailable; helper implementation tests belong to PSF.
+  if (-not (Get-Command Open-OutlookPstStore -ErrorAction SilentlyContinue)) {
+    function Open-OutlookPstStore {
+      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '', Justification = 'Mock boundary only; no attachment is opened.')]
+      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'The parameters declare the API consumed by Pester mocks; the stub never opens Outlook.')]
+      [CmdletBinding(SupportsShouldProcess = $true)]
+      param (
+        [object]
+        $Namespace,
+
+        [string]
+        $LiteralPath
+      )
+
+      throw 'Open-OutlookPstStore must be mocked in consumer tests.'
+    }
+  }
+  if (-not (Get-Command Close-OutlookPstStore -ErrorAction SilentlyContinue)) {
+    function Close-OutlookPstStore {
+      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Mock boundary only; no attachment is closed.')]
+      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'The parameter declares the API consumed by Pester mocks; the stub never closes Outlook.')]
+      [CmdletBinding()]
+      param (
+        [object]
+        $Context
+      )
+
+      throw 'Close-OutlookPstStore must be mocked in consumer tests.'
+    }
+  }
+
   $script:OfficePath = Join-Path $PSScriptRoot '../../scripts/Office'
   foreach ($name in @('New-OutlookArchive', 'Optimize-Outlook', 'New-TestOutlookMessage')) {
     $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $script:OfficePath "$name.ps1"), [ref]$null, [ref]$null)
@@ -593,6 +625,302 @@ Describe 'Outlook store selection and preview' {
         WarningAction   = 'SilentlyContinue'
       }
       $script:ArchiveScript = Join-Path $script:OfficePath 'New-OutlookArchive.ps1'
+    }
+
+    Context 'PST sources selected by file path' {
+      BeforeEach {
+        $script:Source | Add-Member NoteProperty Store $script:FakeContext.Namespace.DefaultStore
+        $script:PstContext = [PSCustomObject]@{
+          Path           = $script:FakeContext.Namespace.DefaultStore.FilePath
+          Root           = $script:Source
+          Namespace      = $script:FakeContext.Namespace
+          StoreId        = $script:Source.StoreID
+          DisplayName    = 'Duplicate name'
+          AttachedByCall = $true
+          Closed         = $false
+        }
+        $script:FakeContext | Add-Member NoteProperty PstContext $script:PstContext
+        Mock Open-OutlookPstStore { $global:WinkitSafetyTestContext.PstContext }
+        Mock Close-OutlookPstStore {
+          param($Context)
+          $Context.Closed = $true
+          $Context.Root = $null
+        }
+        $script:AppendArguments.SourceArchivePath = $script:PstContext.Path
+      }
+
+      It 'previews an explicit PST and closes the source without creating a destination' {
+        $result = & $script:ArchiveScript @script:AppendArguments -DryRun
+        $result.Status | Should -Be Preview
+        $result.SourceFilePath | Should -Be $script:PstContext.Path
+        $result.DestinationFilePath | Should -Be $script:ArchivePath
+        $report = Get-Content -LiteralPath $result.ReportPath -Raw | ConvertFrom-Json
+        $report.Settings.SourceArchivePath | Should -Be $script:PstContext.Path
+        $report.Settings.SourceAttachmentCreated | Should -BeTrue
+        $script:PstContext.Closed | Should -BeTrue
+        Should -Invoke Open-OutlookPstStore -Times 1 -ParameterFilter { -not $WhatIf -and -not $Confirm }
+        Should -Invoke Close-OutlookPstStore -Times 1
+        Should -Invoke Add-OutlookStoreRoot -Times 0
+        Should -Invoke Get-OutlookStoreRoot -Times 0
+      }
+
+      It 'preserves both the planning failure and a source cleanup failure' {
+        Mock Get-OutlookFolderPlan { throw 'Source folder planning failed' }
+        Mock Close-OutlookPstStore { throw 'Source attachment cleanup failed' }
+        $result = & $script:ArchiveScript @script:AppendArguments -DryRun
+        $result.Status | Should -Be Failed
+        $report = Get-Content -LiteralPath $result.ReportPath -Raw | ConvertFrom-Json
+        @($report.Results | Where-Object Status -EQ Failed).Count | Should -Be 2
+        $report.Results.Detail | Should -Contain 'Source folder planning failed'
+        $report.Results.Detail | Should -Contain 'Source attachment cleanup failed'
+        Should -Invoke Close-OutlookPstStore -Times 1
+      }
+
+      It 'refuses the same source and destination before opening Outlook' {
+        $script:AppendArguments.ArchivePath = $script:PstContext.Path
+        $result = & $script:ArchiveScript @script:AppendArguments -DryRun
+        $result.Status | Should -Be Failed
+        $result.Detail | Should -BeLike '*must be different files*'
+        Should -Invoke Connect-Outlook -Times 0
+        Should -Invoke Open-OutlookPstStore -Times 0
+      }
+
+      It 'refuses a missing source without creating a report at that path' {
+        $script:AppendArguments.SourceArchivePath = Join-Path $TestDrive 'missing-source.pst'
+        $script:AppendArguments.Remove('ReportDirectory')
+        $result = & $script:ArchiveScript @script:AppendArguments -ReportPath $script:AppendArguments.SourceArchivePath -DryRun
+        $result.Status | Should -Be Failed
+        Test-Path -LiteralPath $script:AppendArguments.SourceArchivePath | Should -BeFalse
+        Should -Invoke Connect-Outlook -Times 0
+      }
+
+      It 'refuses competing source selectors during parameter binding' {
+        { & $script:ArchiveScript @script:AppendArguments -StoreName 'Mailbox' -DryRun } | Should -Throw
+        {
+          & (Join-Path $script:OfficePath 'Optimize-Outlook.ps1') -PSTPath $script:PstContext.Path -StoreName 'Mailbox' -DryRun
+        } | Should -Throw
+        Should -Invoke Connect-Outlook -Times 0
+      }
+
+      It 'requires one explicit date range for Split' {
+        $command = Get-Command (Join-Path $script:OfficePath 'Split-OutlookArchive.ps1')
+        foreach ($parameterSet in $command.ParameterSets) {
+          foreach ($name in @('ArchivePath', 'PSTPath', 'StartDate', $parameterSet.Name)) {
+            ($parameterSet.Parameters | Where-Object Name -EQ $name).IsMandatory | Should -BeTrue
+          }
+        }
+        {
+          & $command -ArchivePath $script:PstContext.Path -PSTPath $script:ArchivePath `
+            -StartDate '2018-01-01' -EndDate '2019-01-01' -EndBefore '2019-01-01' -DryRun
+        } | Should -Throw
+        Should -Invoke Connect-Outlook -Times 0
+      }
+
+      It 'explains an unavailable PST helper before opening Outlook' {
+        Mock Get-Command { $null } -ParameterFilter { $Name -eq 'Open-OutlookPstStore' }
+        $result = & $script:ArchiveScript @script:AppendArguments -DryRun
+        $result.Status | Should -Be Failed
+        $result.Detail | Should -BeLike '*Update PSFoundation before retrying*'
+        Should -Invoke Connect-Outlook -Times 0
+      }
+
+      It 'splits exactly the requested range through the archive workflow using <UpperBound>' -ForEach @(
+        @{ UpperBound = 'EndBefore'; Expected = 1 }
+        @{ UpperBound = 'EndDate'; Expected = 2 }
+      ) {
+        $before = New-FakeMail -Id 'before'
+        $before.ReceivedTime = [datetime]'2017-12-31T23:59:59'
+        $start = New-FakeMail -Id 'start'
+        $start.ReceivedTime = [datetime]'2018-01-01'
+        $end = New-FakeMail -Id 'end'
+        $end.ReceivedTime = [datetime]'2019-01-01'
+        $script:Source.Items = New-FakeCollection @($before, $start, $end)
+        $arguments = @{
+          ArchivePath     = $script:PstContext.Path
+          PSTPath         = $script:ArchivePath
+          Append          = $true
+          StartDate       = [datetime]'2018-01-01'
+          FolderName      = ''
+          Recurse         = $true
+          IncludeSentMail = $true
+          ExcludeFolders  = @('Protected')
+          Sort            = 'OldToNew'
+          ReportDirectory = $TestDrive
+          DryRun          = $true
+        }
+        $arguments[$UpperBound] = [datetime]'2019-01-01'
+        $result = @(& (Join-Path $script:OfficePath 'Split-OutlookArchive.ps1') @arguments)
+        $result.Count | Should -Be 1
+        $result[0].Status | Should -Be Preview
+        $result[0].Planned | Should -Be $Expected
+        $report = Get-Content -LiteralPath $result[0].ReportPath -Raw | ConvertFrom-Json
+        $report.Settings.Mode | Should -Be Copy
+        $report.Settings.ArchivePath | Should -Be $script:ArchivePath
+        $report.Settings.SourceArchivePath | Should -Be $script:PstContext.Path
+        $report.Settings.Recurse | Should -BeTrue
+        $report.Settings.Include | Should -Contain SentItems
+        $report.Settings.Exclusions | Should -Contain Protected
+        $report.Settings.Sort | Should -Be OldToNew
+        $script:Source.Items.Count | Should -Be 3
+        Should -Invoke Close-OutlookPstStore -Times 1
+      }
+
+      It 'forwards an omitted FolderName as identity selection and propagates failure from Split' {
+        Mock Get-OutlookFolderPlan { throw 'Default Inbox unavailable' }
+        $result = & (Join-Path $script:OfficePath 'Split-OutlookArchive.ps1') `
+          -ArchivePath $script:PstContext.Path -PSTPath $script:ArchivePath -Append `
+          -StartDate '2018-01-01' -EndBefore '2019-01-01' -ReportDirectory $TestDrive -WhatIf -WarningAction SilentlyContinue
+        $LASTEXITCODE | Should -Be 1
+        $result.Status | Should -Be Failed
+        $report = Get-Content -LiteralPath $result.ReportPath -Raw | ConvertFrom-Json
+        $report.Settings.FolderSelection | Should -Be DefaultInbox
+        $report.Settings.FolderName | Should -BeNullOrEmpty
+        Should -Invoke Close-OutlookPstStore -Times 1
+      }
+
+      It 'moves only the selected range into an existing PST through Split' {
+        $selected = New-FakeMail -Id 'selected'
+        $selected.ReceivedTime = [datetime]'2018-06-01'
+        $retained = New-FakeMail -Id 'retained'
+        $retained.ReceivedTime = [datetime]'2019-01-01'
+        $script:Source.Items = New-FakeCollection @($selected, $retained)
+        $selected.SourceItems = $script:Source.Items
+        $retained.SourceItems = $script:Source.Items
+        $result = & (Join-Path $script:OfficePath 'Split-OutlookArchive.ps1') `
+          -ArchivePath $script:PstContext.Path -PSTPath $script:ArchivePath -Append `
+          -StartDate '2018-01-01' -EndBefore '2019-01-01' -FolderName '' `
+          -Mode Move -SkipPathPreservation -AddDataFile -DataFileName 'Year 2018' `
+          -ReportDirectory $TestDrive -Confirm:$false -PassThru
+        $result.Status | Should -Be Completed
+        $result.Moved | Should -Be 1
+        $script:Source.Items.Values.EntryID | Should -Be @('retained')
+        $script:Destination.Items.Values.EntryID | Should -Be @('selected')
+        $script:Destination.Name | Should -Be 'Year 2018'
+        $script:PstContext.Closed | Should -BeTrue
+        $script:FakeContext.Namespace.Detached.Count | Should -Be 0
+      }
+
+      It 'keeps partial source-open cleanup details in the report' {
+        Mock Open-OutlookPstStore {
+          $failure = New-Object InvalidOperationException('Source root lookup failed')
+          $failure.Data['OutlookPstCleanupError'] = 'Temporary source could not be detached'
+          throw $failure
+        }
+        $result = & $script:ArchiveScript @script:AppendArguments -DryRun
+        $result.Status | Should -Be Failed
+        $result.Detail | Should -BeLike '*Source root lookup failed*Temporary source could not be detached*'
+        Should -Invoke Close-OutlookPstStore -Times 0
+      }
+
+      It 'previews Optimize on a PST without changing its deduplication workflow' {
+        $csvPath = Join-Path $TestDrive 'pst-review.csv'
+        $null = & (Join-Path $script:OfficePath 'Optimize-Outlook.ps1') `
+          -PSTPath $script:PstContext.Path -FolderName '' -DryRun -ReportPath $csvPath
+        $script:PstContext.Closed | Should -BeTrue
+        Should -Invoke Open-OutlookPstStore -Times 1 -ParameterFilter { -not $WhatIf -and -not $Confirm }
+        Should -Invoke Close-OutlookPstStore -Times 1
+        Should -Invoke Get-OutlookSubFolder -Times 0
+        Should -Invoke Get-OutlookStoreRoot -Times 0
+      }
+
+      It 'reports Optimize source cleanup failures with the PST path' {
+        Mock Close-OutlookPstStore { throw 'Source attachment cleanup failed' }
+        $results = @(& (Join-Path $script:OfficePath 'Optimize-Outlook.ps1') `
+            -PSTPath $script:PstContext.Path -FolderName '' -DryRun -WarningAction SilentlyContinue)
+        $failure = @($results | Where-Object Status -EQ Failed)
+        $failure.Count | Should -Be 1
+        $failure[0].Target | Should -Be $script:PstContext.Path
+        $failure[0].Action | Should -Be DetachSourceStore
+      }
+    }
+
+    Context 'Real PSFoundation PST helper integration' {
+      BeforeEach {
+        $script:Source | Add-Member NoteProperty Store $script:FakeContext.Namespace.DefaultStore
+        $script:FakeContext.Namespace | Add-Member NoteProperty Added 0
+        $script:FakeContext.Namespace | Add-Member ScriptMethod GetStoreFromID {
+          param($Id)
+          foreach ($store in $this.Stores.Values) {
+            if ($store.StoreID -eq $Id) {
+              return $store
+            }
+          }
+          throw 'Store is not attached'
+        }
+        $script:FakeContext.Namespace | Add-Member ScriptMethod AddStore {
+          param($Path)
+          if ($Path -ne $this.DefaultStore.FilePath) {
+            throw 'Unexpected source attachment'
+          }
+          $this.Added++
+          $null = $this.Stores.Values.Add($this.DefaultStore)
+        }
+        $script:FakeContext.Namespace | Add-Member ScriptMethod RemoveStore {
+          param($Root)
+          $store = $this.GetStoreFromID($Root.StoreID)
+          $null = $this.Detached.Add($Root.StoreID)
+          $this.Stores.Values.Remove($store)
+        } -Force
+      }
+
+      It 'runs <ScriptName> preview with real helpers when AlreadyAttached=<AlreadyAttached>' -ForEach @(
+        @{ ScriptName = 'New-OutlookArchive'; AlreadyAttached = $true }
+        @{ ScriptName = 'New-OutlookArchive'; AlreadyAttached = $false }
+        @{ ScriptName = 'Split-OutlookArchive'; AlreadyAttached = $true }
+        @{ ScriptName = 'Split-OutlookArchive'; AlreadyAttached = $false }
+        @{ ScriptName = 'Optimize-Outlook'; AlreadyAttached = $true }
+        @{ ScriptName = 'Optimize-Outlook'; AlreadyAttached = $false }
+      ) {
+        if (-not (Get-Command Open-OutlookPstStore -Module PSFoundation -ErrorAction SilentlyContinue)) {
+          Set-ItResult -Skipped -Because 'The installed PSFoundation does not yet export the PST lifetime helpers.'
+          return
+        }
+
+        $sourcePath = $script:FakeContext.Namespace.DefaultStore.FilePath
+        if (-not $AlreadyAttached) {
+          $script:FakeContext.Namespace.Stores.Values.Remove($script:FakeContext.Namespace.DefaultStore)
+        }
+        $arguments = @{
+          FolderName = ''
+          WhatIf     = $true
+          PassThru   = $true
+        }
+        if ($ScriptName -eq 'Optimize-Outlook') {
+          $arguments.PSTPath = $sourcePath
+        }
+        else {
+          $arguments.Append = $true
+          $arguments.ReportDirectory = $TestDrive
+          $arguments.Mode = 'Move'
+          if ($ScriptName -eq 'Split-OutlookArchive') {
+            $arguments.ArchivePath = $sourcePath
+            $arguments.PSTPath = $script:ArchivePath
+            $arguments.StartDate = [datetime]'2018-01-01'
+            $arguments.EndBefore = [datetime]'2019-01-01'
+          }
+          else {
+            $arguments.SourceArchivePath = $sourcePath
+            $arguments.ArchivePath = $script:ArchivePath
+          }
+        }
+
+        $results = @(& (Join-Path $script:OfficePath "$ScriptName.ps1") @arguments)
+        @($results | Where-Object Status -EQ Failed).Count | Should -Be 0
+        if ($ScriptName -ne 'Optimize-Outlook') {
+          $results.Count | Should -Be 1
+          $results[0].Status | Should -Be Preview
+          $report = Get-Content -LiteralPath $results[0].ReportPath -Raw | ConvertFrom-Json
+          $report.Settings.SourceAttachmentCreated | Should -Be (-not $AlreadyAttached)
+          $report.Settings.SourceStore.FilePath | Should -Be $sourcePath
+        }
+        $script:FakeContext.Namespace.Added | Should -Be ([int](-not $AlreadyAttached))
+        $script:FakeContext.Namespace.Detached.Count | Should -Be ([int](-not $AlreadyAttached))
+        @($script:FakeContext.Namespace.Stores.Values | Where-Object StoreID -EQ 'source-store').Count | Should -Be ([int]$AlreadyAttached)
+        $script:FakeContext.Namespace.GetStoreFromID('archive-store').Root.Name | Should -Be 'User archive name'
+        Test-Path -LiteralPath $sourcePath | Should -BeTrue
+        Should -Invoke Add-OutlookStoreRoot -Times 0
+        Should -Invoke Get-OutlookSubFolder -Times 0
+      }
     }
 
     Context 'Synchronized OST sources' {

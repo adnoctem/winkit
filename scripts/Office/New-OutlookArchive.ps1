@@ -23,6 +23,8 @@
   Copy also performs temporary source writes that can synchronize.
   Matching OST messages must be fully downloaded, including during previews.
   Only mail exposed by Outlook is considered; server completeness is not verified.
+  SourceArchivePath selects an existing PST directly and manages any temporary
+  source attachment. ArchivePath always selects the destination PST.
   Shows folder and item progress and writes a JSON report, including previews.
   Per-message results are stored in the report rather than printed to the console.
 .PARAMETER ArchivePath
@@ -56,6 +58,12 @@
 .PARAMETER StoreName
   Display name of the source Outlook store. If omitted, the default delivery
   store is used. Select an attached PST, IMAP, or Exchange store, not an OST path.
+.PARAMETER SourceArchivePath
+  Existing local PST to read instead of StoreName or the default mailbox.
+  Reuses an attached store or temporarily attaches it, including during previews.
+  Only a source attachment created by this run is removed afterward. Opening
+  the PST through Outlook can update its metadata. Requires PSFoundation's
+  Open-OutlookPstStore and Close-OutlookPstStore commands.
 .PARAMETER FolderName
   Exact folder path relative to the selected store, or empty for the store root.
   When omitted, selects Inbox by identity, including localized or renamed Inboxes.
@@ -114,6 +122,8 @@
   PS> .\New-OutlookArchive.ps1 -ArchivePath D:\Archive\user-2025.pst -StoreName 'user@example.com' -StartDate '2025-01-01' -EndBefore '2026-01-01' -Mode Move
 .EXAMPLE
   PS> .\New-OutlookArchive.ps1 -ArchivePath D:\Archive\mail.pst -DryRun -ReportPath .\archive-report.json
+.EXAMPLE
+  PS> .\New-OutlookArchive.ps1 -SourceArchivePath D:\Archive\Combined.pst -ArchivePath D:\Archive\2018.pst -StartDate '2018-01-01' -EndBefore '2019-01-01' -DryRun
 .LINK
   https://github.com/adnoctem/winkit
 .NOTES
@@ -125,7 +135,7 @@
   Bitness: Outlook COM automation supports cross-architecture PowerShell clients.
 #>
 
-[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium', DefaultParameterSetName = 'Store')]
 param (
   [Parameter(Mandatory = $true)]
   [string]
@@ -137,8 +147,14 @@ param (
   [switch]
   $SkipPathPreservation,
 
+  [Parameter(ParameterSetName = 'Store')]
   [string]
   $StoreName,
+
+  [Parameter(Mandatory = $true, ParameterSetName = 'Archive')]
+  [ValidateNotNullOrEmpty()]
+  [string]
+  $SourceArchivePath,
 
   [Alias('IncludeSentMail')]
   [switch]
@@ -641,6 +657,8 @@ $_destinationValidation = 'NotValidated'
 $_archivePath = $ArchivePath
 $_sourcePath = $null
 $_sourceInfo = $null
+$_sourceArchivePath = $null
+$_sourceStoreContext = $null
 $_sourceWarnings = @()
 $_reportPath = $null
 $_reportStream = $null
@@ -662,6 +680,31 @@ try {
   }
 
   $_archivePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ArchivePath)
+  if ($PSBoundParameters.ContainsKey('SourceArchivePath')) {
+    foreach ($_command in @('Open-OutlookPstStore', 'Close-OutlookPstStore')) {
+      if (-not (Get-Command -Name $_command -ErrorAction SilentlyContinue)) {
+        throw 'PST source selection requires a PSFoundation version providing Open-OutlookPstStore and Close-OutlookPstStore. Update PSFoundation before retrying.'
+      }
+    }
+
+    # Resolve the existing source before reserving a report or opening Outlook.
+    # A mistyped source must never become a new PST or a JSON report file.
+    if (-not (Test-Path -LiteralPath $SourceArchivePath -PathType Leaf)) {
+      throw 'SourceArchivePath must select an existing PST file.'
+    }
+    $_sourceArchivePath = Resolve-LongPath -LiteralPath $SourceArchivePath
+    if ([IO.Path]::GetExtension($_sourceArchivePath) -ne '.pst') {
+      throw 'SourceArchivePath must end in .pst.'
+    }
+
+    $_destinationPath = $_archivePath
+    if (Test-Path -LiteralPath $_destinationPath -PathType Leaf) {
+      $_destinationPath = Resolve-LongPath -LiteralPath $_destinationPath
+    }
+    if ($_sourceArchivePath -eq $_destinationPath) {
+      throw 'SourceArchivePath and ArchivePath must be different files.'
+    }
+  }
   if (-not $Append -and -not $PSBoundParameters.ContainsKey('DisplayName')) {
     $DisplayName = [IO.Path]::GetFileNameWithoutExtension($_archivePath)
   }
@@ -693,6 +736,9 @@ try {
 
   if ($_reportPath -eq $_archivePath) {
     throw 'ReportPath and ArchivePath must be different files.'
+  }
+  if ($_sourceArchivePath -and $_reportPath -eq $_sourceArchivePath) {
+    throw 'ReportPath and SourceArchivePath must be different files.'
   }
 
   if (Test-Path -LiteralPath $_reportPath) {
@@ -751,7 +797,23 @@ try {
 
   # PSFoundation 1.3.0 checks Store.IsDefault, which Outlook does not expose.
   # Resolve the default via Namespace.DefaultStore and reject ambiguous names.
-  if ([string]::IsNullOrWhiteSpace($StoreName)) {
+  if ($_sourceArchivePath) {
+    Write-Log -Message "Reading source PST: $_sourceArchivePath. A temporary source attachment may be needed, including during preview." -Color Cyan
+    $_sourceStoreContext = Open-OutlookPstStore -Namespace $_context.Namespace -LiteralPath $_sourceArchivePath -WhatIf:$false -Confirm:$false -ErrorAction Stop
+    if ($null -eq $_sourceStoreContext) {
+      throw 'The source PST could not be opened.'
+    }
+
+    $_sourceRoot = $_sourceStoreContext.Root
+    $_selectedStore = $_sourceRoot.Store
+    try {
+      $_sourceInfo = Get-OutlookArchiveSourceInfo -Store $_selectedStore
+    }
+    finally {
+      Remove-ComObject $_selectedStore
+    }
+  }
+  elseif ([string]::IsNullOrWhiteSpace($StoreName)) {
     $_selectedStore = $_context.Namespace.DefaultStore
     try {
       $_sourceInfo = Get-OutlookArchiveSourceInfo -Store $_selectedStore
@@ -1019,8 +1081,13 @@ try {
   }
 }
 catch {
-  Add-OperationResult -Results $_results -Target $_archivePath -Source 'Outlook' -Action 'Archive' -Status 'Failed' -Detail $_.Exception.Message
-  Write-Warning $_.Exception.Message
+  $_failureDetail = $_.Exception.Message
+  $_sourceCleanupError = $_.Exception.Data['OutlookPstCleanupError']
+  if ($_sourceCleanupError) {
+    $_failureDetail = "$_failureDetail $_sourceCleanupError"
+  }
+  Add-OperationResult -Results $_results -Target $_archivePath -Source 'Outlook' -Action 'Archive' -Status 'Failed' -Detail $_failureDetail
+  Write-Warning $_failureDetail
 }
 finally {
   Write-Progress -Id 0 -Activity 'Outlook archive' -Completed
@@ -1034,7 +1101,20 @@ finally {
     }
   }
 
-  Remove-ComObject $_archiveRoot $_sourceRoot
+  Remove-ComObject $_archiveRoot
+  if ($_sourceStoreContext) {
+    try {
+      Close-OutlookPstStore -Context $_sourceStoreContext -ErrorAction Stop
+    }
+    catch {
+      Add-OperationResult -Results $_results -Target $_sourceArchivePath -Source 'Outlook' -Action 'DetachSourceStore' -Status 'Failed' -Detail $_.Exception.Message
+      Write-Warning "Could not clean up the source PST attachment: $($_.Exception.Message)"
+    }
+    $_sourceRoot = $null
+  }
+  else {
+    Remove-ComObject $_sourceRoot
+  }
 
   if ($_context) {
     try {
@@ -1074,21 +1154,23 @@ else {
   'Per-message results are available in the JSON report.'
 }
 
-if ($_declined) {
+if ($_declined -and $_failed -eq 0) {
   $_detail = 'Archive operation was declined.'
 }
 
 $_summaryProperty = @{
-  Preview        = [bool]$WhatIfPreference
-  FoldersRead    = $script:OutlookArchiveFoldersRead
-  FoldersSkipped = $script:OutlookArchiveFoldersSkipped
-  ItemsRead      = $script:OutlookArchiveItemsRead
-  ItemsMatched   = $script:OutlookArchiveItemsMatched
-  Planned        = $_planned
-  Copied         = $script:OutlookArchiveCopied
-  Moved          = $script:OutlookArchiveMoved
-  Failed         = $_failed
-  ReportPath     = $_reportPath
+  Preview             = [bool]$WhatIfPreference
+  FoldersRead         = $script:OutlookArchiveFoldersRead
+  FoldersSkipped      = $script:OutlookArchiveFoldersSkipped
+  ItemsRead           = $script:OutlookArchiveItemsRead
+  ItemsMatched        = $script:OutlookArchiveItemsMatched
+  Planned             = $_planned
+  Copied              = $script:OutlookArchiveCopied
+  Moved               = $script:OutlookArchiveMoved
+  Failed              = $_failed
+  ReportPath          = $_reportPath
+  SourceFilePath      = if ($_sourceInfo) { $_sourceInfo.FilePath } else { $_sourceArchivePath }
+  DestinationFilePath = $_archivePath
 }
 
 $_summary = New-OperationResult -Target $_archivePath -Source 'Outlook' -Action 'Archive' -Status $_status -Detail $_detail -Property $_summaryProperty
@@ -1148,6 +1230,8 @@ try {
       AttachmentCreated        = $_archiveOwned
       DestinationValidation    = $_destinationValidation
       StoreName                = $StoreName
+      SourceArchivePath        = $_sourceArchivePath
+      SourceAttachmentCreated  = [bool]($_sourceStoreContext -and $_sourceStoreContext.AttachedByCall)
       SourceStore              = $_sourceInfo
       SourceFolder             = $_sourcePath
       FolderName               = if ($PSBoundParameters.ContainsKey('FolderName')) { $FolderName } else { $null }

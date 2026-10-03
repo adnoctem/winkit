@@ -1,4 +1,4 @@
-﻿# winkit Outlook integration testing
+# winkit Outlook integration testing
 
 The `tests/Office` directory holds the winkit testing solution for the `scripts/Office` scripts. Two tiers exist:
 
@@ -61,7 +61,7 @@ mailbox:
 
 The suite creates `%TEMP%\winkit-outlook-test-<run-id>` with its own PSTs and a unique store display name. It retains this directory for
 inspection. For offline rehearsal, backups, and manual archive checks, see the
-[Office user guide](../../scripts/Office/README.md#pst-migration-and-archive-rehearsal).
+[mail archival guide](../../docs/www/Office/Mail-Archival.md#rehearse-and-reduce-a-production-pst).
 
 ### Running
 

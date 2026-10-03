@@ -21,6 +21,7 @@ Describe 'Office script file conventions' {
       'Optimize-Outlook.ps1',
       'Remove-Office.ps1',
       'Repair-OutlookDataFile.ps1',
+      'Split-OutlookArchive.ps1',
       'Switch-OfficeVersion.ps1'
     )
   }

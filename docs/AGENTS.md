@@ -26,9 +26,12 @@ a symlink to this file — edit this one.
 - `bin/` — `.cmd` launchers for selected scripts
 - `tools/` — development tooling behind `winkit.ps1` (initialize, format, lint, test, dependencies, build)
 - `docs/` — repository-wide contributor and project documentation; TODO.md is currently all-TBA
-- `scripts/<Area>/README.md` — user documentation for that script family (for example, `scripts/Office/README.md`); keep domain-specific
-  guides here rather than in `docs/`. Describe current behavior, requirements, examples, and limitations without development history,
-  sketches, change narratives, or old review/test-run reports
+- `docs/www/<Area>/` — topic-centered user guides and an area `README.md` overview (for example, `docs/www/Office/`). Group adjacent tasks
+  instead of creating one page per script. Assume installer-managed winkit and installer-provided dependencies, not a Git checkout. Prefer
+  short explanations and generous, copyable examples; state the installed working directory, define inputs, and write user data outside the
+  managed installation. Keep contributor setup, tests, and fixture generation in `docs/CONTRIBUTING.md` or alongside tests
+- `scripts/<Area>/README.md` — concise script catalogue and index linking to the area's task guides. Describe current behavior,
+  requirements, examples, and limitations without development history, sketches, change narratives, or old review/test-run reports
 - `requirements.psd1` — exact module version pins (also a semantic-release commit asset); bump when adopting newer PSFoundation
   functionality
 - `PSScriptAnalyzerSettings.psd1` — formatter/linter rules; contains a singular-noun allowlist

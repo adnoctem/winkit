@@ -37,6 +37,12 @@
 .PARAMETER StoreName
   Display name of the Outlook store to process. If omitted, the default
   delivery store is used. Run with -Verbose to list detected stores.
+.PARAMETER PSTPath
+  Existing local PST to process instead of StoreName or the default mailbox.
+  Requires classic Outlook and PSFoundation's Open-OutlookPstStore and
+  Close-OutlookPstStore commands. A detached source is temporarily attached,
+  even for previews; an existing attachment is preserved. Opening the file
+  can update its metadata. Duplicate review remains inside this same PST.
 .PARAMETER ReviewFolderName
   Top-level folder created under the store root for duplicate review.
 .PARAMETER FolderName
@@ -66,6 +72,8 @@
   PS> .\Optimize-Outlook.ps1 -StoreName 'user@example.com' -ReportPath .\dedup-preview.csv -DryRun
 .EXAMPLE
   PS> .\Optimize-Outlook.ps1 -StoreName 'user@example.com' -ReportPath .\dedup-run.csv
+.EXAMPLE
+  PS> .\Optimize-Outlook.ps1 -PSTPath D:\Archives\2018.pst -FolderName '' -Recurse -DryRun -ReportPath .\archive-duplicates.csv
 .LINK
   https://github.com/adnoctem/winkit
 .NOTES
@@ -77,10 +85,16 @@
   Bitness: Outlook COM automation supports cross-architecture PowerShell clients.
 #>
 
-[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High', DefaultParameterSetName = 'Store')]
 param (
+  [Parameter(ParameterSetName = 'Store')]
   [string]
   $StoreName,
+
+  [Parameter(Mandatory = $true, ParameterSetName = 'Archive')]
+  [ValidateNotNullOrEmpty()]
+  [string]
+  $PSTPath,
 
   [Alias('IncludeSentMail')]
   [switch]
@@ -371,8 +385,20 @@ function Optimize-OutlookFolder {
 $_context = $null
 $_storeRoot = $null
 $_reviewFolder = $null
+$_sourceStoreContext = $null
+$_target = $StoreName
+$_declined = $false
 
 try {
+  if ($PSBoundParameters.ContainsKey('PSTPath')) {
+    $_target = $PSTPath
+    foreach ($_command in @('Open-OutlookPstStore', 'Close-OutlookPstStore')) {
+      if (-not (Get-Command -Name $_command -ErrorAction SilentlyContinue)) {
+        throw 'PST source selection requires a PSFoundation version providing Open-OutlookPstStore and Close-OutlookPstStore. Update PSFoundation before retrying.'
+      }
+    }
+  }
+
   Write-Log -Message 'Connecting to Outlook and locating the store for duplicate review...' -Color Cyan
   Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Connecting to Outlook' -PercentComplete -1
   $_context = Connect-Outlook
@@ -385,7 +411,17 @@ try {
 
   # PSFoundation 1.3.0 checks Store.IsDefault, which Outlook does not expose.
   # Resolve the default via Namespace.DefaultStore and reject ambiguous names.
-  if ([string]::IsNullOrWhiteSpace($StoreName)) {
+  if ($PSBoundParameters.ContainsKey('PSTPath')) {
+    Write-Log -Message "Reading source PST: $PSTPath. A temporary source attachment may be needed, including during preview." -Color Cyan
+    $_sourceStoreContext = Open-OutlookPstStore -Namespace $_context.Namespace -LiteralPath $PSTPath -WhatIf:$false -Confirm:$false -ErrorAction Stop
+    if ($null -eq $_sourceStoreContext) {
+      throw 'The source PST could not be opened.'
+    }
+
+    $_storeRoot = $_sourceStoreContext.Root
+    $_target = $_sourceStoreContext.Path
+  }
+  elseif ([string]::IsNullOrWhiteSpace($StoreName)) {
     $_selectedStore = $_context.Namespace.DefaultStore
     try { $_storeRoot = $_selectedStore.GetRootFolder() }
     finally { Remove-ComObject $_selectedStore }
@@ -456,15 +492,24 @@ try {
   $_sourcePath = [string]$_folderPlan[0].FolderPath
 
   if (-not $WhatIfPreference) {
-    if (-not $PSCmdlet.ShouldProcess($_sourcePath, "Move suspected duplicates to '$ReviewFolderName' for review")) {
-      return
-    }
+    $_declined = -not $PSCmdlet.ShouldProcess($_sourcePath, "Move suspected duplicates to '$ReviewFolderName' for review")
 
-    Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Preparing duplicate review folder' -CurrentOperation $ReviewFolderName -PercentComplete -1
-    $_reviewFolder = Get-OutlookSubFolder -ParentFolder $_storeRoot -Name $ReviewFolderName -Create
+    if ($_declined) {
+      # Finish cleanup and reporting even after declined approval. A temporary
+      # source attachment may still need cleanup, and its failure must surface.
+      Add-OperationResult -Results $_results -Target $_target -Source 'Outlook' -Action 'Deduplicate' -Status 'Skipped' -Detail 'Duplicate review was declined.'
+    }
+    else {
+      Write-Progress -Id 20 -Activity 'Outlook deduplication' -Status 'Preparing duplicate review folder' -CurrentOperation $ReviewFolderName -PercentComplete -1
+      $_reviewFolder = Get-OutlookSubFolder -ParentFolder $_storeRoot -Name $ReviewFolderName -Create
+    }
   }
 
   foreach ($_entry in $_folderPlan) {
+    if ($_declined) {
+      break
+    }
+
     if (-not $_entry.Process) {
       Add-OperationResult -Results $_results -Target $_entry.FolderPath -Source 'Outlook' -Action 'SelectFolder' -Status 'Skipped' -Detail $_entry.Reason
       continue
@@ -483,14 +528,31 @@ try {
   }
 }
 catch {
-  Add-OperationResult -Results $_results -Target $StoreName -Source 'Outlook' -Action 'Deduplicate' -Status 'Failed' -Detail $_.Exception.Message
-  Write-Warning $_.Exception.Message
+  $_failureDetail = $_.Exception.Message
+  $_sourceCleanupError = $_.Exception.Data['OutlookPstCleanupError']
+  if ($_sourceCleanupError) {
+    $_failureDetail = "$_failureDetail $_sourceCleanupError"
+  }
+  Add-OperationResult -Results $_results -Target $_target -Source 'Outlook' -Action 'Deduplicate' -Status 'Failed' -Detail $_failureDetail
+  Write-Warning $_failureDetail
 }
 finally {
   Write-Progress -Id 21 -Activity 'Inspecting messages and processing duplicates' -Completed
   Write-Progress -Id 20 -Activity 'Outlook deduplication' -Completed
   Remove-ComObject $_reviewFolder
-  Remove-ComObject $_storeRoot
+  if ($_sourceStoreContext) {
+    try {
+      Close-OutlookPstStore -Context $_sourceStoreContext -ErrorAction Stop
+    }
+    catch {
+      Add-OperationResult -Results $_results -Target $_target -Source 'Outlook' -Action 'DetachSourceStore' -Status 'Failed' -Detail $_.Exception.Message
+      Write-Warning "Could not clean up the source PST attachment: $($_.Exception.Message)"
+    }
+    $_storeRoot = $null
+  }
+  else {
+    Remove-ComObject $_storeRoot
+  }
 
   if ($_context) {
     try {
