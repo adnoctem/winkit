@@ -2,7 +2,9 @@
 
 ### Bug Fixes
 
-* **scripts:** name winkit's operation log directory explicitly ([cefed0e](https://github.com/adnoctem/winkit/commit/cefed0e20dbda027bacce340b3b79dc0cf10efb1)), closes [#Requires](https://github.com/adnoctem/winkit/issues/Requires)
+- **scripts:** name winkit's operation log directory explicitly
+  ([cefed0e](https://github.com/adnoctem/winkit/commit/cefed0e20dbda027bacce340b3b79dc0cf10efb1)), closes
+  [#Requires](https://github.com/adnoctem/winkit/issues/Requires)
 
 ## [1.7.2](https://github.com/adnoctem/winkit/compare/v1.7.1...v1.7.2) (2026-09-30)
 

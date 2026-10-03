@@ -1,5 +1,8 @@
 # Ad Noctem Collective `winkit` - Repository Source Acknowledgements
 
+These resources contributed code, implementation ideas, documentation, or design references to winkit. Inclusion does not imply that every
+feature or recommendation from a source is adopted.
+
 ## 🌐 Websites
 
 - [NT4Admins][nt4admins]
@@ -26,7 +29,7 @@
 - [`asheroto/winget-install` - winget installer][asheroto_wingetinstall_repo]
 - [`asheroto/UninstallTeams` - Teams uninstaller][asheroto_uninstallteams_repo]
 - [`jrussellfreelance/powershell-scripts` - script collection][jrussellfreelance_repo]
-- [`nickrod158/PowerShell-Scripts` - script collection][nickrod158_repo]
+- [`nickrod518/PowerShell-Scripts` - script collection][nickrod518_repo]
 - [`farag2/Utilities` - Windows utility scripts][farag2_repo]
 - [`lazywinadmin/PowerShell` - Windows administration scripts][lazywinadmin_repo]
 - [`LeDragoX/Win-Debloat-Tools` - Windows debloat/optimization tool][ledragox_repo]
@@ -42,6 +45,14 @@
 - [`microsoft/CSS-Exchange` - Exchange Server support scripts][css_exchange_repo]
 - [`David-Barrett-MS/PowerShell-EWS-Scripts` - Exchange Web Services scripts][ews_repo]
 - [`vacpp/windows11` - script collection][vacpp_windows11_repo]
+- [`Marvin700/Windows_Optimisation_Pack` - Windows optimisation reference][marvin700_repo]
+- [`Raphire/Win11Debloat` - Windows configuration and debloat reference][win11debloat_repo]
+- [`simeononsecurity/Windows-Optimize-Debloat` - Windows optimisation and policy reference][windows_optimize_debloat_repo]
+- [`gordonbay/Windows-On-Reins` - application removal and package lifecycle reference][windows_on_reins_repo]
+- [`semazurek/ET-Optimizer` - Windows optimisation feature reference][et_optimizer_repo]
+- [`hellzerg/optimizerNXT` - declarative automation and architecture reference][optimizernxt_repo]
+- [`ChrisTitusTech/win10script` - upstream Windows repair script reference][win10script_repo]
+- [`kerol2r20/Windows-terminal-context-menu` - Windows Terminal context-menu inspiration][terminal_context_menu_repo]
 
 ## 🧩 Snippets
 
@@ -172,7 +183,7 @@
 [asheroto_wingetinstall_repo]: https://github.com/asheroto/winget-install
 [asheroto_uninstallteams_repo]: https://github.com/asheroto/UninstallTeams
 [jrussellfreelance_repo]: https://github.com/jrussellfreelance/powershell-scripts
-[nickrod158_repo]: https://github.com/nickrod518/PowerShell-Scripts
+[nickrod518_repo]: https://github.com/nickrod518/PowerShell-Scripts
 [farag2_repo]: https://github.com/farag2/Utilities
 [lazywinadmin_repo]: https://github.com/lazywinadmin/PowerShell
 [ledragox_repo]: https://github.com/LeDragoX/Win-Debloat-Tools
@@ -188,3 +199,11 @@
 [css_exchange_repo]: https://github.com/microsoft/CSS-Exchange
 [ews_repo]: https://github.com/David-Barrett-MS/PowerShell-EWS-Scripts
 [vacpp_windows11_repo]: https://github.com/vacpp/windows11
+[marvin700_repo]: https://github.com/Marvin700/Windows_Optimisation_Pack
+[win11debloat_repo]: https://github.com/Raphire/Win11Debloat
+[windows_optimize_debloat_repo]: https://github.com/simeononsecurity/Windows-Optimize-Debloat
+[windows_on_reins_repo]: https://github.com/gordonbay/Windows-On-Reins
+[et_optimizer_repo]: https://github.com/semazurek/ET-Optimizer
+[optimizernxt_repo]: https://github.com/hellzerg/optimizerNXT
+[win10script_repo]: https://github.com/ChrisTitusTech/win10script
+[terminal_context_menu_repo]: https://github.com/kerol2r20/Windows-terminal-context-menu
