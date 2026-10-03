@@ -1,3 +1,9 @@
+## [1.8.0](https://github.com/adnoctem/winkit/compare/v1.7.3...v1.8.0) (2026-10-03)
+
+### Features
+
+* **scripts:** support splitting and optimizing existing Outlook archives ([a61f631](https://github.com/adnoctem/winkit/commit/a61f6317e97c40b1502b49e483e3a98870b67b0b))
+
 ## [1.7.3](https://github.com/adnoctem/winkit/compare/v1.7.2...v1.7.3) (2026-09-30)
 
 ### Bug Fixes
