@@ -17,14 +17,14 @@ The `tests/Office` directory holds the winkit testing solution for the `scripts/
 Integration files are excluded automatically; these tests do not require Outlook. The transport Message-ID parser (`Get-TransportMessageId`)
 is tested separately in the PSFoundation repository.
 
-The Office suite requires PSFoundation 1.8.2, including current ODT identity validation, archive append, and repair metadata. Its module
-tests cover standard identities, the Outlook 2007 MAPI fallback, search folders, exact path selection, and ancestor exclusions. winkit tests
-cover implicit German/renamed Inbox selection, explicit literal names and store roots, failure before mutation for missing identities or
-excluded ancestors, grouped inclusion switches, archive attachment, and JSON reports. Append checks cover existing and missing files,
-attachment ownership, source-store rejection, destination folder conflicts, successive passes, path preservation and flattening, previews,
-and partial failures. Repair checks cover targeted and interactive launches, long paths, local-storage validation, locked files, and process
-results. Subject reporting checks cover null, empty, whitespace-only, and nonblank subjects in JSON and CSV without changing source
-messages. Report-order checks cover `NewToOld`, `OldToNew`, and default received-date ordering, stable ties, undated failures,
+The Office suite requires PSFoundation 1.8.7, including ODT identity validation, archive append, repair metadata and PST lifetime helpers.
+Its module tests cover standard identities, the Outlook 2007 MAPI fallback, search folders, exact path selection, and ancestor exclusions.
+winkit tests cover implicit German/renamed Inbox selection, explicit literal names and store roots, failure before mutation for missing
+identities or excluded ancestors, grouped inclusion switches, archive attachment, and JSON reports. Append checks cover existing and missing
+files, attachment ownership, source-store rejection, destination folder conflicts, successive passes, path preservation and flattening,
+previews, and partial failures. Repair checks cover targeted and interactive launches, long paths, local-storage validation, locked files,
+and process results. Subject reporting checks cover null, empty, whitespace-only, and nonblank subjects in JSON and CSV without changing
+source messages. Report-order checks cover `NewToOld`, `OldToNew`, and default received-date ordering, stable ties, undated failures,
 CSV/log/output consistency, and unchanged duplicate selection. `OutlookBackup.Tests.ps1` covers profile discovery with mocked COM objects
 and real temporary-file copies, locks, hashes, collision handling, previews, and conflicting parameter sets. These checks never open
 Outlook.
@@ -32,7 +32,7 @@ Outlook.
 `OfficeDeployment.Tests.ps1` covers the Install, Remove, and Switch wrappers: mode validation, ordered/default/automatic locales, module
 dispatch, preview and confirmation forwarding, recovery scope, preparation results, and exit codes. Deployment commands are mocked; these
 tests never invoke ODT. PSFoundation owns tests for native deployment behavior and inventory/media verification. The wrapper tests require
-its Office API from version 1.8.1 or later; the Outlook wrappers that write named operation logs require 1.8.2.
+its Office API from version 1.8.1 or later; archiving, splitting and duplicate review require 1.8.7 for the PST lifetime helpers.
 
 OutlookCheckpoint.Tests.ps1 covers explicit and discovered files, user identity, previews, locked/missing sources, OST selection, settings,
 registry-export failures, manifest hashes, and preserved prior checkpoints using synthetic files and mocked Office/native APIs.
@@ -75,7 +75,7 @@ inspection. For offline rehearsal, backups, and manual archive checks, see the
 1. Attaches a scratch PST store (`winkit-test-store.pst`).
 2. `New-TestOutlookMessage.ps1` generates 20 deterministic items (seed 42, 25% duplicate Message-IDs) into `WinkitTestData`.
 3. `Optimize-Outlook.ps1` walks the store: asserts the 20 items are seen, a dry run flags exactly 5 duplicates, and the real run moves them
-   to the review folder. Deduplication checks require PSFoundation 1.8.2 or later. The preview assertion skips when transport headers are
+   to the review folder. Deduplication checks require PSFoundation 1.8.7 or later. The preview assertion skips when transport headers are
    unavailable; the move assertion still requires five actual moves, so missing headers can also cause a failure.
 4. A second generation (seed 7) asserts deterministic Message-ID sequences.
 5. `New-OutlookArchive.ps1` previews (no PST created), then copies the store into an archive PST. Its JSON reports are retained in the

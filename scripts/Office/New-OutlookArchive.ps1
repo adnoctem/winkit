@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.7.1' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.7' }
 
 <#
 .SYNOPSIS
@@ -681,12 +681,6 @@ try {
 
   $_archivePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ArchivePath)
   if ($PSBoundParameters.ContainsKey('SourceArchivePath')) {
-    foreach ($_command in @('Open-OutlookPstStore', 'Close-OutlookPstStore')) {
-      if (-not (Get-Command -Name $_command -ErrorAction SilentlyContinue)) {
-        throw 'PST source selection requires a PSFoundation version providing Open-OutlookPstStore and Close-OutlookPstStore. Update PSFoundation before retrying.'
-      }
-    }
-
     # Resolve the existing source before reserving a report or opening Outlook.
     # A mistyped source must never become a new PST or a JSON report file.
     if (-not (Test-Path -LiteralPath $SourceArchivePath -PathType Leaf)) {

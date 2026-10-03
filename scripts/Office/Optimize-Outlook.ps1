@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
+#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.7' }
 
 <#
 .SYNOPSIS
@@ -392,11 +392,6 @@ $_declined = $false
 try {
   if ($PSBoundParameters.ContainsKey('PSTPath')) {
     $_target = $PSTPath
-    foreach ($_command in @('Open-OutlookPstStore', 'Close-OutlookPstStore')) {
-      if (-not (Get-Command -Name $_command -ErrorAction SilentlyContinue)) {
-        throw 'PST source selection requires a PSFoundation version providing Open-OutlookPstStore and Close-OutlookPstStore. Update PSFoundation before retrying.'
-      }
-    }
   }
 
   Write-Log -Message 'Connecting to Outlook and locating the store for duplicate review...' -Color Cyan

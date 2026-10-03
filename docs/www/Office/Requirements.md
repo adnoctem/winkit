@@ -5,6 +5,8 @@
 The winkit installer supplies the pinned PSFoundation dependency. Scripts check their required versions themselves; Windows PowerShell 5.1
 or a supported PowerShell 7 host is needed.
 
+Archiving, splitting PST archives, and duplicate review require PSFoundation 1.8.7 or later, including its PST attachment lifetime helpers.
+
 ## Choose the session
 
 | Operation                                   | PowerShell session                                                    | Office requirement                                                  |

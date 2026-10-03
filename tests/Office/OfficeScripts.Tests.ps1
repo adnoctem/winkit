@@ -40,6 +40,16 @@ Describe 'Office script file conventions' {
     }
   }
 
+  It 'requires the released PST helper API in <ScriptName>' -ForEach @(
+    @{ ScriptName = 'New-OutlookArchive' }
+    @{ ScriptName = 'Split-OutlookArchive' }
+    @{ ScriptName = 'Optimize-Outlook' }
+  ) {
+    $path = Join-Path $script:OfficeScripts "$ScriptName.ps1"
+    $ast = [Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
+    $ast.ScriptRequirements.RequiredModules[0].Version | Should -Be ([version]'1.8.7')
+  }
+
   It 'documents .SYNOPSIS and a complete .NOTES block' {
     foreach ($_script in $script:Scripts) {
       $_content = Get-Content -LiteralPath $_script.FullName -Raw

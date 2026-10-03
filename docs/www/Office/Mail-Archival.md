@@ -97,7 +97,7 @@ New can also select an existing source PST directly. Here, `ArchivePath` retains
   -FolderName '' -Recurse -IncludeSentItems -Mode Copy -DryRun
 ```
 
-`SourceArchivePath` replaces `StoreName`; it cannot be combined with it. These operations require classic Outlook and PSFoundation's
+`SourceArchivePath` replaces `StoreName`; it cannot be combined with it. These operations require classic Outlook and PSFoundation 1.8.7's
 `Open-OutlookPstStore`/`Close-OutlookPstStore` commands. A source PST already attached to Outlook stays attached. Otherwise the script
 temporarily attaches it and cleans up afterward, including during previews. Opening a PST can update its metadata. Source files must be
 writable and local; network paths and paths traversing reparse points are refused. Do not replace the source or change its profile

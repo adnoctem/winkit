@@ -7,39 +7,7 @@ param ()
 # Exercise real script functions with mutable Outlook-shaped objects. No COM,
 # profile, or real mail is opened. Script-level guards are tested with mocks.
 BeforeAll {
-  Import-Module PSFoundation -Force
-  # The PST helper release can lag this consumer branch. Declare only mock
-  # boundaries when unavailable; helper implementation tests belong to PSF.
-  if (-not (Get-Command Open-OutlookPstStore -ErrorAction SilentlyContinue)) {
-    function Open-OutlookPstStore {
-      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '', Justification = 'Mock boundary only; no attachment is opened.')]
-      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'The parameters declare the API consumed by Pester mocks; the stub never opens Outlook.')]
-      [CmdletBinding(SupportsShouldProcess = $true)]
-      param (
-        [object]
-        $Namespace,
-
-        [string]
-        $LiteralPath
-      )
-
-      throw 'Open-OutlookPstStore must be mocked in consumer tests.'
-    }
-  }
-  if (-not (Get-Command Close-OutlookPstStore -ErrorAction SilentlyContinue)) {
-    function Close-OutlookPstStore {
-      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Mock boundary only; no attachment is closed.')]
-      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'The parameter declares the API consumed by Pester mocks; the stub never closes Outlook.')]
-      [CmdletBinding()]
-      param (
-        [object]
-        $Context
-      )
-
-      throw 'Close-OutlookPstStore must be mocked in consumer tests.'
-    }
-  }
-
+  Import-Module PSFoundation -MinimumVersion 1.8.7 -Force
   $script:OfficePath = Join-Path $PSScriptRoot '../../scripts/Office'
   foreach ($name in @('New-OutlookArchive', 'Optimize-Outlook', 'New-TestOutlookMessage')) {
     $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $script:OfficePath "$name.ps1"), [ref]$null, [ref]$null)
@@ -716,14 +684,6 @@ Describe 'Outlook store selection and preview' {
         Should -Invoke Connect-Outlook -Times 0
       }
 
-      It 'explains an unavailable PST helper before opening Outlook' {
-        Mock Get-Command { $null } -ParameterFilter { $Name -eq 'Open-OutlookPstStore' }
-        $result = & $script:ArchiveScript @script:AppendArguments -DryRun
-        $result.Status | Should -Be Failed
-        $result.Detail | Should -BeLike '*Update PSFoundation before retrying*'
-        Should -Invoke Connect-Outlook -Times 0
-      }
-
       It 'splits exactly the requested range through the archive workflow using <UpperBound>' -ForEach @(
         @{ UpperBound = 'EndBefore'; Expected = 1 }
         @{ UpperBound = 'EndDate'; Expected = 2 }
@@ -871,11 +831,6 @@ Describe 'Outlook store selection and preview' {
         @{ ScriptName = 'Optimize-Outlook'; AlreadyAttached = $true }
         @{ ScriptName = 'Optimize-Outlook'; AlreadyAttached = $false }
       ) {
-        if (-not (Get-Command Open-OutlookPstStore -Module PSFoundation -ErrorAction SilentlyContinue)) {
-          Set-ItResult -Skipped -Because 'The installed PSFoundation does not yet export the PST lifetime helpers.'
-          return
-        }
-
         $sourcePath = $script:FakeContext.Namespace.DefaultStore.FilePath
         if (-not $AlreadyAttached) {
           $script:FakeContext.Namespace.Stores.Values.Remove($script:FakeContext.Namespace.DefaultStore)
