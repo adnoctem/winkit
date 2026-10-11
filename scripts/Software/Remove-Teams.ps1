@@ -1,6 +1,6 @@
-﻿#Requires -Version 5.0
+﻿#Requires -Version 5.1
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
@@ -112,7 +112,7 @@ param (
   $PassThru
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 # -----------------------------------------------------------------------------
 
@@ -157,7 +157,7 @@ function Invoke-TeamsUninstaller {
       }
     }
     else {
-      # Non-MSI case: delegate to PSFoundation, which handles quoting correctly.
+      # Non-MSI case: delegate to AdNoctem.Substrate.PowerShell, which handles quoting correctly.
       $_uninstallResult = Uninstall-Win32Program -InputObject $_program -Quiet -Force -DryRun:$DryRun -WhatIf:$WhatIfPreference
       Add-OperationResult -Results $Results -Target $_program.DisplayName -Action 'UninstallRegistryEntry' -Status $_uninstallResult.Status -Detail $_uninstallResult.Error
     }

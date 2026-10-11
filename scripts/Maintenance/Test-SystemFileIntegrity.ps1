@@ -1,13 +1,13 @@
-﻿#Requires -Version 5.0
+﻿#Requires -Version 5.1
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
   Verifies Windows system file integrity via sfc /verifyOnly.
 
 .DESCRIPTION
-  Wrapper around PSFoundation's Test-SystemFileIntegrity, which runs the
+  Wrapper around AdNoctem.Substrate.PowerShell's Test-SystemFileIntegrity, which runs the
   System File Checker in /verifyOnly mode (non-mutating: it checks integrity
   without repairing anything) and synthesizes a structured verdict from the
   sfc output, the exit code, and the tail of %windir%\Logs\CBS\CBS.log - the
@@ -46,7 +46,7 @@ param (
   $PassThru
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 $_results = New-Object System.Collections.ArrayList
 

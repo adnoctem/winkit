@@ -1,12 +1,12 @@
-﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.1.0' }
+﻿#Requires -Version 5.1
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
   Reports certificates that expire within a given number of days.
 
 .DESCRIPTION
-  Standing certificate-expiry report: wraps PSFoundation's
+  Standing certificate-expiry report: wraps AdNoctem.Substrate.PowerShell's
   Get-CertificateInventory to list certificates in a store that expire
   within -DaysLeft days (optionally excluding already-expired ones via
   -NotExpired). Certificate-expiry monitoring closes a classic operational
@@ -65,7 +65,7 @@ param (
   $OutputPath
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 Write-Log -Message "Querying certificates in $StorePath expiring within $DaysLeft day(s)..." -Color Cyan
 

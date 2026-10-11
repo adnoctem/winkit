@@ -1,9 +1,9 @@
 ﻿#Requires -Version 5.1
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
-# Wrapper contracts only. Native Office behavior is tested in PSFoundation.
+# Wrapper contracts only. Native Office behavior is tested in Substrate.
 BeforeAll {
-  Import-Module PSFoundation -Force
+  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
   $script:EntryPoints = @{}
   $script:ScriptAsts = @{}
@@ -113,11 +113,11 @@ Describe 'Office wrapper contracts' {
     Mock Remove-Item { throw 'Wrapper must not remove files.' }
   }
 
-  It 'requires PSFoundation 1.8.1 and a mandatory mode in <Entry>' -ForEach @(
+  It 'requires AdNoctem.Substrate.PowerShell 0.1.1 and a mandatory mode in <Entry>' -ForEach @(
     @{ Entry = 'Install-Office' }, @{ Entry = 'Remove-Office' }, @{ Entry = 'Switch-OfficeVersion' }
   ) {
     $ast = $script:ScriptAsts[$Entry]
-    $ast.ScriptRequirements.RequiredModules[0].Version | Should -Be ([version]'1.8.1')
+    $ast.ScriptRequirements.RequiredModules[0].RequiredVersion | Should -Be ([version]'0.1.1')
     $mode = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Mode' }
     $mode.Extent.Text | Should -Match 'Mandatory = \$true'
     $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $true).Count | Should -Be 0

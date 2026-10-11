@@ -1,5 +1,5 @@
-﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.7' }
+﻿#Requires -Version 5.1
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
@@ -39,7 +39,7 @@
   delivery store is used. Run with -Verbose to list detected stores.
 .PARAMETER PSTPath
   Existing local PST to process instead of StoreName or the default mailbox.
-  Requires classic Outlook and PSFoundation's Open-OutlookPstStore and
+  Requires classic Outlook and AdNoctem.Substrate.PowerShell's Open-OutlookPstStore and
   Close-OutlookPstStore commands. A detached source is temporarily attached,
   even for previews; an existing attachment is preserved. Opening the file
   can update its metadata. Duplicate review remains inside this same PST.
@@ -152,7 +152,7 @@ param (
   $QuitOutlook
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 # Outlook automation must use the mailbox user's interactive security context.
 $_outlookUser = Get-UserInfo
@@ -178,7 +178,7 @@ $script:HDR_TAGS = @(
   'http://schemas.microsoft.com/mapi/proptag/0x007D001E'
 )
 
-# Script options expand to the identity-based kinds accepted by PSFoundation.
+# Script options expand to the identity-based kinds accepted by Substrate.
 # Inbox is always permitted; Exclusions can still exclude its exact path.
 $_inclusionGroups = [ordered]@{
   IncludeSentItems    = @('SentItems')
@@ -404,7 +404,6 @@ try {
     throw "Outlook 2007 (version 12) or later is required. Detected Outlook version: $($_context.App.Version)"
   }
 
-  # PSFoundation 1.3.0 checks Store.IsDefault, which Outlook does not expose.
   # Resolve the default via Namespace.DefaultStore and reject ambiguous names.
   if ($PSBoundParameters.ContainsKey('PSTPath')) {
     Write-Log -Message "Reading source PST: $PSTPath. A temporary source attachment may be needed, including during preview." -Color Cyan

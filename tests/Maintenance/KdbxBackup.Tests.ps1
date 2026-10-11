@@ -44,12 +44,12 @@ Describe 'KeePass backup script conventions' {
     $script:Scripts = @($script:BackupScript, $script:DriveScript, $script:MarkerScript) | ForEach-Object { Get-Item -LiteralPath $_ }
   }
 
-  It 'pins PSFoundation and documents .SYNOPSIS and a complete .NOTES block' {
+  It 'pins AdNoctem.Substrate.PowerShell and documents .SYNOPSIS and a complete .NOTES block' {
     foreach ($_script in $script:Scripts) {
       $_header = Get-Content -LiteralPath $_script.FullName -TotalCount 3
-      $_header -match "^#Requires -Modules @\{ ModuleName = 'PSFoundation'; ModuleVersion = '1\.8\.2' \}" | Should -Not -BeNullOrEmpty -Because "$($_script.Name) must pin PSFoundation 1.8.2"
+      $_header -match "^#Requires -Modules @\{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0\.1\.1' \}" | Should -Not -BeNullOrEmpty -Because "$($_script.Name) must pin AdNoctem.Substrate.PowerShell 0.1.1"
       $_content = Get-Content -LiteralPath $_script.FullName -Raw
-      $_content -match 'Import-Module PSFoundation -Force' | Should -BeTrue
+      $_content -match 'Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force' | Should -BeTrue
       (Get-Help $_script.FullName).Synopsis | Should -Not -Match ('^' + [regex]::Escape($_script.Name)) -Because "$($_script.Name) comment-based help must be discoverable, not auto-generated syntax"
       $_content -match 'Author: MVProwess' | Should -BeTrue
       $_content -match 'Server Core:' | Should -BeTrue

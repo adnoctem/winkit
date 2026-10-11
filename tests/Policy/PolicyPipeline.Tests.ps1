@@ -7,7 +7,7 @@
 # is required. The LGPO text rules asserted here were verified against LGPO 3.0.
 
 BeforeAll {
-  Import-Module PSFoundation -MinimumVersion 1.8.2 -Force
+  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
   $script:PolicyScripts = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath((Join-Path $PSScriptRoot '..\..\scripts\Policy'))
   $script:ExportScript = Join-Path $script:PolicyScripts 'Export-LocalPolicy.ps1'
@@ -79,18 +79,18 @@ Describe 'Policy script conventions' {
     )
   }
 
-  It 'pins PSFoundation 1.8.2, which provides the registry.pol converters and named operation logs' {
+  It 'pins AdNoctem.Substrate.PowerShell 0.1.1, which provides the registry.pol converters and named operation logs' {
     foreach ($_script in $script:Scripts) {
       $_header = Get-Content -LiteralPath $_script.FullName -TotalCount 3
       $_header -match '^#Requires -Version' | Should -Not -BeNullOrEmpty -Because "$($_script.Name) must declare the PowerShell version"
-      $_header -match "^#Requires -Modules @\{ ModuleName = 'PSFoundation'; ModuleVersion = '1\.8\.2' \}" | Should -Not -BeNullOrEmpty -Because "$($_script.Name) must pin PSFoundation 1.8.2"
+      $_header -match "^#Requires -Modules @\{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0\.1\.1' \}" | Should -Not -BeNullOrEmpty -Because "$($_script.Name) must pin AdNoctem.Substrate.PowerShell 0.1.1"
     }
   }
 
   It 'documents .SYNOPSIS and a complete .NOTES block' {
     foreach ($_script in $script:Scripts) {
       $_content = Get-Content -LiteralPath $_script.FullName -Raw
-      $_content -match 'Import-Module PSFoundation -Force' | Should -BeTrue -Because "$($_script.Name) must import PSFoundation"
+      $_content -match 'Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force' | Should -BeTrue -Because "$($_script.Name) must import AdNoctem.Substrate.PowerShell"
       (Get-Help $_script.FullName).Synopsis | Should -Not -Match '\.ps1' -Because "$($_script.Name) comment-based help must be discoverable, not auto-generated syntax"
       $_content -match 'Author: MVProwess' | Should -BeTrue
       $_content -match 'License: MIT' | Should -BeTrue

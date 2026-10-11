@@ -1,20 +1,21 @@
 # Distribution and installation
 
 This directory contains the maintained installer, local uninstaller, and their documentation. Release archives and SHA-256 checksums are
-generated in the ignored `build/` directory. Both scripts are standalone and do not require PSFoundation to run.
+generated in the ignored `build/` directory. Both scripts are standalone and do not require AdNoctem.Substrate.PowerShell to run.
 
 ## Installation and updates
 
-Use native 64-bit Windows PowerShell 5.1 or PowerShell 7 on 64-bit Windows:
+Use x64 Windows PowerShell 5.1 or PowerShell 7 on x64 Windows. ARM64 and 32-bit hosts are unsupported. The installer supplies the exact
+`AdNoctem.Substrate.PowerShell` 0.1.1 dependency; no .NET SDK or separate NuGet libraries are needed:
 
 ```powershell
 irm https://raw.githubusercontent.com/adnoctem/winkit/main/dist/install.ps1 | iex
 ```
 
 The installer resolves a GitHub release, verifies its ZIP against the published SHA-256 checksum, validates archive paths, installs its
-pinned PSFoundation dependency, and activates the release. This verifies archive consistency; the repository and published checksum remain
-the source of trust. Repeating the command updates the discovered registered installation. An exact version policy remains pinned until
-changed; use `WINKIT_VERSION=latest` to resume following stable releases. Selecting an older exact version allows a downgrade.
+pinned AdNoctem.Substrate.PowerShell dependency, and activates the release. This verifies archive consistency; the repository and published
+checksum remain the source of trust. Repeating the command updates the discovered registered installation. An exact version policy remains
+pinned until changed; use `WINKIT_VERSION=latest` to resume following stable releases. Selecting an older exact version allows a downgrade.
 
 On a fresh installation, scope defaults to `CurrentUser` in an unelevated session and `AllUsers` in an elevated session. The installer
 announces the elevated default. Explicit `WINKIT_SCOPE=CurrentUser` remains valid when elevated. Existing registrations retain their scope;
@@ -46,8 +47,9 @@ application installation directory. Keep reports, checkpoints and personal files
 Repeating installation at the registered location updates it. Setting a different WINKIT_INSTALL_PATH in the same scope fails; there is no
 same-scope relocation mode. To move such an installation, first ensure the desired release is available, preserve personal files, then
 preview and uninstall the exact registered old path. Clear WINKIT_UNINSTALL, select the new path and scope, and preview/install there.
-Shared PSFoundation modules remain installed. Do not manually move the directory or edit registration to bypass the ownership manifest. For
-a simultaneous scope change, use the supported scope-change operation below with the new destination instead.
+Shared Substrate modules and any previously installed PSFoundation modules remain installed. Do not manually move the directory or edit
+registration to bypass the ownership manifest. For a simultaneous scope change, use the supported scope-change operation below with the new
+destination instead.
 
 A Git checkout is separate from a managed installation. Preserve its local changes and use Git to establish it in the new location; do not
 overlay a checkout on the installer's managed directory. The web installer always selects a published release, not local or unpushed code.
@@ -102,8 +104,9 @@ while honoring dry-run, non-interactive, and pass-through settings. Interactive 
 AllUsers removal requires an already elevated session. Direct invocation from an existing native PowerShell session preserves result output.
 
 Removal deletes the verified owned files, the exact matching PATH entry in the installation's scope and current process, and its
-installation and Windows uninstall registration. Shared PSFoundation versions, NuGet, and PowerShellGet remain installed. Uninstall rejects
-`WINKIT_FORCE`, `WINKIT_VERSION`, and `WINKIT_NO_PATH`; they do not describe removal. It cannot be combined with scope change.
+installation and Windows uninstall registration. Shared AdNoctem.Substrate.PowerShell versions, NuGet, and PowerShellGet remain installed.
+Uninstall rejects `WINKIT_FORCE`, `WINKIT_VERSION`, and `WINKIT_NO_PATH`; they do not describe removal. It cannot be combined with scope
+change.
 
 ## Changing scope
 
@@ -118,8 +121,8 @@ irm https://raw.githubusercontent.com/adnoctem/winkit/main/dist/install.ps1 | ie
 The destination defaults to that scope's standard directory; `WINKIT_INSTALL_PATH` can select another unused local directory. The source is
 the single registration in the opposite scope. An occupied destination scope/path or overlapping source/destination directories fails. Both
 directions require elevation. Scope changes copy and verify the existing release locally, retain its version-selection policy and
-repository, and ensure its pinned PSFoundation dependency is available in the destination scope. They do not combine a version update or
-forced reinstall with migration. Source and destination modules are retained as shared dependencies.
+repository, and ensure its pinned AdNoctem.Substrate.PowerShell dependency is available in the destination scope. They do not combine a
+version update or forced reinstall with migration. Source and destination modules are retained as shared dependencies.
 
 After validating the destination, the installer retires the source and transfers registry/PATH registration. On failure before commit it
 attempts to restore source/destination files, registrations, and PATH. Clear `WINKIT_CHANGE_SCOPE` after use.

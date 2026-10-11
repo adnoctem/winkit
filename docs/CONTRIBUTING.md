@@ -7,14 +7,18 @@ Contributions are welcome via GitHub's Pull Requests. This document outlines the
 The project uses the `winkit.ps1` launcher script in the repository root to drive all development workflows. No external build tools (Make,
 CMake, etc.) are required — only PowerShell and the launcher script.
 
-Before running anything else, you must initialize the project. This downloads the PowerShell module dependencies declared in
-[`lib/winkit.psd1`](../lib/winkit.psd1):
+Use x64 Windows PowerShell 5.1 or PowerShell 7 on x64 Windows. Before running anything else, initialize the project. This downloads the
+exact PowerShell module versions declared in [`requirements.psd1`](../requirements.psd1):
 
 ```pwsh
 .\winkit.ps1 init
 ```
 
 Additional aliases recognised for this command are `initialize`, `setup`, and `bootstrap`.
+
+Substrate 0.x releases may change APIs. Adopt a new version by updating `requirements.psd1`, every script's `RequiredVersion` declaration
+and import, and the matching tests and documentation together. The dependency updater reports available Substrate releases but leaves its
+pin unchanged for this coordinated review. A newer installed version does not satisfy an exact pin.
 
 The launcher maps short, familiar command names to the scripts located in the [`tools/`](../tools) directory:
 
@@ -68,8 +72,9 @@ enforce them.
 
 Keep the `#Requires` directives together at the start of the file, followed by comment-based help, binding attributes and parameters,
 `Import-Module`, initialization, helper functions, and the main workflow. Preserve the repository's script requirements in
-[AGENTS.md](AGENTS.md#script-conventions-non-negotiable), including PowerShell 5.0-compatible syntax, PSFoundation imports, preview support,
-and structured results. `winkit.ps1` remains the intentional exception to using `CmdletBinding`, because it forwards arguments.
+[AGENTS.md](AGENTS.md#script-conventions-non-negotiable), including PowerShell 5.0-compatible syntax, AdNoctem.Substrate.PowerShell imports,
+preview support, and structured results. `winkit.ps1` remains the intentional exception to using `CmdletBinding`, because it forwards
+arguments.
 
 #### Parameters and collections
 
@@ -218,27 +223,31 @@ Run all Pester tests:
 Run a specific test file:
 
 ```pwsh
-.\winkit.ps1 test -Path .\tests\user.ps1
+$requirements = Import-PowerShellDataFile .\requirements.psd1
+Import-Module Pester -RequiredVersion $requirements.Pester
+Invoke-Pester -Path .\tests\Office\OfficeDeployment.Tests.ps1
 ```
 
-Tests require Pester 5.0 or higher, which is installed automatically with `.\winkit.ps1 init`. The test runner exits with the number of
-failed tests as its exit code, making it suitable for CI pipelines.
+Tests use the exact Pester version in `requirements.psd1`, installed automatically with `.\winkit.ps1 init`. The test runner exits with the
+number of failed tests as its exit code, making it suitable for CI pipelines.
 
 #### Office and Outlook validation
 
 Run these checks from a source checkout, not an installer-managed copy. The user guides under `docs/www/` describe installed-toolkit
 workflows; development initialization, mocked tests, scratch integration suites, and fixture generation belong here or alongside tests.
 
-Ordinary Outlook COM automation can use a 64-bit host with 32-bit Outlook. Optional Redemption/MAPI fixture injection requires matching
-PowerShell, Redemption, and Outlook architecture; for 32-bit Outlook use `C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe`.
+Ordinary Outlook COM automation can use a 64-bit host with 32-bit Outlook. Optional Redemption/MAPI fixture injection requires matching x64
+PowerShell, Redemption, and Outlook architecture. The Substrate dependency does not support a 32-bit PowerShell host; use ordinary Outlook
+object-model fixtures with 32-bit Outlook and verify that the required headers and dates persisted.
 
 Run `.\winkit.ps1 test` for logic and mocked safety tests without Outlook. Outlook regression tests cover collection mutation, transfer
 failures, date boundaries, store selection, preview behavior, excluded subtrees, repair launch modes, argument quoting, and locks. Transport
-Message-ID parsing belongs to PSFoundation and is tested in that module's repository. Real Office deployment and activation require a
-recoverable workstation.
+Message-ID parsing belongs to AdNoctem.Substrate.PowerShell and is tested in that module's repository. Real Office deployment and activation
+require a recoverable workstation.
 
 Office deployment wrapper tests cover mode validation, locale forwarding, confirmation/previews, recovery routing, and module result/exit
-propagation. Native deployment, inventory, and media-verification tests belong to PSFoundation; wrapper tests never execute ODT.
+propagation. Native deployment, inventory, and media-verification tests belong to AdNoctem.Substrate.PowerShell; wrapper tests never execute
+ODT.
 
 The optional `.\winkit.ps1 test -Outlook` suite generates deterministic subjects, Message-IDs, dates, and seeded duplicates in its scratch
 store. Archive checks reopen output PSTs and compare actual mail counts. These tests require the intended Outlook installation; logic tests
@@ -416,7 +425,8 @@ _**NOTE**_: In order to make testing and merging of PRs easier, please submit ch
 
 ### Technical Requirements
 
-- Must target PowerShell 5.0 or higher (every script must include `#Requires -Version 5.0`)
+- Must target Windows PowerShell 5.1 or PowerShell 7 on x64 Windows (runtime consumers include `#Requires -Version 5.1` or a higher
+  requirement)
 - Must pass `.\winkit.ps1 format -Check` with no formatting drift
 - Must pass `.\winkit.ps1 lint` with zero PSScriptAnalyzer findings
 - Scripts under `scripts/` must include comment-based help (`.SYNOPSIS`, `.DESCRIPTION`, `.PARAMETER`, `.EXAMPLE`)

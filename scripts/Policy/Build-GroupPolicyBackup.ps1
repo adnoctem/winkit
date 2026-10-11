@@ -1,12 +1,12 @@
-﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
+﻿#Requires -Version 5.1
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
   Compiles winkit policy text sources into a domain-importable GPO backup.
 .DESCRIPTION
   Reads LGPO text policy sources (resources/policies/*.txt), compiles them into
-  Machine and User registry.pol files with PSFoundation's
+  Machine and User registry.pol files with AdNoctem.Substrate.PowerShell's
   ConvertTo-RegistryPolicy, and wraps them in a GPO backup stamped from the
   vendored skeleton templates (resources/policies/skeleton/). The result imports
   into a domain with Import-GPO, or locally with Import-GroupPolicyBackup.ps1.
@@ -93,7 +93,7 @@ param (
   $PassThru
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 # -----------------------------------------------------------------------------
 

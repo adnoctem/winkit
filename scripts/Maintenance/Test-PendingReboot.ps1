@@ -1,5 +1,5 @@
-﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
+﻿#Requires -Version 5.1
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
@@ -7,7 +7,7 @@
   independent sources.
 
 .DESCRIPTION
-  Wrapper around PSFoundation's Test-PendingReboot, which checks ten
+  Wrapper around AdNoctem.Substrate.PowerShell's Test-PendingReboot, which checks ten
   independent read-only pending-reboot indicators:
 
     - CBS RebootPending key and servicing state (RebootInProgress /
@@ -54,7 +54,7 @@ param (
   $PassThru
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 $_results = New-Object System.Collections.ArrayList
 

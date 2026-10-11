@@ -12,10 +12,10 @@ Download and extract the [Office Deployment Tool](https://www.microsoft.com/en-u
 extracted `setup.exe`, not the `officedeploymenttool_*.exe` download. See
 [Microsoft's ODT overview](https://learn.microsoft.com/en-us/microsoft-365-apps/deploy/overview-office-deployment-tool).
 
-Alternatively, acquire a verified copy through PSFoundation:
+Alternatively, acquire a verified copy through AdNoctem.Substrate.PowerShell:
 
 ```powershell
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 New-Item -ItemType Directory -Path 'C:\Managed' -Force | Out-Null
 
 $source = Test-OfficeDeploymentToolSourceAvailability
@@ -36,7 +36,7 @@ incomplete extraction, and reuses an existing trusted tool. Its directory must p
 Validate the exact file to be used for deployment; this does not launch it or download Office:
 
 ```powershell
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 $tool = Test-OfficeDeploymentTool -OdtPath 'C:\Managed\ODT\setup.exe'
 $tool | Format-List Valid, Version, SignatureStatus, OriginalFilename, FileDescription, Detail
 if (-not $tool.Valid) {
@@ -45,8 +45,8 @@ if (-not $tool.Valid) {
 ```
 
 Microsoft's tool can report `OriginalFilename = Bootstrapper.exe` and description `Microsoft 365 and Office`. Both identity and Microsoft
-signature/version must validate; renaming another executable is insufficient. Update winkit/PSFoundation when using an old installation that
-rejects this metadata; PSFoundation 1.7.1 and earlier lack the current ODT identity support. Do not bypass validation.
+signature/version must validate; renaming another executable is insufficient. Use the installer to keep winkit and its pinned Substrate
+dependency together when an older installation rejects this metadata. Do not bypass validation.
 
 ## Choose the target
 

@@ -5,7 +5,7 @@
 param ()
 
 BeforeAll {
-  Import-Module PSFoundation -Force
+  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
   $script:CheckpointScript = Join-Path $PSScriptRoot '../../scripts/Office/Checkpoint-Outlook.ps1'
 }
 

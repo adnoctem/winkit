@@ -2,10 +2,12 @@
 
 [Office overview](README.md)
 
-The winkit installer supplies the pinned PSFoundation dependency. Scripts check their required versions themselves; Windows PowerShell 5.1
-or a supported PowerShell 7 host is needed.
+The winkit installer supplies the pinned AdNoctem.Substrate.PowerShell dependency. Scripts require exactly version 0.1.1. Use x64 Windows
+PowerShell 5.1 or PowerShell 7 on x64 Windows; 32-bit and ARM64 PowerShell hosts are unsupported. No .NET SDK or separate NuGet libraries
+are required.
 
-Archiving, splitting PST archives, and duplicate review require PSFoundation 1.8.7 or later, including its PST attachment lifetime helpers.
+Archiving, splitting PST archives, and duplicate review require AdNoctem.Substrate.PowerShell 0.1.1, including its PST attachment lifetime
+helpers.
 
 ## Choose the session
 
@@ -20,7 +22,8 @@ Archiving, splitting PST archives, and duplicate review require PSFoundation 1.8
 
 Ordinary Outlook COM automation supports 64-bit PowerShell with 32-bit Outlook because Outlook runs in a separate process. See
 [Microsoft's cross-architecture COM guidance](https://learn.microsoft.com/en-us/windows/win32/winprog64/process-interoperability). Optional
-Redemption/MAPI use requires matching PowerShell, Redemption, and Outlook architecture.
+Redemption/MAPI use requires matching x64 PowerShell, Redemption, and Outlook architecture. Use the ordinary Outlook object-model path for
+32-bit Outlook.
 
 Office deployment supports x64 Windows 10 22H2 (build 19045) and later desktop hosts, including Windows 11. Windows Server, ARM, and older
 Windows 10 builds are blocked by the deployment backend. Product recognition does not establish vendor lifecycle or OS support. Office
@@ -59,7 +62,7 @@ edition may be unavailable. Use the [installer's update procedure](../../../dist
 its dependency.
 
 ```powershell
-Get-Module -ListAvailable PSFoundation | Select-Object Name, Version, Path
+Get-Module -ListAvailable AdNoctem.Substrate.PowerShell | Select-Object Name, Version, Path
 Get-Help .\scripts\Office\New-OutlookArchive.ps1 -Full
 
 # Optional: hide progress bars while keeping warnings, status messages, and results.

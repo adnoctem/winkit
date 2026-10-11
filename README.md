@@ -32,15 +32,16 @@
 
 `winkit` is an open-source [MIT][license]-licensed collection of [PowerShell][powershell] scripts and modules written and maintained by the
 [Ad Noctem Collective][org] for the machine-level configuration, hardening, provisioning and maintenance of Windows systems. The repository
-targets both desktop Windows installations and Windows Server environments and supports [PowerShell][powershell] 5.0 and above, including
-Windows PowerShell 5.x as well as newer PowerShell releases. It is intended for repeatable system setup, workstation preparation,
+targets both desktop Windows installations and Windows Server environments using x64 Windows [PowerShell][powershell] 5.1 or PowerShell 7 on
+x64 Windows. Individual scripts may require PowerShell 7. It is intended for repeatable system setup, workstation preparation,
 administrative automation and post-install configuration, especially where Windows machines need to be brought into a known and documented
 configuration state.
 
 The [`scripts`](scripts) directory contains executable scripts intended to be run directly by an administrator, deployment process,
 bootstrap routine, scheduled task or other automation system. Scripts depend on the
-[`PSFoundation`](https://www.powershellgallery.com/packages/PSFoundation) module, which is installed from the PowerShell Gallery; the
-[`bin`](bin) directory holds convenience `.cmd` launchers for selected entry-point scripts.
+[`AdNoctem.Substrate.PowerShell`](https://www.powershellgallery.com/packages/AdNoctem.Substrate.PowerShell) module at exactly version 0.1.1,
+installed from the PowerShell Gallery. No .NET SDK or separate NuGet libraries are required; the [`bin`](bin) directory holds convenience
+`.cmd` launchers for selected entry-point scripts.
 
 Functionally, `winkit` covers several major areas of Windows administration, including system appearance, Explorer behavior, Start menu and
 taskbar configuration, browser policies, privacy options, telemetry reduction, diagnostic reporting and notification settings. It also
@@ -58,11 +59,11 @@ steps can be reviewed, composed and executed independently depending on the targ
 
 For more information on PowerShell itself, refer to Microsoft's official [PowerShell Documentation][powershell_docs]. Existing scripts may
 also serve as implementation examples for composing new automation routines or reusing the shared functionality provided by the
-[`PSFoundation`][psfoundation] module.
+[`AdNoctem.Substrate.PowerShell`][substrate] module.
 
 ## 📦 Installation and updates
 
-Install or update winkit from native Windows PowerShell 5.1 or PowerShell 7:
+Install or update winkit from x64 Windows PowerShell 5.1 or PowerShell 7 on x64 Windows:
 
 ```powershell
 irm https://raw.githubusercontent.com/adnoctem/winkit/main/dist/install.ps1 | iex
@@ -150,7 +151,7 @@ _Assets provided by:_ **[Microsoft Corporation][microsoft]**
   https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork
 [github_releases]: https://github.com/adnoctem/winkit/releases
 [github_commits]: https://github.com/adnoctem/winkit/commits/main/
-[psfoundation]: https://www.powershellgallery.com/packages/PSFoundation
+[substrate]: https://www.powershellgallery.com/packages/AdNoctem.Substrate.PowerShell
 
 <!-- Third-party -->
 

@@ -1,4 +1,6 @@
-﻿<#
+﻿#Requires -Version 5.1
+
+<#
   Initial setup script used to install PowerShell module dependencies
   declared in the project's requirements.psd1 manifest.
 
@@ -10,10 +12,15 @@
 
 [CmdletBinding()]
 param(
-  [switch]$Force
+  [switch]
+  $Force
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not [Environment]::Is64BitProcess -or $env:PROCESSOR_ARCHITECTURE -ne 'AMD64') {
+  throw 'winkit requires x64 Windows PowerShell 5.1 or PowerShell 7 on x64 Windows.'
+}
 
 # ---- Ensure NuGet provider (required by PowerShellGet) ----------------------
 $null = Install-PackageProvider -Name NuGet -Force -Scope CurrentUser -ErrorAction SilentlyContinue
@@ -32,17 +39,15 @@ $requirements = Import-PowerShellDataFile -Path $requirementsPath -ErrorAction S
 foreach ($name in $requirements.Keys) {
   $targetVersion = $requirements[$name]
 
-  Write-Host "Ensuring module '$name' (>= $targetVersion) is installed.." -ForegroundColor Yellow
+  Write-Host "Ensuring module '$name' ($targetVersion exactly) is installed.." -ForegroundColor Yellow
 
   $installed = Get-Module -ListAvailable -Name $name |
-    Sort-Object Version -Descending |
+    Where-Object { $_.Version -eq [version]$targetVersion } |
     Select-Object -First 1
 
   if ($installed -and -not $Force) {
-    if ($installed.Version -ge [version]$targetVersion) {
-      Write-Host "    -> OK (found $($installed.Version))" -ForegroundColor Green
-      continue
-    }
+    Write-Host "    -> OK (found $($installed.Version))" -ForegroundColor Green
+    continue
   }
 
   Write-Host "    -> Installing $name $targetVersion ..." -ForegroundColor Yellow
@@ -50,6 +55,7 @@ foreach ($name in $requirements.Keys) {
   $installParams = @{
     Name               = $name
     RequiredVersion    = $targetVersion
+    Repository         = 'PSGallery'
     Scope              = 'CurrentUser'
     Force              = $true
     AllowClobber       = $true
@@ -62,7 +68,7 @@ foreach ($name in $requirements.Keys) {
     Write-Host "    -> Installed $name $targetVersion" -ForegroundColor Green
   }
   catch {
-    Write-Host "    -> Failed to install $name : $_" -ForegroundColor Red
+    throw "Failed to install $name $targetVersion : $_"
   }
 }
 

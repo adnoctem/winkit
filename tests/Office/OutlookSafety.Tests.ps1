@@ -7,7 +7,11 @@ param ()
 # Exercise real script functions with mutable Outlook-shaped objects. No COM,
 # profile, or real mail is opened. Script-level guards are tested with mocks.
 BeforeAll {
-  Import-Module PSFoundation -MinimumVersion 1.8.7 -Force
+  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
+  $script:CompiledFolderPlan = Get-Command Get-OutlookFolderPlan -CommandType Cmdlet -Module AdNoctem.Substrate.PowerShell
+  if (-not ('Winkit.Tests.OutlookAutomationProxy' -as [type])) {
+    Add-Type -Path (Join-Path $PSScriptRoot 'OutlookAutomationProxy.cs')
+  }
   $script:OfficePath = Join-Path $PSScriptRoot '../../scripts/Office'
   foreach ($name in @('New-OutlookArchive', 'Optimize-Outlook', 'New-TestOutlookMessage')) {
     $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $script:OfficePath "$name.ps1"), [ref]$null, [ref]$null)
@@ -494,7 +498,24 @@ Describe 'Repair tool launch safety' {
 
 Describe 'Outlook store selection and preview' {
   BeforeEach {
-    Mock Get-OutlookStandardFolderIdentity -ModuleName PSFoundation { @() }
+    Mock Get-OutlookStandardFolderIdentity { @() }
+    # Keep mutable PowerShell mail fixtures, but pass CLR objects to the real
+    # compiled planner. Mock at the public boundary, not inside the C# engine.
+    Mock Get-OutlookFolderPlan {
+      param($Namespace, $StoreRoot, $FolderName, $Recurse, $Include, $Exclusions)
+      $identities = @(Get-OutlookStandardFolderIdentity -Namespace $Namespace -StoreRoot $StoreRoot)
+      $arguments = @{
+        Namespace  = [Winkit.Tests.OutlookAutomationProxy]::new($Namespace, $Namespace, $identities)
+        StoreRoot  = [Winkit.Tests.OutlookAutomationProxy]::new($StoreRoot, $Namespace, $identities)
+        Recurse    = $Recurse
+        Include    = $Include
+        Exclusions = $Exclusions
+      }
+      if ($PSBoundParameters.ContainsKey('FolderName')) {
+        $arguments.FolderName = $FolderName
+      }
+      & $global:WinkitSafetyTestContext.CompiledFolderPlan @arguments
+    }
     Mock Get-UserInfo { @{ UserName = 'TEST\MailboxUser'; IsAdministrator = $false } }
     Mock Write-Progress { }
     Mock Import-Module { }
@@ -519,8 +540,9 @@ Describe 'Outlook store selection and preview' {
     $app = [PSCustomObject]@{ Version = '12.0'; QuitCalled = $false }
     $app | Add-Member ScriptMethod Quit { $this.QuitCalled = $true }
     $script:FakeContext = [PSCustomObject]@{
-      App       = $app
-      Namespace = [PSCustomObject]@{ DefaultStore = $store; Stores = (New-FakeCollection @($store, $store)) }
+      CompiledFolderPlan = $script:CompiledFolderPlan
+      App                = $app
+      Namespace          = [PSCustomObject]@{ DefaultStore = $store; Stores = (New-FakeCollection @($store, $store)) }
     }
     $script:FakeContext.Namespace | Add-Member ScriptMethod GetFolderFromID {
       param($Id, $StoreId)
@@ -794,7 +816,7 @@ Describe 'Outlook store selection and preview' {
       }
     }
 
-    Context 'Real PSFoundation PST helper integration' {
+    Context 'Real AdNoctem.Substrate.PowerShell PST helper integration' {
       BeforeEach {
         $script:Source | Add-Member NoteProperty Store $script:FakeContext.Namespace.DefaultStore
         $script:FakeContext.Namespace | Add-Member NoteProperty Added 0
@@ -821,6 +843,9 @@ Describe 'Outlook store selection and preview' {
           $null = $this.Detached.Add($Root.StoreID)
           $this.Stores.Values.Remove($store)
         } -Force
+        $script:FakeContext.Namespace = [Winkit.Tests.OutlookAutomationProxy]::new(
+          $script:FakeContext.Namespace, $script:FakeContext.Namespace, @()
+        )
       }
 
       It 'runs <ScriptName> preview with real helpers when AlreadyAttached=<AlreadyAttached>' -ForEach @(
@@ -833,7 +858,8 @@ Describe 'Outlook store selection and preview' {
       ) {
         $sourcePath = $script:FakeContext.Namespace.DefaultStore.FilePath
         if (-not $AlreadyAttached) {
-          $script:FakeContext.Namespace.Stores.Values.Remove($script:FakeContext.Namespace.DefaultStore)
+          $sourceStore = @($script:FakeContext.Namespace.Stores.Values | Where-Object StoreID -EQ 'source-store')[0]
+          $script:FakeContext.Namespace.Stores.Values.Remove($sourceStore)
         }
         $arguments = @{
           FolderName = ''
@@ -918,7 +944,7 @@ Describe 'Outlook store selection and preview' {
         $null = $inbox.Folders.Values.Add($leaf)
         $null = $inbox.Folders.Values.Add($excluded)
         $null = $script:Source.Folders.Values.Add($inbox)
-        Mock Get-OutlookStandardFolderIdentity -ModuleName PSFoundation {
+        Mock Get-OutlookStandardFolderIdentity {
           [PSCustomObject]@{
             Kind    = 'Inbox'
             StoreID = 'source-store'
@@ -1369,7 +1395,7 @@ Describe 'Outlook store selection and preview' {
       }
     }
     $script:FakeContext | Add-Member NoteProperty Identities $identities
-    Mock Get-OutlookStandardFolderIdentity -ModuleName PSFoundation { $global:WinkitSafetyTestContext.Identities }
+    Mock Get-OutlookStandardFolderIdentity { $global:WinkitSafetyTestContext.Identities }
     $script:FakeContext.Namespace | Add-Member ScriptMethod GetItemFromID {
       param($Id, $StoreId)
       foreach ($folder in $this.DefaultStore.Root.Folders.Values) {
@@ -1424,7 +1450,7 @@ Describe 'Outlook store selection and preview' {
     $inbox.FolderPath = $script:Source.FolderPath + '\Inbox'
     $nested.FolderPath = $inbox.FolderPath + '\Nested'
     $protected.FolderPath = $script:Source.FolderPath + '\Protected'
-    Mock Get-OutlookStandardFolderIdentity -ModuleName PSFoundation {
+    Mock Get-OutlookStandardFolderIdentity {
       [PSCustomObject]@{ Kind = 'Inbox'; EntryID = 'folder-Inbox'; StoreID = 'source-store'; State = 'Resolved' }
     }
     $null = $inbox.Folders.Values.Add($nested)
@@ -1456,6 +1482,39 @@ Describe 'Outlook store selection and preview' {
     Should -Invoke Get-OutlookSubFolder -Times 0 -ParameterFilter { $Create }
   }
 
+  It 'warns about unavailable SuggestedContacts without blocking a resolvable Inbox preview' {
+    $inbox = New-FakeFolder -Name Posteingang
+    $inbox.FolderPath = $script:Source.FolderPath + '\Posteingang'
+    $null = $script:Source.Folders.Values.Add($inbox)
+    Mock Get-OutlookStandardFolderIdentity {
+      [PSCustomObject]@{
+        Kind    = 'Inbox'
+        EntryID = 'folder-Posteingang'
+        StoreID = 'source-store'
+        State   = 'Resolved'
+      }
+      [PSCustomObject]@{
+        Kind  = 'SuggestedContacts'
+        State = 'Unresolved'
+      }
+    }
+    $arguments = @{
+      ArchivePath     = Join-Path $TestDrive 'optional-folder.pst'
+      ReportDirectory = $TestDrive
+      DryRun          = $true
+      WarningAction   = 'SilentlyContinue'
+      WarningVariable = 'diagnostics'
+    }
+
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') @arguments
+
+    $result.Status | Should -Be Preview
+    $result.FoldersRead | Should -Be 1
+    ($diagnostics -join ';') | Should -Match 'SuggestedContacts'
+    Should -Invoke Add-OutlookStoreRoot -Times 0
+    Test-Path -LiteralPath $arguments.ArchivePath | Should -BeFalse
+  }
+
   It 'selects the implicit <InboxName> Inbox independently of a literal Inbox for <ScriptName>' -ForEach @(
     @{ ScriptName = 'New-OutlookArchive'; InboxName = 'Posteingang' }
     @{ ScriptName = 'New-OutlookArchive'; InboxName = 'Renamed' }
@@ -1469,7 +1528,7 @@ Describe 'Outlook store selection and preview' {
     $literal.FolderPath = $script:Source.FolderPath + '\Inbox'
     $null = $script:Source.Folders.Values.Add($inbox)
     $null = $script:Source.Folders.Values.Add($literal)
-    Mock Get-OutlookStandardFolderIdentity -ModuleName PSFoundation {
+    Mock Get-OutlookStandardFolderIdentity {
       [PSCustomObject]@{ Kind = 'Inbox'; EntryID = 'standard-inbox'; StoreID = 'source-store'; State = 'Resolved' }
     }
     $script:FakeContext.Namespace | Add-Member ScriptMethod GetItemFromID {
@@ -1526,7 +1585,7 @@ Describe 'Outlook store selection and preview' {
     $null = $parent.Folders.Values.Add($inbox)
     $null = $script:Source.Folders.Values.Add($parent)
     if ($Excluded) {
-      Mock Get-OutlookStandardFolderIdentity -ModuleName PSFoundation {
+      Mock Get-OutlookStandardFolderIdentity {
         [PSCustomObject]@{ Kind = 'Inbox'; EntryID = 'folder-Posteingang'; StoreID = 'source-store'; State = 'Resolved' }
       }
     }
@@ -1580,7 +1639,7 @@ Describe 'Outlook store selection and preview' {
     foreach ($folder in @($inbox, $sent, $junk)) {
       $null = $script:Source.Folders.Values.Add($folder)
     }
-    Mock Get-OutlookStandardFolderIdentity -ModuleName PSFoundation {
+    Mock Get-OutlookStandardFolderIdentity {
       [PSCustomObject]@{ Kind = 'Inbox'; EntryID = 'folder-Posteingang'; State = 'Resolved' }
       [PSCustomObject]@{ Kind = 'SentItems'; EntryID = 'folder-Gesendet'; State = 'Resolved' }
       [PSCustomObject]@{ Kind = 'Junk'; EntryID = 'folder-Unerwuenscht'; State = 'Resolved' }

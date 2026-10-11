@@ -13,7 +13,7 @@ Deploy Microsoft Office, archive Outlook mail, and preserve data and settings wi
 
 ## Open the installed toolkit
 
-The [winkit installer](../../../dist/README.md) installs the scripts and their pinned PSFoundation dependency.
+The [winkit installer](../../../dist/README.md) installs the scripts and their pinned AdNoctem.Substrate.PowerShell dependency.
 
 Choose the directory matching your installation, then run the examples from there:
 

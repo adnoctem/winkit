@@ -1,11 +1,11 @@
-﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
+﻿#Requires -Version 5.1
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
   Exports the local Group Policy registry settings as an LGPO text policy source.
 .DESCRIPTION
-  Reads the local Machine and User registry.pol files with PSFoundation's
+  Reads the local Machine and User registry.pol files with AdNoctem.Substrate.PowerShell's
   ConvertFrom-RegistryPolicy and writes them as a single LGPO text file - the
   source format compiled by Build-GroupPolicyBackup.ps1. This turns a
   hand-configured golden image into a reviewable, version-controlled policy
@@ -82,7 +82,7 @@ param (
   $PassThru
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 # -----------------------------------------------------------------------------
 

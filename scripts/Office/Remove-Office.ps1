@@ -1,12 +1,12 @@
-﻿#Requires -Version 5.0
+﻿#Requires -Version 5.1
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.1' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
   Inventories or removes explicitly selected Click-to-Run Office products.
 .DESCRIPTION
-  Uses PSFoundation 1.8.1 for removal planning, confirmation, execution, and
+  Uses AdNoctem.Substrate.PowerShell 0.1.1 for removal planning, confirmation, execution, and
   verification. Never defaults to removing all Office. Selected products already
   absent are a successful no-op. Unselected products must remain unchanged.
   Standalone MSI removal is unsupported; use an approved migration where applicable.
@@ -40,12 +40,12 @@
   Author: MVProwess <info@mvprowess.com>
   License: MIT
   Server Core: not supported.
-  SYSTEM-account execution: supported where PSFoundation permits the host and
+  SYSTEM-account execution: supported where AdNoctem.Substrate.PowerShell permits the host and
   media is accessible. Microsoft 365 activation requires the licensed user's session.
   Current native verification and recovery limits are documented in README.md.
 #>
 
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '', Justification = 'PSFoundation owns confirmation and execution; WhatIf, DryRun, and explicit Confirm are forwarded.')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '', Justification = 'AdNoctem.Substrate.PowerShell owns confirmation and execution; WhatIf, DryRun, and explicit Confirm are forwarded.')]
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
 param (
   [Parameter(Mandatory = $true)]
@@ -75,7 +75,7 @@ param (
   $PassThru
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 # -----------------------------------------------------------------------------
 # Validate the operation before calling any deployment API.
@@ -165,7 +165,7 @@ try {
     Write-Log -Message ("Click-to-Run: {0}; MSI: {1}" -f ($_inventory.Products.ProductId -join ', '), ($_inventory.Msi.Name -join ', ')) -Color Gray
   }
   else {
-    # PSFoundation rechecks the selection and confirms the complete removal scope.
+    # AdNoctem.Substrate.PowerShell rechecks the selection and confirms the complete removal scope.
     $_execution = @{
       OdtPath        = $OdtPath
       ForceCloseApps = [bool]$ForceCloseApps

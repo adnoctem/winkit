@@ -1,5 +1,5 @@
-﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
+﻿#Requires -Version 5.1
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
@@ -115,7 +115,7 @@ param (
   $QuitOutlook
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 # Outlook automation must use the mailbox user's interactive security context.
 $_outlookUser = Get-UserInfo
@@ -330,7 +330,6 @@ try {
     throw "Outlook 2007 (version 12) or later is required. Detected Outlook version: $($_context.App.Version)"
   }
 
-  # PSFoundation 1.3.0 checks Store.IsDefault, which Outlook does not expose.
   # Resolve the default via Namespace.DefaultStore and reject ambiguous names.
   if ([string]::IsNullOrWhiteSpace($StoreName)) {
     $_selectedStore = $_context.Namespace.DefaultStore

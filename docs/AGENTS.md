@@ -1,8 +1,8 @@
 # winkit — Agent Guidance
 
 `winkit` is a PowerShell script collection for Windows configuration, hardening, and provisioning. It contains **no module code**: shared
-functionality lives in the separate `PSFoundation` module (PowerShell Gallery), which every script imports by name. The root `AGENTS.md` is
-a symlink to this file — edit this one.
+functionality lives in the separate `AdNoctem.Substrate.PowerShell` module (PowerShell Gallery), which every script imports by name. The
+root `AGENTS.md` is a symlink to this file — edit this one.
 
 ## Commands (run from repo root)
 
@@ -10,14 +10,14 @@ a symlink to this file — edit this one.
 - `.\winkit.ps1 format` — in-place PSScriptAnalyzer formatting; `-Check` = read-only mode (used by CI and pre-commit)
 - `.\winkit.ps1 lint` — PSScriptAnalyzer rule checks, exit 1 on findings
 - `.\winkit.ps1 test` — run the winkit Pester suite under `tests/` (logic tests, no Outlook); `-Outlook` also runs the integration suite
-  (needs Outlook, uses a scratch PST). Module logic tests live in the PSFoundation repo
+  (needs Outlook, uses a scratch PST). Module logic tests live in the separate substrate repo
 - `.\winkit.ps1 deps` — compare `requirements.psd1` pins against the PowerShell Gallery (`-Check` reports only)
 - `.\winkit.ps1 build` — create `build/` archives (ZIP + tar.gz) from `scripts/`
 
 ## Layout
 
-- `dist/` — tracked standalone installer/uninstaller sources and their user guide; they cannot depend on PSFoundation because they install
-  or remove winkit itself
+- `dist/` — tracked standalone installer/uninstaller sources and their user guide; they cannot depend on AdNoctem.Substrate.PowerShell
+  because they install or remove winkit itself
 - `build/` — gitignored generated release archives and checksums
 - `scripts/` — the product: executable admin scripts, filed by what they change. The scripts root holds only the three `bin/`-launched entry
   points (`Invoke-Bootstrap`, `Invoke-Optimizer`, `Invoke-InformationRetrieval`); everything else lives in `Privacy/`, `Interface/`,
@@ -32,23 +32,26 @@ a symlink to this file — edit this one.
   managed installation. Keep contributor setup, tests, and fixture generation in `docs/CONTRIBUTING.md` or alongside tests
 - `scripts/<Area>/README.md` — concise script catalogue and index linking to the area's task guides. Describe current behavior,
   requirements, examples, and limitations without development history, sketches, change narratives, or old review/test-run reports
-- `requirements.psd1` — exact module version pins (also a semantic-release commit asset); bump when adopting newer PSFoundation
-  functionality
+- `requirements.psd1` — exact module version pins (also a semantic-release commit asset); bump when adopting newer
+  AdNoctem.Substrate.PowerShell functionality
 - `PSScriptAnalyzerSettings.psd1` — formatter/linter rules; contains a singular-noun allowlist
 
 ## Script conventions (non-negotiable)
 
-- Every script opens with `#Requires -Version 5.0`, `#Requires -RunAsAdministrator` (when elevation is required), and
-  `#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = 'x.y.z' }` — pin the lowest version that provides every cmdlet used
-- `dist/install.ps1` and `dist/uninstall.ps1` are the PSFoundation exceptions: distribution maintenance must remain standalone
+- Every script opens with `#Requires -Version 5.1`, `#Requires -RunAsAdministrator` (when elevation is required), and
+  `#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }` — pin the exact adopted version;
+  Substrate 0.x releases may change APIs
+- `dist/install.ps1` and `dist/uninstall.ps1` are the AdNoctem.Substrate.PowerShell exceptions: distribution maintenance must remain
+  standalone
 - The web installer `dist/install.ps1` takes configuration only from `WINKIT_*` process environment variables, including `WINKIT_DRY_RUN`;
   it has no public script parameters. Keep the documented `irm | iex` entry point working in Windows PowerShell 5.1
-- `Import-Module PSFoundation -Force` after the param block
+- `Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force` after the param block
 - Comment-based help with `.SYNOPSIS`/`.DESCRIPTION`/`.PARAMETER`/`.EXAMPLE`, plus a `.NOTES` block (Author, License, Server Core support,
   SYSTEM-account suitability)
 - `[CmdletBinding(SupportsShouldProcess = $true)]` with `-DryRun` (sets `$WhatIfPreference`) and `-PassThru` switches
-- Results use PSFoundation `New-OperationResult`/`Add-OperationResult`; user feedback via `Write-Log -Message -Color`
-- PowerShell 5.0 compatibility: no ternary, `??`, or null-conditional operators (PSUseCompatibleSyntax targets 5.0/5.1/7.0)
+- Results use AdNoctem.Substrate.PowerShell `New-OperationResult`/`Add-OperationResult`; user feedback via `Write-Log -Message -Color`
+- Runtime: x64 Windows PowerShell 5.1 or PowerShell 7 on x64 Windows; no .NET SDK is needed. Keep PowerShell 5.0-compatible syntax: no
+  ternary, `??`, or null-conditional operators (PSUseCompatibleSyntax targets 5.0/5.1/7.0)
 - Encoding: UTF-8 with BOM, CRLF (enforced by formatter and pre-commit `mixed-line-ending`); 2-space indentation
 - `dist/install.ps1` is the encoding exception: keep it ASCII-only UTF-8 **without BOM**, with CRLF. Windows PowerShell 5.1 treats a BOM
   preserved in downloaded text as code, breaking the documented `irm | iex` entry point
@@ -87,8 +90,7 @@ Passing the formatter is necessary but does not establish readable structure. Fo
 
 ## Gotchas
 
-- `docs/CONTRIBUTING.md` still references the retired `lib/` module and a `tests/` directory — both were split out into PSFoundation; trust
-  the code over that document
+- Module implementation tests live in substrate; winkit wrapper and script tests remain under `tests/`.
 - Format/lint skip generated and gitignored directories; tracked `dist/` sources are included by default
 - Commit messages must be conventional (types `build|ci|docs|feat|fix|perf|refactor|test|chore`; scopes `lib|scripts|tools|config|docs` —
   `lib` is historical) — see `docs/CONTRIBUTING.md`

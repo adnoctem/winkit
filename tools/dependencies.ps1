@@ -16,6 +16,9 @@
   pull request is picked up by the repository's regular CI on its own. No other
   workflows are dispatched.
 
+  Substrate updates are reported but require a coordinated manual update of
+  the manifest and script RequiredVersion pins while its API is at version 0.x.
+
   In -Check mode no files are modified and the script exits with code 1 when any
   dependency is outdated, making it suitable for local use and CI checks.
 
@@ -212,6 +215,15 @@ if ($outdated.Count -eq 0) {
 
 if ($Check) {
   Write-Host ('{0} dependency update(s) required.' -f $outdated.Count) -ForegroundColor Yellow
+  exit 1
+}
+
+$_manualUpdates = @($outdated | Where-Object { $_.Name -eq 'AdNoctem.Substrate.PowerShell' })
+foreach ($_dependency in $_manualUpdates) {
+  Write-Warning "Substrate $($_dependency.LatestVersion) requires a coordinated adoption: update requirements.psd1 and all script RequiredVersion pins together. Keeping the current pin."
+  $null = $outdated.Remove($_dependency)
+}
+if ($outdated.Count -eq 0) {
   exit 1
 }
 

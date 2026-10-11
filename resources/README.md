@@ -196,9 +196,10 @@ GPO backup
 applied policy
 ```
 
-**Export** reads `Machine\registry.pol` and `User\registry.pol` with PSFoundation's `ConvertFrom-RegistryPolicy`. It captures everything in
-local policy — including settings that did not come from the golden-image configuration — groups entries under their top-most captured
-registry key, and reports every group so nothing enters a baseline unnoticed. The metadata header is emitted as a TODO stub.
+**Export** reads `Machine\registry.pol` and `User\registry.pol` with AdNoctem.Substrate.PowerShell's `ConvertFrom-RegistryPolicy`. It
+captures everything in local policy — including settings that did not come from the golden-image configuration — groups entries under their
+top-most captured registry key, and reports every group so nothing enters a baseline unnoticed. The metadata header is emitted as a TODO
+stub.
 
 **Build** compiles the sources with `ConvertTo-RegistryPolicy` and needs no LGPO.exe. (It cannot delegate to `LGPO.exe /r`, which ignores
 the `Computer`/`User` scope and writes both into one file.) The GPO backup is stamped from the templates in `resources/policies/skeleton/`:

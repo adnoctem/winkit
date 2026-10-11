@@ -9,7 +9,7 @@
   run the Outlook integration suite, which needs an installed Outlook and
   creates a disposable scratch PST store for the duration of the run.
 
-  Logic tests for the shared PSFoundation module run in the PSFoundation
+  Logic tests for the shared AdNoctem.Substrate.PowerShell module run in the AdNoctem.Substrate.PowerShell
   repository instead.
 .PARAMETER Outlook
   Enable the Outlook integration tests (tests/Office/Outlook.Integration.Tests.ps1).
@@ -35,6 +35,8 @@ param (
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath((Split-Path -Path $PSScriptRoot -Parent))
+$requirements = Import-PowerShellDataFile -LiteralPath (Join-Path $repositoryRoot 'requirements.psd1')
+Import-Module Pester -RequiredVersion $requirements.Pester -ErrorAction Stop
 $testsPath = Join-Path -Path $repositoryRoot -ChildPath 'tests'
 
 if (-not (Test-Path -LiteralPath $testsPath -PathType Container)) {

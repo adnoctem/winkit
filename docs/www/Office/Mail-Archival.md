@@ -97,12 +97,13 @@ New can also select an existing source PST directly. Here, `ArchivePath` retains
   -FolderName '' -Recurse -IncludeSentItems -Mode Copy -DryRun
 ```
 
-`SourceArchivePath` replaces `StoreName`; it cannot be combined with it. These operations require classic Outlook and PSFoundation 1.8.7's
-`Open-OutlookPstStore`/`Close-OutlookPstStore` commands. A source PST already attached to Outlook stays attached. Otherwise the script
-temporarily attaches it and cleans up afterward, including during previews. Opening a PST can update its metadata. Source files must be
-writable and local; network paths and paths traversing reparse points are refused. Do not replace the source or change its profile
-attachment during a run. Other attached data-file paths must also be inspectable and local; an inaccessible, network or reparse-point path
-elsewhere in the profile can block source inspection. `AddDataFile` and `DetachWhenDone` control the destination, not the temporary source.
+`SourceArchivePath` replaces `StoreName`; it cannot be combined with it. These operations require classic Outlook and
+AdNoctem.Substrate.PowerShell 0.1.1's `Open-OutlookPstStore`/`Close-OutlookPstStore` commands. A source PST already attached to Outlook
+stays attached. Otherwise the script temporarily attaches it and cleans up afterward, including during previews. Opening a PST can update
+its metadata. Source files must be writable and local; network paths and paths traversing reparse points are refused. Do not replace the
+source or change its profile attachment during a run. Other attached data-file paths must also be inspectable and local; an inaccessible,
+network or reparse-point path elsewhere in the profile can block source inspection. `AddDataFile` and `DetachWhenDone` control the
+destination, not the temporary source.
 
 Split returns the same single summary and report as New, with `SourceFilePath` and `DestinationFilePath`. Its report retains
 `Script: New-OutlookArchive` and the `Archive` operation name. The settings also record `SourceArchivePath` and whether the source

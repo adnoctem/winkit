@@ -63,7 +63,7 @@ BeforeAll {
     Set-Content -LiteralPath (Join-Path -Path $source -ChildPath 'scripts\Invoke-Bootstrap.ps1') -Value "# fixture $Version"
     Set-Content -LiteralPath (Join-Path -Path $source -ChildPath 'bin\bootstrap.cmd') -Value "rem fixture $Version"
     Set-Content -LiteralPath (Join-Path -Path $source -ChildPath 'resources\version.txt') -Value $Version
-    Set-Content -LiteralPath (Join-Path -Path $source -ChildPath 'requirements.psd1') -Value "@{ PSFoundation = '1.4.0' }"
+    Set-Content -LiteralPath (Join-Path -Path $source -ChildPath 'requirements.psd1') -Value "@{ 'AdNoctem.Substrate.PowerShell' = '0.1.1' }"
     Set-Content -LiteralPath (Join-Path -Path $source -ChildPath 'LICENSE') -Value 'MIT fixture'
 
     $items = @(
@@ -117,8 +117,8 @@ BeforeAll {
   }
 
   Mock Get-Module {
-    [pscustomobject]@{ Version = [version]'1.4.0' }
-  } -ParameterFilter { $ListAvailable -and $Name -eq 'PSFoundation' }
+    [pscustomobject]@{ Version = [version]'0.1.1' }
+  } -ParameterFilter { $ListAvailable -and $Name -eq 'AdNoctem.Substrate.PowerShell' }
 }
 
 Describe 'install.ps1' {
@@ -161,7 +161,7 @@ Describe 'install.ps1' {
   It 'remains standalone and avoids dynamic command evaluation' {
     $content = Get-Content -LiteralPath $script:InstallerPath -Raw
     $content | Should -Not -Match '#Requires -Modules'
-    $content | Should -Not -Match 'Import-Module PSFoundation'
+    $content | Should -Not -Match 'Import-Module AdNoctem.Substrate.PowerShell'
     $content | Should -Not -Match 'Invoke-Expression'
     $content | Should -Match 'WINKIT_NON_INTERACTIVE'
   }
@@ -230,7 +230,7 @@ Describe 'install.ps1' {
       $text | Should -Match 'https://example.invalid/winkit.zip'
       $text | Should -Match 'https://example.invalid/CHECKSUMS_SHA256.txt'
       $text | Should -Match 'temporary staging'
-      $text | Should -Match 'PSFoundation.*PSGallery.*CurrentUser'
+      $text | Should -Match 'AdNoctem\.Substrate\.PowerShell.*PSGallery.*CurrentUser'
       $text | Should -Match 'user PATH'
     }
 
@@ -731,6 +731,41 @@ Describe 'install.ps1' {
       Add-Content -LiteralPath $engine '# changed'
       { & (Join-Path $script:SchemaRecord.InstallPath 'dist\uninstall.ps1') } | Should -Throw '*does not match the ownership manifest*'
     }
+  }
+}
+
+Describe 'runtime dependency selection' {
+  BeforeEach {
+    $script:AvailableRuntimeVersion = [version]'0.2.0'
+    Mock Get-Module {
+      [pscustomobject]@{
+        Version    = $script:AvailableRuntimeVersion
+        ModuleBase = 'C:\Program Files\WindowsPowerShell\Modules\AdNoctem.Substrate.PowerShell'
+      }
+    } -ParameterFilter { $ListAvailable -and $Name -eq 'AdNoctem.Substrate.PowerShell' }
+    Mock Get-PackageProvider { [pscustomobject]@{ Name = 'NuGet' } }
+    Mock Install-PackageProvider { throw 'The installed provider must be reused.' }
+    Mock Install-Module { $script:AvailableRuntimeVersion = [version]'0.1.1' }
+  }
+
+  It 'reads the exact Substrate pin from the distribution manifest' {
+    $manifest = Join-Path $TestDrive 'runtime.psd1'
+    Set-Content -LiteralPath $manifest -Value "@{ 'AdNoctem.Substrate.PowerShell' = '0.1.1' }"
+    Get-RuntimeRequirement -RequirementsPath $manifest | Should -Be '0.1.1'
+  }
+
+  It 'installs the pinned release even when a newer module is available' {
+    Invoke-DependencyInstall -RequiredVersion '0.1.1' -InstallScope CurrentUser | Should -BeTrue
+    Should -Invoke Install-Module -Times 1 -Exactly -ParameterFilter {
+      $Name -eq 'AdNoctem.Substrate.PowerShell' -and $RequiredVersion -eq '0.1.1' -and
+      $Repository -eq 'PSGallery' -and $Scope -eq 'CurrentUser'
+    }
+  }
+
+  It 'reuses the exact installed release without installing another version' {
+    $script:AvailableRuntimeVersion = [version]'0.1.1'
+    Invoke-DependencyInstall -RequiredVersion '0.1.1' -InstallScope CurrentUser | Should -BeFalse
+    Should -Invoke Install-Module -Times 0
   }
 }
 

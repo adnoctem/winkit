@@ -1,4 +1,4 @@
-#Requires -Version 5.0
+#Requires -Version 5.1
 
 <#
 .SYNOPSIS
@@ -7,13 +7,13 @@
 .DESCRIPTION
   Downloads a winkit release from GitHub, verifies the release ZIP against its
   published SHA-256 checksum, validates the archive layout, installs the pinned
-  PSFoundation runtime dependency, and activates the release at a stable path.
+  AdNoctem.Substrate.PowerShell runtime dependency, and activates the release at a stable path.
 
   Re-running the script updates an existing managed installation. Updates are
   staged beside the installation and rolled back if activation fails. Existing
   directories without winkit's ownership manifest are never overwritten.
 
-  The installer is intentionally standalone and does not import PSFoundation.
+  The installer is intentionally standalone and does not import Substrate.
 
   Configure the installer through process environment variables, not script
   parameters. Unset or blank values reuse stored choices or defaults. Booleans accept
@@ -407,13 +407,13 @@
     )
 
     $requirements = Import-PowerShellDataFile -LiteralPath $RequirementsPath -ErrorAction Stop
-    if (-not $requirements.ContainsKey('PSFoundation')) {
-      throw 'requirements.psd1 does not define PSFoundation.'
+    if (-not $requirements.ContainsKey('AdNoctem.Substrate.PowerShell')) {
+      throw 'requirements.psd1 does not define Substrate.'
     }
 
-    $requiredVersion = [string]$requirements.PSFoundation
+    $requiredVersion = [string]$requirements['AdNoctem.Substrate.PowerShell']
     if ($requiredVersion -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$') {
-      throw "requirements.psd1 contains an invalid PSFoundation version: $requiredVersion"
+      throw "requirements.psd1 contains an invalid AdNoctem.Substrate.PowerShell version: $requiredVersion"
     }
 
     return $requiredVersion
@@ -450,11 +450,11 @@
       [switch]$Reinstall
     )
 
-    $installed = @(Get-Module -ListAvailable -Name PSFoundation |
+    $installed = @(Get-Module -ListAvailable -Name AdNoctem.Substrate.PowerShell |
         Where-Object { $_.Version -eq [version]$RequiredVersion } |
         Where-Object { Test-ModuleScope -Module $_ -InstallScope $InstallScope })
     if ($installed.Count -gt 0 -and -not $Reinstall) {
-      Write-InstallerMessage -Message "PSFoundation $RequiredVersion is already installed."
+      Write-InstallerMessage -Message "AdNoctem.Substrate.PowerShell $RequiredVersion is already installed."
       return $false
     }
 
@@ -470,9 +470,9 @@
       }
     }
 
-    Write-InstallerMessage -Message "Installing PSFoundation $RequiredVersion for $InstallScope..."
+    Write-InstallerMessage -Message "Installing AdNoctem.Substrate.PowerShell $RequiredVersion for $InstallScope..."
     $installParameters = @{
-      Name            = 'PSFoundation'
+      Name            = 'AdNoctem.Substrate.PowerShell'
       RequiredVersion = $RequiredVersion
       Repository      = 'PSGallery'
       Scope           = $InstallScope
@@ -483,11 +483,11 @@
     }
     Install-Module @installParameters
 
-    $verified = @(Get-Module -ListAvailable -Name PSFoundation |
+    $verified = @(Get-Module -ListAvailable -Name AdNoctem.Substrate.PowerShell |
         Where-Object { $_.Version -eq [version]$RequiredVersion } |
         Where-Object { Test-ModuleScope -Module $_ -InstallScope $InstallScope })
     if ($verified.Count -eq 0) {
-      throw "PSFoundation $RequiredVersion was not found after installation."
+      throw "AdNoctem.Substrate.PowerShell $RequiredVersion was not found after installation."
     }
 
     return $true
@@ -1043,8 +1043,11 @@
       $Context
     )
 
-    if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProcess) {
-      throw 'Use 64-bit PowerShell so registry registration uses the native registry view.'
+    if ($PSVersionTable.PSVersion -lt [version]'5.1') {
+      throw 'winkit requires Windows PowerShell 5.1 or PowerShell 7.'
+    }
+    if (-not [Environment]::Is64BitProcess -or $env:PROCESSOR_ARCHITECTURE -ne 'AMD64') {
+      throw 'Use x64 PowerShell on x64 Windows for the Substrate dependency and native registry registration.'
     }
     $plan = Resolve-InstallPlan $Context
     $previous = if ($plan.Source) { $plan.Source } else { $plan.Existing }
@@ -1090,7 +1093,7 @@
           Write-InstallerMessage "Would download checksums: $($release.ChecksumUri)"
         }
         Write-InstallerMessage "Would use temporary staging below '$parent', validate files, and register the installation."
-        Write-InstallerMessage "Would ensure the pinned PSFoundation dependency from PSGallery for $($plan.Scope); NuGet is installed only if needed."
+        Write-InstallerMessage "Would ensure the pinned AdNoctem.Substrate.PowerShell dependency from PSGallery for $($plan.Scope); NuGet is installed only if needed."
         if ($plan.NoPath) {
           Write-InstallerMessage 'PATH update disabled by WINKIT_NO_PATH.'
         }

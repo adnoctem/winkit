@@ -1,12 +1,12 @@
-﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
+﻿#Requires -Version 5.1
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
   Provisions an AD computer account and writes an offline-join blob file.
 
 .DESCRIPTION
-  Wrapper around PSFoundation's New-OfflineDomainJoinBlob and New-DjoinFile:
+  Wrapper around AdNoctem.Substrate.PowerShell's New-OfflineDomainJoinBlob and New-DjoinFile:
   provisions the computer account in Active Directory and generates the
   join blob via the native NetCreateProvisioningPackage Win32 API - no
   djoin.exe dependency - then writes it in the format Windows Setup and
@@ -77,7 +77,7 @@ param (
   $PassThru
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 $_results = New-Object System.Collections.ArrayList
 

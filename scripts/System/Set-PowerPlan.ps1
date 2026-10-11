@@ -1,6 +1,6 @@
-﻿#Requires -Version 5.0
+﻿#Requires -Version 5.1
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
@@ -79,7 +79,7 @@ param (
   $PassThru
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 # -----------------------------------------------------------------------------
 
@@ -145,7 +145,7 @@ if ($Undo) {
       Write-Log -Message "  -> $_name = $_defaultVal" -Color Green
     }
     catch {
-      Write-Log -Message "  -> FAILED to set $_name = $_defaultVal: $_" -Color Red
+      Write-Log -Message "  -> FAILED to set $_name = ${_defaultVal}: $_" -Color Red
     }
   }
 
@@ -221,7 +221,7 @@ else {
       Write-Log -Message "  -> $_name = $_val" -Color Green
     }
     catch {
-      Write-Log -Message "  -> FAILED to set $_name = $_val: $_" -Color Red
+      Write-Log -Message "  -> FAILED to set $_name = ${_val}: $_" -Color Red
     }
   }
   Write-Log -Message '  -> Process-kill timers applied.' -Color Green

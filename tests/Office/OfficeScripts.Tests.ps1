@@ -3,7 +3,7 @@
 
 # Tier-0 logic tests: enforce the winkit script conventions on the Office
 # scripts without needing Outlook. Pure Outlook parsing logic (transport
-# Message-ID extraction) lives in PSFoundation and is tested there.
+# Message-ID extraction) lives in AdNoctem.Substrate.PowerShell and is tested there.
 
 BeforeAll {
   $script:OfficeScripts = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath((Join-Path $PSScriptRoot '..\..\scripts\Office'))
@@ -26,17 +26,17 @@ Describe 'Office script file conventions' {
     )
   }
 
-  It 'declares the PowerShell version and PSFoundation module dependency' {
+  It 'declares the PowerShell version and AdNoctem.Substrate.PowerShell module dependency' {
     foreach ($_script in $script:Scripts) {
       $_header = Get-Content -LiteralPath $_script.FullName -TotalCount 3
       $_header -match '^#Requires -Version' | Should -Not -BeNullOrEmpty -Because "$($_script.Name) must declare the PowerShell version"
-      $_header -match '^#Requires -Modules @\{ ModuleName = .PSFoundation.' | Should -Not -BeNullOrEmpty -Because "$($_script.Name) must pin PSFoundation"
+      $_header -match '^#Requires -Modules @\{ ModuleName = .AdNoctem\.Substrate\.PowerShell.' | Should -Not -BeNullOrEmpty -Because "$($_script.Name) must pin AdNoctem.Substrate.PowerShell"
     }
   }
 
-  It 'imports PSFoundation after the parameter block' {
+  It 'imports AdNoctem.Substrate.PowerShell after the parameter block' {
     foreach ($_script in $script:Scripts) {
-      (Get-Content -LiteralPath $_script.FullName -Raw) -match 'Import-Module PSFoundation -Force' | Should -BeTrue -Because "$($_script.Name) must import PSFoundation"
+      (Get-Content -LiteralPath $_script.FullName -Raw) -match 'Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force' | Should -BeTrue -Because "$($_script.Name) must import AdNoctem.Substrate.PowerShell"
     }
   }
 
@@ -47,7 +47,7 @@ Describe 'Office script file conventions' {
   ) {
     $path = Join-Path $script:OfficeScripts "$ScriptName.ps1"
     $ast = [Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
-    $ast.ScriptRequirements.RequiredModules[0].Version | Should -Be ([version]'1.8.7')
+    $ast.ScriptRequirements.RequiredModules[0].RequiredVersion | Should -Be ([version]'0.1.1')
   }
 
   It 'documents .SYNOPSIS and a complete .NOTES block' {

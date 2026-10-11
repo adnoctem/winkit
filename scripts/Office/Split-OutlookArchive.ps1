@@ -1,5 +1,5 @@
-﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.7' }
+﻿#Requires -Version 5.1
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
@@ -22,7 +22,7 @@
   never deleted or compacted. Failures can leave a partially completed transfer;
   inspect the report before retrying.
 .PARAMETER ArchivePath
-  Existing local source PST. It must differ from PSTPath. Requires PSFoundation's
+  Existing local source PST. It must differ from PSTPath. Requires AdNoctem.Substrate.PowerShell's
   Open-OutlookPstStore and Close-OutlookPstStore commands.
 .PARAMETER PSTPath
   Local destination PST. Must be new unless Append is supplied. Its parent
@@ -221,7 +221,7 @@ param (
   $QuitOutlook
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 if ($DryRun) {
   $WhatIfPreference = $true

@@ -1,12 +1,12 @@
-﻿#Requires -Version 5.0
+﻿#Requires -Version 5.1
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.1' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
   Plans, prepares, installs, or resumes an Office deployment.
 .DESCRIPTION
-  Delegates deployment to PSFoundation 1.8.1. Mode is mandatory.
+  Delegates deployment to AdNoctem.Substrate.PowerShell 0.1.1. Mode is mandatory.
   Check is read-only; with a target it returns the complete plan and blockers.
   Prepare publishes verified media. Install uses the module's validated plan.
   Recover resumes only the original installation journal.
@@ -17,13 +17,13 @@
   Check, Prepare, Install, or Recover. No operation is selected implicitly.
 .PARAMETER TargetProductId
   Required for Prepare and deployment. Optional in Check to assess a target plan.
-  Product IDs and compatibility are validated by PSFoundation.
+  Product IDs and compatibility are validated by Substrate.
 .PARAMETER Architecture
   Target Office architecture, 32 or 64. Defaults to 64.
 .PARAMETER Channel
   Derived from the volume product; Microsoft 365 defaults to Current.
 .PARAMETER Language
-  Ordered Office language IDs. Defaults to en-us through PSFoundation.
+  Ordered Office language IDs. Defaults to en-us through Substrate.
   The first language is primary. Cannot be combined with AutoSourceLocales.
 .PARAMETER AutoSourceLocales
   Explicitly discover locales instead of defaulting to en-us. Ambiguous discovery fails.
@@ -33,7 +33,7 @@
 .PARAMETER Version
   Optional exact 16.0 build. Prepare resolves a build; deployment uses the media manifest.
 .PARAMETER ExcludeApp
-  Applications to exclude. Values are validated by PSFoundation.
+  Applications to exclude. Values are validated by Substrate.
   OneDrive and Groove are distinct ODT IDs; neither implies removing a separately
   installed sync client. Keep the same exclusions for preparation and execution.
 .PARAMETER ExcludePublisher
@@ -70,12 +70,12 @@
   Author: MVProwess <info@mvprowess.com>
   License: MIT
   Server Core: not supported.
-  SYSTEM-account execution: supported where PSFoundation permits the host and
+  SYSTEM-account execution: supported where AdNoctem.Substrate.PowerShell permits the host and
   media is accessible. Microsoft 365 activation requires the licensed user's session.
   Current native verification and recovery limits are documented in README.md.
 #>
 
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '', Justification = 'PSFoundation owns confirmation and execution; WhatIf, DryRun, and explicit Confirm are forwarded.')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '', Justification = 'AdNoctem.Substrate.PowerShell owns confirmation and execution; WhatIf, DryRun, and explicit Confirm are forwarded.')]
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
 param (
   [Parameter(Mandatory = $true)]
@@ -145,7 +145,7 @@ param (
   $PassThru
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 # -----------------------------------------------------------------------------
 # Validate the operation before calling any deployment API.
@@ -319,7 +319,7 @@ try {
         $_changed = $false
       }
       elseif (-not $_media.Valid) {
-        throw 'PSFoundation did not return verified media.'
+        throw 'AdNoctem.Substrate.PowerShell did not return verified media.'
       }
       elseif ($_existing) {
         $_reason = 'AlreadyPrepared'

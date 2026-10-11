@@ -1,5 +1,5 @@
-﻿#Requires -Version 5.0
-#Requires -Modules @{ ModuleName = 'PSFoundation'; ModuleVersion = '1.8.2' }
+﻿#Requires -Version 5.1
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
 
 <#
 .SYNOPSIS
@@ -11,7 +11,7 @@
   -Target Local (default) imports the backup into this machine's local Group
   Policy with LGPO.exe /g. It requires elevation and relaunches elevated when
   needed. LGPO.exe must carry a valid Microsoft Authenticode signature; if it
-  is missing, PSFoundation's Install-LGPO is used to fetch it.
+  is missing, AdNoctem.Substrate.PowerShell's Install-LGPO is used to fetch it.
 
   -Target Domain imports the backup into a domain GPO with Import-GPO, which
   replaces every setting in the target GPO. It requires the Group Policy
@@ -113,7 +113,7 @@ param (
   $Elevated
 )
 
-Import-Module PSFoundation -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
 
 # -----------------------------------------------------------------------------
 
