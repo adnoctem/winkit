@@ -342,7 +342,21 @@ function Test-OutlookItemInRange {
     $Item
   )
 
-  if ($Item.Class -ne 43) {
+  # A null or unreadable Class is indistinguishable from a non-mail item and
+  # would silently drop every message. Fail like an unreadable ReceivedTime.
+  $_class = $null
+  try {
+    $_class = $Item.Class
+  }
+  catch {
+    throw 'Cannot read Class for an Outlook item; archive stopped.'
+  }
+
+  if ($null -eq $_class) {
+    throw 'Outlook item has no Class; archive stopped.'
+  }
+
+  if ($_class -ne 43) {
     return $false
   }
 

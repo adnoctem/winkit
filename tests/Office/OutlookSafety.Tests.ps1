@@ -234,6 +234,20 @@ Describe 'Outlook archive safety' {
     Test-OutlookItemInRange $mail | Should -BeFalse
   }
 
+  It 'stops instead of silently skipping an item that reports no Class' {
+    $mail = New-FakeMail A
+    $mail.Class = $null
+    { Test-OutlookItemInRange $mail } | Should -Throw '*has no Class*'
+  }
+
+  It 'stops instead of silently skipping an item whose Class accessor fails' {
+    # A failing accessor surfaces as $null rather than a catchable error, so
+    # assert the halt, not which of the two Class guards reported it.
+    $broken = [PSCustomObject]@{ ReceivedTime = [datetime]'2024-06-01' }
+    $broken | Add-Member ScriptProperty Class { throw 'Vorgang abgebrochen' }
+    { Test-OutlookItemInRange $broken } | Should -Throw '*Class*archive stopped*'
+  }
+
 }
 
 Describe 'Outlook deduplication safety' {
