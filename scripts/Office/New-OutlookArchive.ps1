@@ -674,6 +674,7 @@ $_sourceInfo = $null
 $_sourceArchivePath = $null
 $_sourceStoreContext = $null
 $_sourceWarnings = @()
+$_planWarnings = @()
 $_reportPath = $null
 $_reportStream = $null
 $_declined = $false
@@ -941,7 +942,10 @@ try {
   }
 
   try {
-    $_folderPlan = @(Get-OutlookFolderPlan @_planArguments)
+    # Capture the planner's own diagnostics for the report. Incomplete folder
+    # classification is only visible here, and the console is not evidence.
+    $_folderPlan = @(Get-OutlookFolderPlan @_planArguments -WarningVariable _planDiagnostics)
+    $_planWarnings = @($_planDiagnostics | ForEach-Object { [string]$_ })
   }
   catch {
     $_selectionError = $_.Exception.Message
@@ -1257,6 +1261,7 @@ try {
     }
     Summary        = $_summary
     SourceWarnings = @($_sourceWarnings)
+    PlanWarnings   = @($_planWarnings)
     FolderPlan     = @($_folderPlan)
     Results        = $_reportResults
   }

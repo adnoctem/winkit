@@ -1527,6 +1527,10 @@ Describe 'Outlook store selection and preview' {
     ($diagnostics -join ';') | Should -Match 'SuggestedContacts'
     Should -Invoke Add-OutlookStoreRoot -Times 0
     Test-Path -LiteralPath $arguments.ArchivePath | Should -BeFalse
+
+    # The console is not evidence; the planner diagnostic must survive in the report.
+    $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    ($report.PlanWarnings -join ';') | Should -Match 'SuggestedContacts'
   }
 
   It 'warns rather than reporting success when items were read but none matched' {
