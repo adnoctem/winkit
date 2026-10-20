@@ -1,3 +1,9 @@
+## [2.1.0](https://github.com/adnoctem/winkit/compare/v2.0.1...v2.1.0) (2026-10-20)
+
+### Features
+
+* **scripts:** survey Outlook mail before archiving ([06551ec](https://github.com/adnoctem/winkit/commit/06551ec2a986a1bbbe949e025398295c2cf4aaf8))
+
 ## [2.0.1](https://github.com/adnoctem/winkit/compare/v2.0.0...v2.0.1) (2026-10-20)
 
 ### Bug Fixes
