@@ -13,7 +13,7 @@ BeforeAll {
     Add-Type -Path (Join-Path $PSScriptRoot 'OutlookAutomationProxy.cs')
   }
   $script:OfficePath = Join-Path $PSScriptRoot '../../scripts/Office'
-  foreach ($name in @('New-OutlookArchive', 'Optimize-Outlook', 'New-TestOutlookMessage')) {
+  foreach ($name in @('New-OutlookArchive', 'Optimize-Outlook', 'New-TestOutlookMessage', 'Show-OutlookState')) {
     $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $script:OfficePath "$name.ps1"), [ref]$null, [ref]$null)
     foreach ($definition in $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
       . ([scriptblock]::Create($definition.Extent.Text))
@@ -157,6 +157,53 @@ Describe 'Outlook profile elevation guard' -ForEach @(
   }
 }
 
+Describe 'Outlook state survey guard' {
+  BeforeEach {
+    Mock Import-Module { }
+    Mock Get-UserInfo { @{ UserName = 'TEST\Administrator'; IsAdministrator = $true } }
+    Mock Connect-Outlook { throw 'Connection reached for guard test' }
+    Mock Write-Log { }
+    Mock Write-OperationResultLog { }
+    Mock Remove-ComObject { }
+    Mock Invoke-ComGarbageCollection { }
+    $script:StateScriptPath = Join-Path $script:OfficePath 'Show-OutlookState.ps1'
+  }
+
+  It 'blocks elevated execution before COM access' {
+    { & $script:StateScriptPath } | Should -Throw '*non-elevated*IgnoreAdministrator*'
+    Should -Invoke Connect-Outlook -Times 0
+  }
+
+  It 'allows the explicit override with a context warning' {
+    # A read-only survey has no partial work to report, so it fails outright
+    # rather than returning a Failed summary the way the archive scripts do.
+    try {
+      & $script:StateScriptPath -IgnoreAdministrator -WarningVariable warnings -WarningAction SilentlyContinue
+    }
+    catch {
+      $script:StateGuardError = $_.Exception.Message
+    }
+
+    $script:StateGuardError | Should -Match 'Connection reached for guard test'
+    ($warnings -join ' ') | Should -Match 'IgnoreAdministrator permits elevated execution'
+    Should -Invoke Connect-Outlook -Times 1 -Exactly
+  }
+
+  It 'refuses an existing report path before opening Outlook' {
+    $existing = Join-Path $TestDrive 'existing-state.json'
+    [IO.File]::WriteAllText($existing, '{}')
+    { & $script:StateScriptPath -IgnoreAdministrator -ReportPath $existing -WarningAction SilentlyContinue } |
+      Should -Throw '*already exists*'
+    Should -Invoke Connect-Outlook -Times 0
+  }
+
+  It 'refuses conflicting received-date bounds before opening Outlook' {
+    { & $script:StateScriptPath -IgnoreAdministrator -EndDate '2025-01-01' -EndBefore '2026-01-01' -WarningAction SilentlyContinue } |
+      Should -Throw '*EndDate or EndBefore*'
+    Should -Invoke Connect-Outlook -Times 0
+  }
+}
+
 Describe 'Outlook archive safety' {
   BeforeEach {
     Mock Remove-ComObject { }
@@ -232,6 +279,29 @@ Describe 'Outlook archive safety' {
     $mail = New-FakeMail A
     $mail.Class = 40
     Test-OutlookItemInRange $mail | Should -BeFalse
+  }
+
+  It 'surveys received-date bounds exactly as the archive filter applies them' {
+    # Show-OutlookState reports how much the window would archive. That figure
+    # is worthless if its comparisons ever drift from the archive filter.
+    $script:StartDate = [datetime]'2024-01-01'
+    $script:EndBefore = [datetime]'2025-01-01'
+    $candidates = @(
+      '2023-12-31T23:59:59',
+      '2024-01-01',
+      '2024-06-15T12:00:00',
+      '2024-12-31T23:59:59',
+      '2025-01-01',
+      '2026-07-01'
+    )
+
+    foreach ($candidate in $candidates) {
+      $received = [datetime]$candidate
+      $mail = New-FakeMail 'parity'
+      $mail.ReceivedTime = $received
+      $expected = Test-OutlookItemInRange $mail
+      Test-OutlookStateInWindow -Received $received | Should -Be $expected -Because "both filters must agree on $candidate"
+    }
   }
 
   It 'stops instead of silently skipping an item that reports no Class' {
@@ -1531,6 +1601,116 @@ Describe 'Outlook store selection and preview' {
     # The console is not evidence; the planner diagnostic must survive in the report.
     $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
     ($report.PlanWarnings -join ';') | Should -Match 'SuggestedContacts'
+  }
+
+  It 'surveys mail by year and class without transferring or mounting anything' {
+    $mail2024 = New-FakeMail 'm2024'
+    $mail2024.ReceivedTime = [datetime]'2024-06-01'
+    $mail2025a = New-FakeMail 'm2025a'
+    $mail2025a.ReceivedTime = [datetime]'2025-03-01'
+    $mail2025b = New-FakeMail 'm2025b'
+    $mail2025b.ReceivedTime = [datetime]'2025-09-01'
+    $mail2026 = New-FakeMail 'm2026'
+    $mail2026.ReceivedTime = [datetime]'2026-01-15'
+    $contact = New-FakeMail 'contact'
+    $contact.Class = 40
+    $inbox = New-FakeFolder -Name Inbox -Mail @($mail2024, $mail2025a, $mail2025b, $mail2026, $contact)
+    $inbox.FolderPath = $script:Source.FolderPath + '\Inbox'
+    $null = $script:Source.Folders.Values.Add($inbox)
+    Mock Get-OutlookStandardFolderIdentity {
+      [PSCustomObject]@{
+        Kind    = 'Inbox'
+        EntryID = 'folder-Inbox'
+        StoreID = 'source-store'
+        State   = 'Resolved'
+      }
+    }
+
+    $state = & (Join-Path $script:OfficePath 'Show-OutlookState.ps1') -Detailed -PassThru -WarningAction SilentlyContinue
+
+    @($state.Profile).Count | Should -Be 2
+    $survey = $state.Stores[0]
+    $survey.FoldersRead | Should -Be 1
+    @($survey.Folders)[0].RelativePath | Should -Be 'Inbox'
+    @($survey.Folders)[0].MailItems | Should -Be 4
+    @($survey.Folders)[0].OtherItems | Should -Be 1
+    $survey.MailItems | Should -Be 4
+    $survey.OtherItems | Should -Be 1
+    $survey.UndatedMail | Should -Be 0
+    $survey.OldestMail | Should -Be ([datetime]'2024-06-01')
+    $survey.NewestMail | Should -Be ([datetime]'2026-01-15')
+    $survey.Window | Should -BeNullOrEmpty
+    @($survey.Years).Count | Should -Be 3
+    @($survey.Years | Where-Object { $_.Year -eq 2025 })[0].Mail | Should -Be 2
+    @($survey.Years)[-1].Cumulative | Should -Be 4
+    @($survey.Classes | Where-Object { $_.Name -eq 'Mail' })[0].Count | Should -Be 4
+    @($survey.Classes | Where-Object { $_.Name -eq 'Contact' })[0].Count | Should -Be 1
+
+    Should -Invoke Add-OutlookStoreRoot -Times 0
+    Should -Invoke Get-OutlookSubFolder -Times 0
+    $script:FakeContext.App.QuitCalled | Should -BeFalse
+  }
+
+  It 'reports a received-date window that selects none of the surveyed mail' {
+    $mail = New-FakeMail 'm2025'
+    $mail.ReceivedTime = [datetime]'2025-03-01'
+    $inbox = New-FakeFolder -Name Inbox -Mail @($mail)
+    $inbox.FolderPath = $script:Source.FolderPath + '\Inbox'
+    $null = $script:Source.Folders.Values.Add($inbox)
+    Mock Get-OutlookStandardFolderIdentity {
+      [PSCustomObject]@{
+        Kind    = 'Inbox'
+        EntryID = 'folder-Inbox'
+        StoreID = 'source-store'
+        State   = 'Resolved'
+      }
+    }
+    $arguments = @{
+      StartDate       = '2023-01-01'
+      EndBefore       = '2024-01-01'
+      PassThru        = $true
+      WarningAction   = 'SilentlyContinue'
+      WarningVariable = 'diagnostics'
+    }
+
+    $state = & (Join-Path $script:OfficePath 'Show-OutlookState.ps1') @arguments
+
+    $survey = $state.Stores[0]
+    # The window annotates the survey; it must never shrink it.
+    $survey.MailItems | Should -Be 1
+    @($survey.Years).Count | Should -Be 1
+    $survey.Window.MailItems | Should -Be 0
+    ($diagnostics -join ';') | Should -Match 'selects none of the 1 mail item'
+  }
+
+  It 'counts undated mail instead of stopping the way an archive would' {
+    $undated = New-FakeMail 'undated'
+    $undated.ReceivedTime = $null
+    $inbox = New-FakeFolder -Name Inbox -Mail @($undated)
+    $inbox.FolderPath = $script:Source.FolderPath + '\Inbox'
+    $null = $script:Source.Folders.Values.Add($inbox)
+    Mock Get-OutlookStandardFolderIdentity {
+      [PSCustomObject]@{
+        Kind    = 'Inbox'
+        EntryID = 'folder-Inbox'
+        StoreID = 'source-store'
+        State   = 'Resolved'
+      }
+    }
+
+    $state = & (Join-Path $script:OfficePath 'Show-OutlookState.ps1') -PassThru -WarningVariable diagnostics -WarningAction SilentlyContinue
+
+    $survey = $state.Stores[0]
+    $survey.MailItems | Should -Be 1
+    $survey.UndatedMail | Should -Be 1
+    @($survey.Years).Count | Should -Be 0
+    ($diagnostics -join ';') | Should -Match 'no readable received date'
+  }
+
+  It 'refuses an ambiguous store name for the survey' {
+    { & (Join-Path $script:OfficePath 'Show-OutlookState.ps1') -StoreName 'Duplicate name' -WarningAction SilentlyContinue } |
+      Should -Throw '*matches 2 stores*'
+    Should -Invoke Add-OutlookStoreRoot -Times 0
   }
 
   It 'warns rather than reporting success when items were read but none matched' {

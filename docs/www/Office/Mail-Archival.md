@@ -5,6 +5,62 @@
 Run from your **installed winkit directory**, as the Outlook user in a normal, non-elevated PowerShell session. Use classic Outlook 2007+
 for PST sources or 2010+ for IMAP/Exchange sources. Take a [backup or checkpoint](Outlook-Backup-and-Repair.md) before changing real mail.
 
+## Survey a mailbox before archiving
+
+`Show-OutlookState` reports what an archive would find without transferring anything. Start here: a date window that matches no mail
+produces an empty PST from a run that still reports `Completed`, and the year distribution tells you which windows are worth requesting.
+
+```powershell
+# Every data file in the profile, plus a survey of each one.
+.\scripts\Office\Show-OutlookState.ps1 -AllStores
+```
+
+Store and folder selection mirrors `New-OutlookArchive` exactly, so the same arguments survey the folders an archive would act on:
+
+```powershell
+$selection = @{
+  StoreName        = 'user@example.com'
+  FolderName       = ''
+  Recurse          = $true
+  IncludeSentItems = $true
+}
+
+.\scripts\Office\Show-OutlookState.ps1 @selection -Detailed
+```
+
+Received-date bounds behave differently here. They do not restrict the survey; the year distribution is always reported in full. Supplying
+them adds how much of the surveyed mail that window would select, which is the figure to confirm before archiving:
+
+```powershell
+.\scripts\Office\Show-OutlookState.ps1 @selection -StartDate '2025-01-01' -EndBefore '2026-01-01'
+```
+
+```text
+Store: user@example.com
+  Data file: PST | ExchangeStoreType: 3 (local only)
+  Selection: \\user@example.com | Recurse: True | Include: Inbox, SentItems
+  Folders:   49 surveyed, 10 skipped
+  Mail:      1949 item(s) | 2024-01-03 to 2026-10-19
+  Other:     439 item(s) | Appointment 366, MeetingRequest 45, Contact 12
+
+  Year      Mail   Cumulative
+  2024       121          121
+  2025      1028         1149
+  2026       858         2007
+
+  Window from 2025-01-01 before 2026-01-01: 1028 of 1949 mail item(s) would be archived
+```
+
+| Option            | Effect                                                                                         |
+| ----------------- | ---------------------------------------------------------------------------------------------- |
+| `AllStores`       | Survey every data file instead of one store. An unresolvable store is reported and skipped.    |
+| `Detailed`        | Add per-folder item counts and date ranges, and list every skipped folder with its reason.     |
+| `ReportDirectory` | Write a timestamped JSON report. No report is written unless this or `ReportPath` is supplied. |
+| `PassThru`        | Emit the survey as an object; `.Stores[0].Years` and `.Stores[0].Window` carry the counts.     |
+
+Mail with no readable received date is counted separately and warned about, because `New-OutlookArchive` stops on those items rather than
+skipping them. Nothing is created, moved, renamed, or detached; surveying an archive PST needs `-FolderName ''` because it has no Inbox.
+
 ## Preview and archive the Inbox
 
 By default, `New-OutlookArchive` copies mail from the selected store's Inbox into a new Unicode PST. Inbox selection uses Outlook's

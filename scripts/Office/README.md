@@ -17,6 +17,7 @@ Recorded installations and migrations use the [Office recovery workflow](../../d
 
 | Script                                                   | Purpose                                                            | Documentation                                                                                     |
 | -------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| [Show-OutlookState.ps1](Show-OutlookState.ps1)           | Survey stores, folders, and mail distribution before archiving.    | [Survey a mailbox](../../docs/www/Office/Mail-Archival.md#survey-a-mailbox-before-archiving)      |
 | [New-OutlookArchive.ps1](New-OutlookArchive.ps1)         | Copy or move mail to new or existing PST archives.                 | [Mail archival](../../docs/www/Office/Mail-Archival.md)                                           |
 | [Split-OutlookArchive.ps1](Split-OutlookArchive.ps1)     | Transfer one date range from an existing PST into another archive. | [Split an existing archive](../../docs/www/Office/Mail-Archival.md#split-an-existing-archive)     |
 | [Optimize-Outlook.ps1](Optimize-Outlook.ps1)             | Move duplicate messages into a review folder.                      | [Duplicate review](../../docs/www/Office/Mail-Archival.md#review-duplicates)                      |
