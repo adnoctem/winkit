@@ -2,16 +2,15 @@
 
 ### ⚠ BREAKING CHANGES
 
-* **scripts:** winkit's runtime dependency is now
-AdNoctem.Substrate.PowerShell 0.1.1 instead of PSFoundation. The installer
-acquires it from PSGallery during installation; previously installed
-PSFoundation modules are deliberately left in place and can be removed
-separately. Consumers pinning winkit's requirements.psd1, or importing
-PSFoundation alongside winkit scripts, must move to the Substrate module.
+- **scripts:** winkit's runtime dependency is now AdNoctem.Substrate.PowerShell 0.1.1 instead of PSFoundation. The installer acquires it
+  from PSGallery during installation; previously installed PSFoundation modules are deliberately left in place and can be removed
+  separately. Consumers pinning winkit's requirements.psd1, or importing PSFoundation alongside winkit scripts, must move to the Substrate
+  module.
 
 ### Features
 
-* **scripts:** require the Substrate runtime module ([46f2ba2](https://github.com/adnoctem/winkit/commit/46f2ba23b7f9a6021536c1ead30d9e4cfac5f14d))
+- **scripts:** require the Substrate runtime module
+  ([46f2ba2](https://github.com/adnoctem/winkit/commit/46f2ba23b7f9a6021536c1ead30d9e4cfac5f14d))
 
 ## [1.8.0](https://github.com/adnoctem/winkit/compare/v1.7.3...v1.8.0) (2026-10-03)
 
