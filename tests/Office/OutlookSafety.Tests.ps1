@@ -1529,6 +1529,35 @@ Describe 'Outlook store selection and preview' {
     Test-Path -LiteralPath $arguments.ArchivePath | Should -BeFalse
   }
 
+  It 'warns rather than reporting success when items were read but none matched' {
+    $inbox = New-FakeFolder -Name Inbox -Mail @((New-FakeMail 'outside-window'))
+    $inbox.FolderPath = $script:Source.FolderPath + '\Inbox'
+    $null = $script:Source.Folders.Values.Add($inbox)
+    Mock Get-OutlookStandardFolderIdentity {
+      [PSCustomObject]@{
+        Kind    = 'Inbox'
+        EntryID = 'folder-Inbox'
+        StoreID = 'source-store'
+        State   = 'Resolved'
+      }
+    }
+    $arguments = @{
+      ArchivePath     = Join-Path $TestDrive 'empty-window.pst'
+      ReportDirectory = $TestDrive
+      StartDate       = '2023-01-01'
+      EndBefore       = '2024-01-01'
+      DryRun          = $true
+      WarningAction   = 'SilentlyContinue'
+      WarningVariable = 'diagnostics'
+    }
+
+    $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') @arguments
+
+    $result.ItemsRead | Should -Be 1
+    $result.ItemsMatched | Should -Be 0
+    ($diagnostics -join ';') | Should -Match 'No item qualified for archiving'
+  }
+
   It 'selects the implicit <InboxName> Inbox independently of a literal Inbox for <ScriptName>' -ForEach @(
     @{ ScriptName = 'New-OutlookArchive'; InboxName = 'Posteingang' }
     @{ ScriptName = 'New-OutlookArchive'; InboxName = 'Renamed' }

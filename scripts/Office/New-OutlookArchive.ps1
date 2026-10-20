@@ -1287,8 +1287,17 @@ finally {
   Write-Progress -Id 0 -Activity 'Outlook archive' -Completed
 }
 
-$_color = if ($_summary.Status -eq 'Failed' -or $WhatIfPreference -or $_declined) { 'Yellow' } else { 'Green' }
+# Reading items while matching none is almost always a wrong date window,
+# store or folder selection rather than an empty mailbox. Never report it green.
+$_unmatched = ($_summary.ItemsRead -gt 0) -and ($_summary.ItemsMatched -eq 0)
+
+$_color = if ($_summary.Status -eq 'Failed' -or $WhatIfPreference -or $_declined -or $_unmatched) { 'Yellow' } else { 'Green' }
 Write-Log -Message "Outlook archive: $($_summary.Status) | Read: $($_summary.ItemsRead) | Matched: $($_summary.ItemsMatched) | Planned: $_planned | Copied: $script:OutlookArchiveCopied | Moved: $script:OutlookArchiveMoved | Failed: $($_summary.Failed)" -Color $_color
+
+if ($_unmatched) {
+  Write-Warning "No item qualified for archiving: $($_summary.ItemsRead) item(s) were read across $($_summary.FoldersRead) folder(s) and none matched. Verify the date range against the mail actually present, the selected store, FolderName, Recurse, and the Include switches."
+}
+
 Write-Log -Message "PST: $_archivePath" -Color Gray
 if ($_summary.ReportPath) {
   Write-Log -Message "JSON report: $($_summary.ReportPath)" -Color Cyan
