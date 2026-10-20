@@ -1,3 +1,11 @@
+## [2.0.1](https://github.com/adnoctem/winkit/compare/v2.0.0...v2.0.1) (2026-10-20)
+
+### Bug Fixes
+
+* **scripts:** record planner diagnostics in the Outlook archive report ([d43a993](https://github.com/adnoctem/winkit/commit/d43a9930812588203b71bc68f79006653aee2b2f))
+* **scripts:** stop the Outlook archive when an item Class is unreadable ([b10966a](https://github.com/adnoctem/winkit/commit/b10966a901c1fbbe73a075f77f372454f0c8aa70))
+* **scripts:** warn when the Outlook archive matches none of what it read ([1b0892b](https://github.com/adnoctem/winkit/commit/1b0892b3429c3aefc1b92b73f25f3f8abadcc579))
+
 ## [2.0.0](https://github.com/adnoctem/winkit/compare/v1.8.0...v2.0.0) (2026-10-20)
 
 ### ⚠ BREAKING CHANGES
