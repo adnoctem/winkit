@@ -15,16 +15,17 @@ Recorded installations and migrations use the [Office recovery workflow](../../d
 
 ## Outlook
 
-| Script                                                   | Purpose                                                            | Documentation                                                                                     |
-| -------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| [Show-OutlookState.ps1](Show-OutlookState.ps1)           | Survey stores, folders, and mail distribution before archiving.    | [Survey a mailbox](../../docs/www/Office/Mail-Archival.md#survey-a-mailbox-before-archiving)      |
-| [New-OutlookArchive.ps1](New-OutlookArchive.ps1)         | Copy or move mail to new or existing PST archives.                 | [Mail archival](../../docs/www/Office/Mail-Archival.md)                                           |
-| [Split-OutlookArchive.ps1](Split-OutlookArchive.ps1)     | Transfer one date range from an existing PST into another archive. | [Split an existing archive](../../docs/www/Office/Mail-Archival.md#split-an-existing-archive)     |
-| [Optimize-Outlook.ps1](Optimize-Outlook.ps1)             | Move duplicate messages into a review folder.                      | [Duplicate review](../../docs/www/Office/Mail-Archival.md#review-duplicates)                      |
-| [Backup-Outlook.ps1](Backup-Outlook.ps1)                 | Create verified closed-file PST copies.                            | [Backup and repair](../../docs/www/Office/Outlook-Backup-and-Repair.md#back-up-pst-files)         |
-| [Checkpoint-Outlook.ps1](Checkpoint-Outlook.ps1)         | Capture data files, Office settings, and a manifest.               | [Backup and repair](../../docs/www/Office/Outlook-Backup-and-Repair.md#capture-data-and-settings) |
-| [Repair-OutlookDataFile.ps1](Repair-OutlookDataFile.ps1) | Launch Microsoft's scan/repair utility.                            | [Backup and repair](../../docs/www/Office/Outlook-Backup-and-Repair.md#repair-with-scanpst)       |
-| [New-TestOutlookMessage.ps1](New-TestOutlookMessage.ps1) | Generate synthetic fixtures for a disposable Outlook store.        | [Contributor fixture guide](../../docs/CONTRIBUTING.md#generate-outlook-test-messages)            |
+| Script                                                   | Purpose                                                            | Documentation                                                                                        |
+| -------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| [Show-OutlookAccount.ps1](Show-OutlookAccount.ps1)       | Report accounts, delivery stores, and data file headroom.          | [Inventory a profile](../../docs/www/Office/Mail-Archival.md#inventory-accounts-and-delivery-stores) |
+| [Show-OutlookState.ps1](Show-OutlookState.ps1)           | Survey stores, folders, and mail distribution before archiving.    | [Survey a mailbox](../../docs/www/Office/Mail-Archival.md#survey-a-mailbox-before-archiving)         |
+| [New-OutlookArchive.ps1](New-OutlookArchive.ps1)         | Copy or move mail to new or existing PST archives.                 | [Mail archival](../../docs/www/Office/Mail-Archival.md)                                              |
+| [Split-OutlookArchive.ps1](Split-OutlookArchive.ps1)     | Transfer one date range from an existing PST into another archive. | [Split an existing archive](../../docs/www/Office/Mail-Archival.md#split-an-existing-archive)        |
+| [Optimize-Outlook.ps1](Optimize-Outlook.ps1)             | Move duplicate messages into a review folder.                      | [Duplicate review](../../docs/www/Office/Mail-Archival.md#review-duplicates)                         |
+| [Backup-Outlook.ps1](Backup-Outlook.ps1)                 | Create verified closed-file PST copies.                            | [Backup and repair](../../docs/www/Office/Outlook-Backup-and-Repair.md#back-up-pst-files)            |
+| [Checkpoint-Outlook.ps1](Checkpoint-Outlook.ps1)         | Capture data files, Office settings, and a manifest.               | [Backup and repair](../../docs/www/Office/Outlook-Backup-and-Repair.md#capture-data-and-settings)    |
+| [Repair-OutlookDataFile.ps1](Repair-OutlookDataFile.ps1) | Launch Microsoft's scan/repair utility.                            | [Backup and repair](../../docs/www/Office/Outlook-Backup-and-Repair.md#repair-with-scanpst)          |
+| [New-TestOutlookMessage.ps1](New-TestOutlookMessage.ps1) | Generate synthetic fixtures for a disposable Outlook store.        | [Contributor fixture guide](../../docs/CONTRIBUTING.md#generate-outlook-test-messages)               |
 
 ## Source and parameter help
 

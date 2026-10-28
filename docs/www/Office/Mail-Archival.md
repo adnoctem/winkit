@@ -1,9 +1,70 @@
-# Mail archival
+﻿# Mail archival
 
 [Office overview](README.md) | [Requirements](Requirements.md)
 
 Run from your **installed winkit directory**, as the Outlook user in a normal, non-elevated PowerShell session. Use classic Outlook 2007+
 for PST sources or 2010+ for IMAP/Exchange sources. Take a [backup or checkpoint](Outlook-Backup-and-Repair.md) before changing real mail.
+
+## Inventory accounts and delivery stores
+
+`Show-OutlookAccount` answers the question that decides whether an account can be removed: which store does each account deliver new mail
+into. It reads account and store properties only, so unlike `Show-OutlookState` it works on Outlook 2007 against Exchange and OST profiles.
+
+```powershell
+.\scripts\Office\Show-OutlookAccount.ps1
+```
+
+```text
+Outlook 12.0.6612.1000 | data file limit: 20480 MB (warn at 19456 MB, source: Default)
+
+Accounts: 3
+  Account                                Type      Delivers into
+  buchhaltung@example.de                 POP3      Mailbox - A. Example
+  a.example@legacy.example.com           POP3      Mailbox - A. Example
+  a.example@legacy.example.com           Exchange  Mailbox - A. Example
+
+Data files: 1
+  Store                            Format  Exchange            Size       Path
+  Mailbox - A. Example             OST     PrimaryMailbox      18.4 GB    C:\Users\...\outlook.ost
+      receives delivery from: buchhaltung@example.de, a.example@legacy.example.com, a.example@legacy.example.com
+
+Findings: 2 critical, 0 warning, 2 informational
+  [Critical] buchhaltung@example.de: POP3 mail is delivered into the Exchange-backed store
+    'Mailbox - A. Example'. Removing the Exchange account discards this account's mail with the
+    OST. Re-point delivery to a PST first.
+  [Information] Mailbox - A. Example: OST contents are not recoverable from the file alone.
+    Archive through a connected profile, not by copying the file.
+```
+
+A `DeliversIntoExchange` finding means account removal is destructive in that profile: the POP or IMAP mail has no server-side copy of its
+own and lives only in the OST. Re-point delivery to a PST and migrate the contents before removing anything. `FileSizeLimit` reports a data
+file near its configured ceiling, which Outlook 2007 defaults to 20480 MB; Outlook stops delivering into the file when it is reached.
+
+| Finding                | Severity      | Meaning                                                                                           |
+| ---------------------- | ------------- | ------------------------------------------------------------------------------------------------- |
+| `DeliversIntoExchange` | Critical      | An account's mail lands in an Exchange-backed store it does not own. Removal destroys that mail.  |
+| `FileSizeLimit`        | Critical      | A data file is at or past the configured warning size. Outlook stops delivering when it is full.  |
+| `NoDeliveryStore`      | Warning       | The account reports no delivery store. Confirm the delivery location before changing the profile. |
+| `UnknownDeliveryStore` | Warning       | The delivery store is not among the profile's data files.                                         |
+| `LocalImapSentItems`   | Warning       | Before Outlook 2013, IMAP sent mail and drafts stay local. See below.                             |
+| `SynchronizedStore`    | Informational | Removing mail from this store can remove the server copy and reach every other client.            |
+| `HeaderOnlyItems`      | Informational | Items here can be stubs. Archiving verifies each body and stops rather than moving a stub.        |
+
+Store classification comes from the accounts, not the file name. An Outlook 2007 IMAP account is backed by a **PST** that reports
+`ExchangeStoreType 3`, so by extension alone it is indistinguishable from an ordinary local data file — while its items can still be
+header-only stubs and its deletions still reach the server. `IsSynchronized` and `MayContainHeaderOnlyItems` report the real answer, and
+`Evidence` says which account decided it.
+
+`LocalImapSentItems` matters for shared mailboxes. Before Outlook 2013 an IMAP account writes sent mail and drafts into the local delivery
+store rather than the server's folders, so each workstation holds its own sent mail and the server never sees it. An archive taken from one
+designated machine, or from the server, does not contain the others'. Collect Sent Items from **every** workstation that carries the account
+before calling the mailbox archived, and run the inventory on each one to find them.
+
+| Option            | Effect                                                                                        |
+| ----------------- | --------------------------------------------------------------------------------------------- |
+| `ReportDirectory` | Write a timestamped JSON report. Collect them across a fleet to plan removals from one place. |
+| `ReportPath`      | Write the JSON report to an exact path. Refused when the file already exists.                 |
+| `PassThru`        | Emit the inventory as an object; `.Findings` and `.CriticalCount` carry the verdicts.         |
 
 ## Survey a mailbox before archiving
 
@@ -154,7 +215,7 @@ New can also select an existing source PST directly. Here, `ArchivePath` retains
 ```
 
 `SourceArchivePath` replaces `StoreName`; it cannot be combined with it. These operations require classic Outlook and
-AdNoctem.Substrate.PowerShell 0.1.1's `Open-OutlookPstStore`/`Close-OutlookPstStore` commands. A source PST already attached to Outlook
+AdNoctem.Substrate.PowerShell 0.2.0's `Open-OutlookPstStore`/`Close-OutlookPstStore` commands. A source PST already attached to Outlook
 stays attached. Otherwise the script temporarily attaches it and cleans up afterward, including during previews. Opening a PST can update
 its metadata. Source files must be writable and local; network paths and paths traversing reparse points are refused. Do not replace the
 source or change its profile attachment during a run. Other attached data-file paths must also be inspectable and local; an inaccessible,
@@ -277,6 +338,11 @@ Close Outlook before copying the archive elsewhere; detaching a store does not p
 Attached IMAP/Exchange stores use the same selections and destination PST options. There is no standalone OST conversion or OST-path input.
 Synchronize complete messages first; verify Exchange cache history and IMAP folder subscriptions cover the requested date range.
 
+Whether a store can hold header-only stubs is decided from the accounts that deliver into it, not from its file extension. That matters on
+Outlook 2007, where an IMAP account is backed by a PST: the download check applies there exactly as it does to an OST, so `Mode Move` is
+safe to use against it. Run `Show-OutlookAccount` first — the archive prints the delivering accounts and its classification, and
+`Settings.SourceStore.Classification` in the report records whether that lookup succeeded.
+
 ```powershell
 $serverArchive = @{
   StoreName   = 'user@example.com'
@@ -288,19 +354,47 @@ $serverArchive = @{
 .\scripts\Office\New-OutlookArchive.ps1 @serverArchive -Confirm -PassThru
 ```
 
-| Server-store condition            | Consequence                                                                                                                                                                                                                                                                                          |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Copy                              | Temporary source duplicates can synchronize; source write access and quota headroom are needed.                                                                                                                                                                                                      |
-| Move                              | Removal can synchronize to the server and other clients, including after reconnecting. Both preview and execution warn; no extra opt-in flag is required.                                                                                                                                            |
-| Incomplete/unknown download state | OST matching messages must report full body/attachment download during enumeration and before transfer. Missing, header-only, unreadable, or unknown state stops the run, including previews; failure reports identify folder/EntryID.                                                               |
-| Cache coverage                    | The script does not synchronize, change cache settings, or detect older messages absent from the cache. Success covers only selected mail Outlook exposes, not the complete server mailbox.                                                                                                          |
-| Result evidence                   | `Settings.SourceStore` records display name, StoreID, path, DataFileFormat, numeric ExchangeStoreType, and MaySynchronize. Extension alone does not identify IMAP; ExchangeStoreType 3 means non-Exchange. SourceWarnings retains notices. Transfer success does not confirm server synchronization. |
+| Server-store condition            | Consequence                                                                                                                                                                                                                                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Copy                              | Temporary source duplicates can synchronize; source write access and quota headroom are needed.                                                                                                                                                                                                                    |
+| Move                              | Removal can synchronize to the server and other clients, including after reconnecting. Both preview and execution warn; no extra opt-in flag is required.                                                                                                                                                          |
+| Incomplete/unknown download state | Matching messages in a store that can hold stubs must report full body/attachment download during enumeration and again before transfer. Missing, header-only, unreadable, or unknown state stops the run, including previews; failure reports identify folder/EntryID.                                            |
+| IMAP Move                         | Move marks the source messages deleted rather than removing them. Purge deleted messages in Outlook and re-check the mailbox size, or the server still holds everything the run archived and no quota is recovered.                                                                                                |
+| Cache coverage                    | The script does not synchronize, change cache settings, or detect older messages absent from the cache. Success covers only selected mail Outlook exposes, not the complete server mailbox.                                                                                                                        |
+| Result evidence                   | `Settings.SourceStore` records display name, StoreID, path, DataFileFormat, numeric ExchangeStoreType, MaySynchronize, MayContainHeaderOnlyItems, the delivering accounts, and the `Evidence` behind the classification. SourceWarnings retains notices. Transfer success does not confirm server synchronization. |
 
 Test disposable mail in a dedicated server folder first. Verify PST bodies, attachments, dates, and layout; confirm originals remain for
 Copy and the server view matches intended removals for Move. A raw OST checkpoint is supplementary, not a portable PST backup. See
 [Microsoft's PST archiving guidance](https://support.microsoft.com/en-us/outlook/mail/archive-in-outlook-for-windows),
 [cached-export limitations](https://support.microsoft.com/en-us/outlook/export-emails-contacts-and-calendar-items-to-outlook-using-a-pst-file),
 and [MailItem.DownloadState](https://learn.microsoft.com/en-us/office/vba/api/outlook.mailitem.downloadstate).
+
+### Collect local IMAP sent mail
+
+Before Outlook 2013, an IMAP account's Sent Items and Drafts live in the local delivery store, not on the server. Archive them per
+workstation, then move the resulting PST to whichever machine holds the mailbox's archive:
+
+```powershell
+# Run on every workstation that carries the shared account, as its Outlook user.
+.\scripts\Office\Show-OutlookAccount.ps1 -ReportDirectory '\\share\outlook-inventory'
+
+$sentItems = @{
+  StoreName        = 'Personal Folders'
+  ArchivePath      = Join-Path $archiveDirectory "info-sent-$env:COMPUTERNAME.pst"
+  FolderName       = ''
+  IncludeSentItems = $true
+  IncludeDrafts    = $true
+  Recurse          = $true
+  EndBefore        = [datetime]'2025-01-01'
+  Mode             = 'Copy'
+}
+.\scripts\Office\New-OutlookArchive.ps1 @sentItems -DryRun -PassThru
+.\scripts\Office\New-OutlookArchive.ps1 @sentItems -Confirm -PassThru
+```
+
+`StoreName` is the **delivery store** the inventory reported for that IMAP account, not the IMAP store itself — that is where 2007 put the
+sent mail. Name the archive after the workstation so the collected files stay distinguishable, keep the same `EndBefore` cutoff on every
+machine, and verify each PST with `Show-OutlookState -FolderName '' -Recurse -IncludeSentItems -IncludeDrafts` before deleting anything.
 
 ## Read and sort reports
 

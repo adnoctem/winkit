@@ -15,7 +15,7 @@ extracted `setup.exe`, not the `officedeploymenttool_*.exe` download. See
 Alternatively, acquire a verified copy through AdNoctem.Substrate.PowerShell:
 
 ```powershell
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
 New-Item -ItemType Directory -Path 'C:\Managed' -Force | Out-Null
 
 $source = Test-OfficeDeploymentToolSourceAvailability
@@ -36,7 +36,7 @@ incomplete extraction, and reuses an existing trusted tool. Its directory must p
 Validate the exact file to be used for deployment; this does not launch it or download Office:
 
 ```powershell
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
 $tool = Test-OfficeDeploymentTool -OdtPath 'C:\Managed\ODT\setup.exe'
 $tool | Format-List Valid, Version, SignatureStatus, OriginalFilename, FileDescription, Detail
 if (-not $tool.Valid) {

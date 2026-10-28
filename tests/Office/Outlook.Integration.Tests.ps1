@@ -25,7 +25,7 @@ if ($env:WINKIT_TEST_OUTLOOK -ne '1' -or -not $_outlookInstalled) {
 }
 
 BeforeAll {
-  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
+  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
 
   $script:OfficeScripts = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath((Join-Path $PSScriptRoot '..\..\scripts\Office'))
   $script:Generator = Join-Path -Path $script:OfficeScripts -ChildPath 'New-TestOutlookMessage.ps1'
@@ -58,7 +58,7 @@ BeforeAll {
     Write-Verbose 'No ScanPST discovery result; repair tests will be skipped.'
   }
 
-  $script:OptimizeSupported = [bool](Get-Module AdNoctem.Substrate.PowerShell -ListAvailable | Where-Object { $_.Version -eq [version]'0.1.1' })
+  $script:OptimizeSupported = [bool](Get-Module AdNoctem.Substrate.PowerShell -ListAvailable | Where-Object { $_.Version -eq [version]'0.2.0' })
 
   $script:Context = Connect-Outlook
   $script:StoreRoot = Add-OutlookStoreRoot -Namespace $script:Context.Namespace -Path $script:TestStorePst
@@ -109,7 +109,7 @@ Describe 'New-TestOutlookMessage' {
 Describe 'Optimize-Outlook deduplication' {
   It 'walks the generated folder and counts mail items' {
     if (-not $script:OptimizeSupported) {
-      Set-ItResult -Skipped -Because 'Optimize-Outlook requires AdNoctem.Substrate.PowerShell 0.1.1 (Outlook folder selection, named operation logs and PST lifetime helpers).'
+      Set-ItResult -Skipped -Because 'Optimize-Outlook requires AdNoctem.Substrate.PowerShell 0.2.0 (Outlook folder selection, named operation logs and PST lifetime helpers).'
       return
     }
 
@@ -143,7 +143,7 @@ Describe 'Optimize-Outlook deduplication' {
 
   It 'flags exactly the seeded duplicates in a dry run' {
     if (-not $script:OptimizeSupported) {
-      Set-ItResult -Skipped -Because 'Optimize-Outlook requires AdNoctem.Substrate.PowerShell 0.1.1 (Outlook folder selection, named operation logs and PST lifetime helpers).'
+      Set-ItResult -Skipped -Because 'Optimize-Outlook requires AdNoctem.Substrate.PowerShell 0.2.0 (Outlook folder selection, named operation logs and PST lifetime helpers).'
       return
     }
 
@@ -197,7 +197,7 @@ Describe 'Optimize-Outlook deduplication' {
 
   It 'moves the seeded duplicates to the review folder' {
     if (-not $script:OptimizeSupported) {
-      Set-ItResult -Skipped -Because 'Optimize-Outlook requires AdNoctem.Substrate.PowerShell 0.1.1 (Outlook folder selection, named operation logs and PST lifetime helpers).'
+      Set-ItResult -Skipped -Because 'Optimize-Outlook requires AdNoctem.Substrate.PowerShell 0.2.0 (Outlook folder selection, named operation logs and PST lifetime helpers).'
       return
     }
 

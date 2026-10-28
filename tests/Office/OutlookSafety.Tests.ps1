@@ -7,7 +7,7 @@ param ()
 # Exercise real script functions with mutable Outlook-shaped objects. No COM,
 # profile, or real mail is opened. Script-level guards are tested with mocks.
 BeforeAll {
-  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
+  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
   $script:CompiledFolderPlan = Get-Command Get-OutlookFolderPlan -CommandType Cmdlet -Module AdNoctem.Substrate.PowerShell
   if (-not ('Winkit.Tests.OutlookAutomationProxy' -as [type])) {
     Add-Type -Path (Join-Path $PSScriptRoot 'OutlookAutomationProxy.cs')
@@ -58,6 +58,34 @@ BeforeAll {
       return $this
     }
     return $mail
+  }
+
+  function Get-FakeProfileStore {
+    $stores = $global:WinkitSafetyTestContext.Namespace.Stores
+    for ($index = 1; $index -le $stores.Count; $index++) {
+      $store = $stores.Item($index)
+      $path = ''
+      $exchangeType = 0
+
+      # An archive-only fixture store exposes neither property.
+      try { $path = [string]$store.FilePath } catch { $path = '' }
+      try { $exchangeType = [int]$store.ExchangeStoreType } catch { $exchangeType = 0 }
+
+      $format = switch ([IO.Path]::GetExtension($path)) {
+        '.pst' { 'PST' }
+        '.ost' { 'OST' }
+        '' { 'None' }
+        default { 'Other' }
+      }
+
+      [PSCustomObject]@{
+        DisplayName       = [string]$store.DisplayName
+        StoreID           = [string]$store.StoreID
+        FilePath          = $path
+        DataFileFormat    = $format
+        ExchangeStoreType = $exchangeType
+      }
+    }
   }
 
   function New-FakeFolder {
@@ -610,6 +638,47 @@ Describe 'Outlook store selection and preview' {
     Mock Get-OutlookStoreRoot { throw 'Default selection must use Namespace.DefaultStore' }
     Mock Add-OutlookStoreRoot { throw 'Preview must not mount a store' }
     Mock Get-OutlookSubFolder { throw 'Preview must not create a folder' }
+    # Which accounts deliver into a store decides whether it synchronizes and
+    # whether its items can be stubs. Tests declare them by StoreID.
+    $global:WinkitSafetyAccountTypes = @{}
+    Mock Get-OutlookAccount {
+      foreach ($store in Get-FakeProfileStore) {
+        foreach ($type in @($global:WinkitSafetyAccountTypes[$store.StoreID])) {
+          [PSCustomObject]@{
+            DisplayName          = "$type account"
+            SmtpAddress          = "$type@example.test"
+            AccountTypeName      = $type
+            DeliveryStoreID      = $store.StoreID
+            DeliveryStoreName    = $store.DisplayName
+            IsServerSynchronized = $type -in @('Exchange', 'IMAP', 'HTTP', 'EAS')
+            MayDeferItemBodies   = $type -in @('IMAP', 'HTTP', 'EAS')
+            Evidence             = ''
+          }
+        }
+      }
+    }
+    Mock Get-OutlookStore {
+      foreach ($store in Get-FakeProfileStore) {
+        $types = @($global:WinkitSafetyAccountTypes[$store.StoreID])
+        $deferring = @($types | Where-Object { $_ -in @('IMAP', 'HTTP', 'EAS') })
+        $synchronizing = @($types | Where-Object { $_ -in @('Exchange', 'IMAP', 'HTTP', 'EAS') })
+
+        [PSCustomObject]@{
+          DisplayName               = $store.DisplayName
+          StoreID                   = $store.StoreID
+          FilePath                  = $store.FilePath
+          DataFileFormat            = $store.DataFileFormat
+          ExchangeStoreType         = $store.ExchangeStoreType
+          ExchangeStoreName         = 'Synthetic'
+          IsExchangeBacked          = $store.ExchangeStoreType -ne 3
+          IsSynchronized            = ($store.DataFileFormat -eq 'OST' -or $store.ExchangeStoreType -ne 3 -or $synchronizing.Count -gt 0)
+          MayContainHeaderOnlyItems = ($store.DataFileFormat -eq 'OST' -or $deferring.Count -gt 0)
+          SizeBytes                 = $null
+          DeliveredFrom             = @($types | ForEach-Object { "$_ account" })
+          Evidence                  = 'Synthetic classification.'
+        }
+      }
+    }
     $script:Source = New-FakeFolder -Name Root
     $sourcePath = Join-Path $TestDrive 'source.pst'
     [IO.File]::WriteAllText($sourcePath, 'source fixture')
@@ -1086,7 +1155,10 @@ Describe 'Outlook store selection and preview' {
         Test-Path -LiteralPath $script:AppendArguments.ArchivePath | Should -BeFalse
         Should -Invoke Add-OutlookStoreRoot -Times 0
         $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        $report.SourceWarnings.Count | Should -Be 2
+        # An OST can hold header-only items, so the download notice accompanies
+        # the two synchronization notices even during a preview.
+        $report.SourceWarnings.Count | Should -Be 3
+        ($report.SourceWarnings -join ' ') | Should -Match 'header-only stubs'
         $expected = if ($ArchiveMode -eq 'Copy') { 'temporarily creates duplicates' } else { 'Removal can synchronize' }
         ($warnings -join ' ') | Should -Match $expected
         ($report.SourceWarnings -join ' ') | Should -Match $expected
@@ -1170,6 +1242,53 @@ Describe 'Outlook store selection and preview' {
       }
     }
 
+    It 'stops a Move out of an Outlook 2007 IMAP PST when a message is header-only' {
+      # The store is a PST reporting olNotExchange, which is what Outlook 2007
+      # gives an IMAP account. Classifying by file alone skipped this check and
+      # let Move delete a server copy whose body was never downloaded.
+      $global:WinkitSafetyAccountTypes['source-store'] = @('IMAP')
+      $mail = New-FakeMail 'imap-stub'
+      $mail.SourceItems = $script:Source.Items
+      $mail.DownloadState = 0
+      $null = $script:Source.Items.Values.Add($mail)
+
+      $result = & $script:ArchiveScript @script:AppendArguments
+
+      $result.Status | Should -Be Failed
+      $result.Detail | Should -Match 'DownloadState'
+      $mail.Moves | Should -Be 0
+      $mail.Copies | Should -Be 0
+      $script:Source.Items.Count | Should -Be 1
+      $script:Destination.Items.Count | Should -Be 0
+      $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      $report.Settings.SourceStore.DataFileFormat | Should -Be PST
+      $report.Settings.SourceStore.ExchangeStoreType | Should -Be 3
+      $report.Settings.SourceStore.MayContainHeaderOnlyItems | Should -BeTrue
+      $report.Settings.SourceStore.MaySynchronize | Should -BeTrue
+    }
+
+    It 'archives a downloaded Outlook 2007 IMAP PST with Move and reports the purge requirement' {
+      $global:WinkitSafetyAccountTypes['source-store'] = @('IMAP')
+      $mail = New-FakeMail 'imap-complete'
+      $mail.SourceItems = $script:Source.Items
+      $null = $script:Source.Items.Values.Add($mail)
+
+      $result = & $script:ArchiveScript @script:AppendArguments
+
+      $result.Status | Should -Be Completed
+      $result.Moved | Should -Be 1
+      $script:Destination.Items.Count | Should -Be 1
+      $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      $report.Settings.SourceStore.MaySynchronize | Should -BeTrue
+      $report.Settings.SourceStore.MayContainHeaderOnlyItems | Should -BeTrue
+      $report.Settings.SourceStore.OwningAccountTypes | Should -Be @('IMAP')
+      $report.Settings.SourceStore.Classification | Should -Be Resolved
+      # IMAP deletion is a flag. Without a purge the quota never moves, so the
+      # run must say so rather than reporting recovered space.
+      ($report.SourceWarnings -join ' ') | Should -Match 'Purge deleted messages'
+      ($report.SourceWarnings -join ' ') | Should -Match 'header-only stubs'
+    }
+
     It 'does not require download metadata for a PST source' {
       $mail = New-FakeMail 'local'
       $mail.SourceItems = $script:Source.Items
@@ -1181,6 +1300,8 @@ Describe 'Outlook store selection and preview' {
       $report = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
       $report.Settings.SourceStore.DataFileFormat | Should -Be PST
       $report.Settings.SourceStore.MaySynchronize | Should -BeFalse
+      $report.Settings.SourceStore.MayContainHeaderOnlyItems | Should -BeFalse
+      $report.Settings.SourceStore.Classification | Should -Be Resolved
       $report.SourceWarnings.Count | Should -Be 0
     }
 
@@ -2221,5 +2342,279 @@ Describe 'Outlook store selection and preview' {
     $report.Results[1].Detail | Should -Match 'Disk full'
     $destination.Items.Count | Should -Be 1
     Should -Invoke Write-Progress -ParameterFilter { $Completed }
+  }
+}
+
+Describe 'Outlook account inventory guard' {
+  BeforeEach {
+    Mock Import-Module { }
+    Mock Get-UserInfo { @{ UserName = 'TEST\Administrator'; IsAdministrator = $true } }
+    Mock Connect-Outlook { throw 'Connection reached for guard test' }
+    Mock Write-Log { }
+    Mock Write-OperationResultLog { }
+    Mock Remove-ComObject { }
+    Mock Invoke-ComGarbageCollection { }
+    $script:AccountScriptPath = Join-Path $script:OfficePath 'Show-OutlookAccount.ps1'
+  }
+
+  It 'blocks elevated execution before COM access' {
+    { & $script:AccountScriptPath } | Should -Throw '*non-elevated*IgnoreAdministrator*'
+    Should -Invoke Connect-Outlook -Times 0
+  }
+
+  It 'refuses an existing report path before COM access' {
+    Mock Get-UserInfo { @{ UserName = 'TEST\MailboxUser'; IsAdministrator = $false } }
+    $existing = Join-Path $TestDrive 'inventory.json'
+    [IO.File]::WriteAllText($existing, '{}')
+
+    { & $script:AccountScriptPath -ReportPath $existing } | Should -Throw '*already exists*'
+    Should -Invoke Connect-Outlook -Times 0
+  }
+
+  It 'refuses both report destinations at once' {
+    Mock Get-UserInfo { @{ UserName = 'TEST\MailboxUser'; IsAdministrator = $false } }
+
+    { & $script:AccountScriptPath -ReportPath (Join-Path $TestDrive 'a.json') -ReportDirectory $TestDrive } |
+      Should -Throw '*not both*'
+    Should -Invoke Connect-Outlook -Times 0
+  }
+}
+
+Describe 'Outlook account and delivery store inventory' {
+  BeforeAll {
+    function New-FakeAccountRecord {
+      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Creates only in-memory test fixtures.')]
+      param ([string]$Name, [string]$TypeName, [int]$Type, [string]$StoreID, [string]$StoreName)
+      [PSCustomObject]@{
+        DisplayName          = $Name
+        SmtpAddress          = $Name
+        UserName             = $Name
+        AccountType          = $Type
+        AccountTypeName      = $TypeName
+        DeliveryStoreID      = $StoreID
+        DeliveryStoreName    = $StoreName
+        DeliveryFilePath     = ''
+        IsServerSynchronized = $TypeName -in @('Exchange', 'IMAP', 'HTTP', 'EAS')
+        MayDeferItemBodies   = $TypeName -in @('IMAP', 'HTTP', 'EAS')
+        Evidence             = ''
+      }
+    }
+
+    function New-FakeStoreRecord {
+      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Creates only in-memory test fixtures.')]
+      param (
+        [string]$Name,
+        [string]$StoreID,
+        [string]$Path,
+        [string]$Format = 'PST',
+        [int]$ExchangeStoreType = 3,
+        [Nullable[long]]$SizeBytes,
+        [string[]]$DeliveredFrom = @(),
+        [switch]$HeaderOnly
+      )
+      [PSCustomObject]@{
+        DisplayName               = $Name
+        StoreID                   = $StoreID
+        FilePath                  = $Path
+        DataFileFormat            = $Format
+        ExchangeStoreType         = $ExchangeStoreType
+        ExchangeStoreName         = 'Synthetic'
+        IsExchangeBacked          = $ExchangeStoreType -ne 3
+        IsSynchronized            = [bool]($HeaderOnly -or $Format -eq 'OST' -or $ExchangeStoreType -ne 3)
+        MayContainHeaderOnlyItems = [bool]($HeaderOnly -or $Format -eq 'OST')
+        SizeBytes                 = $SizeBytes
+        DeliveredFrom             = @($DeliveredFrom)
+        Evidence                  = 'Synthetic classification.'
+      }
+    }
+  }
+
+  BeforeEach {
+    Mock Import-Module { }
+    Mock Get-UserInfo { @{ UserName = 'TEST\MailboxUser'; IsAdministrator = $false } }
+    Mock Write-Log { }
+    Mock Write-OperationResultLog { }
+    Mock Remove-ComObject { }
+    Mock Invoke-ComGarbageCollection { }
+    Mock Get-RegistryValue { $null }
+    # The inventory must stay readable on Outlook 2007 Exchange profiles, where
+    # standard-folder discovery is unavailable. Touching either is a failure.
+    Mock Get-OutlookStandardFolderIdentity { throw 'Account inventory must not resolve standard folders' }
+    Mock Get-OutlookFolderPlan { throw 'Account inventory must not plan folders' }
+    Mock Get-OutlookStoreRoot { throw 'Account inventory must not open a store root' }
+    Mock Add-OutlookStoreRoot { throw 'Account inventory must not mount a store' }
+    Mock Connect-Outlook {
+      [PSCustomObject]@{
+        App       = [PSCustomObject]@{ Version = $global:WinkitInventoryVersion }
+        Namespace = 'synthetic-namespace'
+      }
+    }
+    Mock Get-OutlookAccount { @($global:WinkitInventoryAccounts) }
+    Mock Get-OutlookStore { @($global:WinkitInventoryStores) }
+    $global:WinkitInventoryVersion = '12.0.6612.1000'
+    $global:WinkitInventoryAccounts = @()
+    $global:WinkitInventoryStores = @()
+    $script:AccountScriptPath = Join-Path $script:OfficePath 'Show-OutlookAccount.ps1'
+  }
+
+  AfterEach {
+    foreach ($name in @('WinkitInventoryVersion', 'WinkitInventoryAccounts', 'WinkitInventoryStores')) {
+      Remove-Variable -Name $name -Scope Global -ErrorAction SilentlyContinue
+    }
+  }
+
+  It 'reports a critical finding when a POP account delivers into an Exchange-backed store' {
+    $global:WinkitInventoryStores = @(
+      (New-FakeStoreRecord -Name 'Postfach - Test' -StoreID 'exchange-store' -Path 'C:\Synthetic\outlook.ost' -Format 'OST' -ExchangeStoreType 0 -DeliveredFrom @('buchhaltung@example.de', 'legacy@example.com'))
+    )
+    $global:WinkitInventoryAccounts = @(
+      (New-FakeAccountRecord -Name 'buchhaltung@example.de' -TypeName 'POP3' -Type 2 -StoreID 'exchange-store' -StoreName 'Postfach - Test'),
+      (New-FakeAccountRecord -Name 'legacy@example.com' -TypeName 'Exchange' -Type 0 -StoreID 'exchange-store' -StoreName 'Postfach - Test')
+    )
+
+    $inventory = & $script:AccountScriptPath -PassThru -WarningAction SilentlyContinue
+
+    $inventory.CriticalCount | Should -Be 1
+    $critical = @($inventory.Findings | Where-Object { $_.Code -eq 'DeliversIntoExchange' })
+    $critical.Count | Should -Be 1
+    $critical[0].Subject | Should -Be 'buchhaltung@example.de'
+    $critical[0].Detail | Should -Match 'Re-point delivery to a PST first'
+    # The Exchange account itself owns that store, so it is not a finding.
+    @($inventory.Stores)[0].DeliveredFrom | Should -Be @('buchhaltung@example.de', 'legacy@example.com')
+    @($inventory.Stores)[0].IsExchangeBacked | Should -BeTrue
+    @($inventory.Accounts | Where-Object { $_.AccountTypeName -eq 'POP3' }).Count | Should -Be 1
+    Should -Invoke Get-OutlookFolderPlan -Times 0
+    Should -Invoke Get-OutlookStandardFolderIdentity -Times 0
+  }
+
+  It 'reports no critical finding when a POP account delivers into its own PST' {
+    $global:WinkitInventoryStores = @(
+      (New-FakeStoreRecord -Name 'Personal Folders' -StoreID 'pst-store' -Path 'C:\Synthetic\personal.pst' -DeliveredFrom @('buchhaltung@example.de'))
+    )
+    $global:WinkitInventoryAccounts = @(
+      (New-FakeAccountRecord -Name 'buchhaltung@example.de' -TypeName 'POP3' -Type 2 -StoreID 'pst-store' -StoreName 'Personal Folders')
+    )
+
+    $inventory = & $script:AccountScriptPath -PassThru -WarningAction SilentlyContinue
+
+    $inventory.CriticalCount | Should -Be 0
+    @($inventory.Stores)[0].DataFileFormat | Should -Be 'PST'
+    @($inventory.Stores)[0].IsExchangeBacked | Should -BeFalse
+    @($inventory.Findings).Count | Should -Be 0
+  }
+
+  It 'honours the configured data file limit instead of the Outlook default' {
+    Mock Get-RegistryValue {
+      if ($Name -eq 'MaxLargeFileSize') {
+        return 2
+      }
+
+      if ($Name -eq 'WarnLargeFileSize') {
+        return 1
+      }
+
+      return $null
+    }
+    $global:WinkitInventoryStores = @(
+      (New-FakeStoreRecord -Name 'Archive' -StoreID 'pst-store' -Path 'C:\Synthetic\large.pst' -SizeBytes (2 * 1MB))
+    )
+
+    $inventory = & $script:AccountScriptPath -PassThru -WarningAction SilentlyContinue
+
+    $inventory.FileLimit.MaximumMb | Should -Be 2
+    $inventory.FileLimit.WarningMb | Should -Be 1
+    $inventory.FileLimit.Source | Should -Match 'Policies'
+    @($inventory.Stores)[0].ExceedsWarning | Should -BeTrue
+    @($inventory.Stores)[0].HeadroomMb | Should -Be 0
+    @($inventory.Findings | Where-Object { $_.Code -eq 'FileSizeLimit' }).Count | Should -Be 1
+  }
+
+  It 'resolves an account delivery target by StoreID when two data files share a display name' {
+    $global:WinkitInventoryStores = @(
+      (New-FakeStoreRecord -Name 'Personal Folders' -StoreID 'store-one' -Path 'C:\Synthetic\first.pst'),
+      (New-FakeStoreRecord -Name 'Personal Folders' -StoreID 'store-two' -Path 'C:\Synthetic\second.ost' -Format 'OST' -ExchangeStoreType 0 -DeliveredFrom @('buchhaltung@example.de'))
+    )
+    $global:WinkitInventoryAccounts = @(
+      (New-FakeAccountRecord -Name 'buchhaltung@example.de' -TypeName 'POP3' -Type 2 -StoreID 'store-two' -StoreName 'Personal Folders')
+    )
+
+    $inventory = & $script:AccountScriptPath -PassThru -WarningAction SilentlyContinue
+
+    # The local PST shares the display name, so only StoreID distinguishes the
+    # store whose removal would take this account's mail with it.
+    $inventory.CriticalCount | Should -Be 1
+    @($inventory.Findings | Where-Object { $_.Code -eq 'DeliversIntoExchange' })[0].Detail | Should -Match 'Personal Folders'
+    @(@($inventory.Stores)[0].DeliveredFrom).Count | Should -Be 0
+  }
+
+  It 'warns rather than fails when an account resolves no delivery store' {
+    $global:WinkitInventoryStores = @(
+      (New-FakeStoreRecord -Name 'Personal Folders' -StoreID 'pst-store' -Path 'C:\Synthetic\orphan.pst')
+    )
+    $global:WinkitInventoryAccounts = @(
+      (New-FakeAccountRecord -Name 'broken@example.de' -TypeName 'IMAP' -Type 1 -StoreID '' -StoreName '')
+    )
+
+    $inventory = & $script:AccountScriptPath -PassThru -WarningAction SilentlyContinue
+
+    $inventory.CriticalCount | Should -Be 0
+    @($inventory.Findings | Where-Object { $_.Code -eq 'NoDeliveryStore' }).Count | Should -Be 1
+    @($inventory.Accounts)[0].AccountTypeName | Should -Be 'IMAP'
+  }
+
+  It 'reports local IMAP sent mail on Outlook <Release> as <Expected>' -ForEach @(
+    @{ Release = '2007'; Version = '12.0.6612.1000'; Expected = 1 }
+    @{ Release = '2010'; Version = '14.0.7268.5000'; Expected = 1 }
+    @{ Release = '2019'; Version = '16.0.10396.20023'; Expected = 0 }
+  ) {
+    $global:WinkitInventoryVersion = $Version
+    # An Outlook 2007 IMAP account is backed by a PST reporting olNotExchange,
+    # so only the owning account marks the store synchronized.
+    $global:WinkitInventoryStores = @(
+      (New-FakeStoreRecord -Name 'info@example.de' -StoreID 'imap-store' -Path 'C:\Synthetic\imap.pst' -HeaderOnly -DeliveredFrom @('info@example.de'))
+    )
+    $global:WinkitInventoryAccounts = @(
+      (New-FakeAccountRecord -Name 'info@example.de' -TypeName 'IMAP' -Type 1 -StoreID 'imap-store' -StoreName 'info@example.de')
+    )
+
+    $inventory = & $script:AccountScriptPath -PassThru -WarningAction SilentlyContinue
+
+    $sent = @($inventory.Findings | Where-Object { $_.Code -eq 'LocalImapSentItems' })
+    $sent.Count | Should -Be $Expected
+    if ($Expected -gt 0) {
+      $sent[0].Detail | Should -Match 'Collect Sent Items and Drafts from this workstation'
+    }
+
+    # The store is a PST, so only the account makes it synchronized. Both
+    # classifications must be reported, or an archive would treat it as local.
+    @($inventory.Stores)[0].DataFileFormat | Should -Be 'PST'
+    @($inventory.Stores)[0].IsExchangeBacked | Should -BeFalse
+    @($inventory.Stores)[0].IsSynchronized | Should -BeTrue
+    @($inventory.Findings | Where-Object { $_.Code -eq 'HeaderOnlyItems' }).Count | Should -Be 1
+    @($inventory.Findings | Where-Object { $_.Code -eq 'SynchronizedStore' })[0].Detail | Should -Match 'mirrors server state'
+    $inventory.CriticalCount | Should -Be 0
+  }
+
+  It 'writes a JSON report only when a destination is supplied' {
+    $global:WinkitInventoryStores = @(
+      (New-FakeStoreRecord -Name 'Personal Folders' -StoreID 'pst-store' -Path 'C:\Synthetic\reported.pst' -DeliveredFrom @('buchhaltung@example.de'))
+    )
+    $global:WinkitInventoryAccounts = @(
+      (New-FakeAccountRecord -Name 'buchhaltung@example.de' -TypeName 'POP3' -Type 2 -StoreID 'pst-store' -StoreName 'Personal Folders')
+    )
+    $reportDirectory = Join-Path $TestDrive 'reports'
+
+    $silent = & $script:AccountScriptPath -PassThru -WarningAction SilentlyContinue
+    $silent.ReportPath | Should -BeNullOrEmpty
+
+    $inventory = & $script:AccountScriptPath -ReportDirectory $reportDirectory -PassThru -WarningAction SilentlyContinue
+
+    $inventory.ReportPath | Should -Not -BeNullOrEmpty
+    $report = Get-Content -LiteralPath $inventory.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $report.Script | Should -Be 'Show-OutlookAccount'
+    $report.SchemaVersion | Should -Be 2
+    $report.OutlookVersion | Should -Be '12.0.6612.1000'
+    @($report.Accounts)[0].DeliveryStoreID | Should -Be 'pst-store'
+    @($report.Stores)[0].MayContainHeaderOnlyItems | Should -BeFalse
   }
 }

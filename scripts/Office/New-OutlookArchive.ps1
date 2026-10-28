@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.0' }
 
 <#
 .SYNOPSIS
@@ -21,7 +21,10 @@
   Attached IMAP/Exchange stores are supported with classic Outlook 2010 or later.
   Move can remove source mail from the server and other synchronized clients;
   Copy also performs temporary source writes that can synchronize.
-  Matching OST messages must be fully downloaded, including during previews.
+  Messages in a store that can hold header-only stubs must be fully downloaded,
+  including during previews. That is decided from the accounts delivering into
+  the store, not from its file extension: an Outlook 2007 IMAP account is backed
+  by a PST, so the download check applies there as it does to an OST.
   Only mail exposed by Outlook is considered; server completeness is not verified.
   SourceArchivePath selects an existing PST directly and manages any temporary
   source attachment. ArchivePath always selects the destination PST.
@@ -82,6 +85,8 @@
   Copy leaves source mail intact. Move removes archived items from the source.
   For IMAP/Exchange, removal can synchronize to the server and other clients.
   Copy temporarily creates duplicates in the source before transferring them.
+  Against an IMAP store, Move marks the source messages deleted; purge deleted
+  messages in Outlook afterwards or the server still holds every archived item.
 .PARAMETER DisplayName
   Display name for the PST. New files default to the filename without .pst.
   Append preserves the existing name unless this parameter is supplied.
@@ -237,7 +242,7 @@ param (
   $QuitOutlook
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
 
 # Outlook automation must use the mailbox user's interactive security context.
 $_outlookUser = Get-UserInfo
@@ -489,16 +494,61 @@ function Get-OutlookArchiveSourceInfo {
     throw 'Cannot determine the source ExchangeStoreType. No archive work was started.'
   }
 
-  # olNotExchange (3) also describes non-Exchange OST providers. An OST
-  # extension alone cannot distinguish IMAP from another synchronized provider.
+  # Raw facts only. Neither the extension nor olNotExchange (3) distinguishes
+  # an Outlook 2007 IMAP store from a local PST, so synchronization and
+  # header-only risk are resolved from the owning accounts afterwards.
   [PSCustomObject]@{
-    DisplayName       = [string]$Store.DisplayName
-    StoreID           = [string]$Store.StoreID
-    FilePath          = $_path
-    DataFileFormat    = $_format
-    ExchangeStoreType = [int]$_exchangeType
-    MaySynchronize    = $_format -eq 'OST' -or [int]$_exchangeType -ne 3
+    DisplayName               = [string]$Store.DisplayName
+    StoreID                   = [string]$Store.StoreID
+    FilePath                  = $_path
+    DataFileFormat            = $_format
+    ExchangeStoreType         = [int]$_exchangeType
+    MaySynchronize            = $true
+    MayContainHeaderOnlyItems = $true
+    DeliveredFrom             = @()
+    OwningAccountTypes        = @()
+    Classification            = 'Unresolved'
+    Evidence                  = 'Store classification has not been resolved against the profile accounts.'
   }
+}
+
+function Resolve-OutlookArchiveSourceClass {
+  param (
+    [object]
+    $SourceInfo,
+
+    [object]
+    $Namespace
+  )
+
+  # Get-OutlookStore reads the accounts with the stores, so a store that an
+  # IMAP, HTTP, EAS, or Exchange account delivers into is reported as
+  # synchronized even when its file is an ordinary PST reporting olNotExchange.
+  $_record = @(Get-OutlookStore -Namespace $Namespace | Where-Object { $_.StoreID -eq $SourceInfo.StoreID })
+
+  if ($_record.Count -eq 0) {
+    # Fail closed. An unclassified source keeps every safety check enabled
+    # rather than silently archiving stubs out of a synchronized store.
+    Write-Warning 'The source store was not found in the profile inventory, so it is treated as synchronized and as possibly holding header-only messages. Every message body is verified before transfer.'
+
+    return $SourceInfo
+  }
+
+  $_accountTypes = @()
+  foreach ($_account in @(Get-OutlookAccount -Namespace $Namespace)) {
+    if ($_account.DeliveryStoreID -eq $SourceInfo.StoreID) {
+      $_accountTypes += [string]$_account.AccountTypeName
+    }
+  }
+
+  $SourceInfo.MaySynchronize = [bool]$_record[0].IsSynchronized
+  $SourceInfo.MayContainHeaderOnlyItems = [bool]$_record[0].MayContainHeaderOnlyItems
+  $SourceInfo.DeliveredFrom = @($_record[0].DeliveredFrom)
+  $SourceInfo.OwningAccountTypes = @($_accountTypes | Sort-Object -Unique)
+  $SourceInfo.Classification = 'Resolved'
+  $SourceInfo.Evidence = [string]$_record[0].Evidence
+
+  return $SourceInfo
 }
 
 function Test-OutlookArchiveDownload {
@@ -860,19 +910,38 @@ try {
     $_sourceRoot = Get-OutlookStoreRoot -Namespace $_context.Namespace -Name $StoreName
   }
   Write-Verbose "Source: $($_sourceRoot.FolderPath)"
-  Write-Log -Message ("Archive source: {0} | Data file: {1} | ExchangeStoreType: {2}" -f $_sourceInfo.DisplayName, $_sourceInfo.DataFileFormat, $_sourceInfo.ExchangeStoreType) -Color Cyan
+  $_sourceInfo = Resolve-OutlookArchiveSourceClass -SourceInfo $_sourceInfo -Namespace $_context.Namespace
+
+  $_sourceAccountLabel = 'none'
+  if (@($_sourceInfo.OwningAccountTypes).Count -gt 0) {
+    $_sourceAccountLabel = @($_sourceInfo.OwningAccountTypes) -join ', '
+  }
+
+  Write-Log -Message ("Archive source: {0} | Data file: {1} | ExchangeStoreType: {2} | Delivering accounts: {3}" -f $_sourceInfo.DisplayName, $_sourceInfo.DataFileFormat, $_sourceInfo.ExchangeStoreType, $_sourceAccountLabel) -Color Cyan
+  Write-Verbose "Source classification: $($_sourceInfo.Evidence)"
+
+  if ($_sourceInfo.MayContainHeaderOnlyItems) {
+    $_sourceWarnings += 'Messages in this store can be header-only stubs. Every matching message is verified as fully downloaded before transfer, and the run stops rather than archiving a stub. Download full items, including bodies and attachments, before archiving.'
+  }
+
   if ($_sourceInfo.MaySynchronize) {
     $_sourceWarnings += 'Only selected mail exposed by Outlook is considered. Server-mailbox completeness is not verified; check cache history, folder subscriptions, and synchronization before archiving.'
     if ($Mode -eq 'Move') {
       $_sourceWarnings += 'Move removes archived messages from the source. Removal can synchronize to the server and other clients, including when Outlook reconnects later.'
+
+      # IMAP deletion is a flag, not a removal. Without an explicit purge the
+      # server keeps every archived message and the quota does not move.
+      if (@($_sourceInfo.OwningAccountTypes) -contains 'IMAP') {
+        $_sourceWarnings += 'This is an IMAP store: Move marks the source messages deleted rather than removing them. Purge deleted messages in Outlook and re-check the mailbox size afterwards, or the server still holds everything this run archived.'
+      }
     }
     else {
       $_sourceWarnings += 'Copy preserves originals but temporarily creates duplicates in the source before moving them to the PST. These writes can synchronize and require source write access and quota headroom.'
     }
+  }
 
-    foreach ($_warning in $_sourceWarnings) {
-      Write-Warning $_warning
-    }
+  foreach ($_warning in $_sourceWarnings) {
+    Write-Warning $_warning
   }
 
   if ($Append) {
@@ -1074,7 +1143,7 @@ try {
           DestinationFolder       = $_destinationFolder
           DestinationRelativePath = $_destinationRelativePath
           ArchiveMode             = $Mode
-          RequireFullDownload     = $_sourceInfo.DataFileFormat -eq 'OST'
+          RequireFullDownload     = [bool]$_sourceInfo.MayContainHeaderOnlyItems
           Results                 = $_results
           WhatIf                  = [bool]$WhatIfPreference
           Confirm                 = $false

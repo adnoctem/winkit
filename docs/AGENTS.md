@@ -39,13 +39,13 @@ root `AGENTS.md` is a symlink to this file — edit this one.
 ## Script conventions (non-negotiable)
 
 - Every script opens with `#Requires -Version 5.1`, `#Requires -RunAsAdministrator` (when elevation is required), and
-  `#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }` — pin the exact adopted version;
+  `#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.0' }` — pin the exact adopted version;
   Substrate 0.x releases may change APIs
 - `dist/install.ps1` and `dist/uninstall.ps1` are the AdNoctem.Substrate.PowerShell exceptions: distribution maintenance must remain
   standalone
 - The web installer `dist/install.ps1` takes configuration only from `WINKIT_*` process environment variables, including `WINKIT_DRY_RUN`;
   it has no public script parameters. Keep the documented `irm | iex` entry point working in Windows PowerShell 5.1
-- `Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force` after the param block
+- `Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force` after the param block
 - Comment-based help with `.SYNOPSIS`/`.DESCRIPTION`/`.PARAMETER`/`.EXAMPLE`, plus a `.NOTES` block (Author, License, Server Core support,
   SYSTEM-account suitability)
 - `[CmdletBinding(SupportsShouldProcess = $true)]` with `-DryRun` (sets `$WhatIfPreference`) and `-PassThru` switches

@@ -1,12 +1,12 @@
 ﻿#Requires -Version 5.1
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.0' }
 
 <#
 .SYNOPSIS
   Plans, prepares, executes, or resumes an explicit Office migration.
 .DESCRIPTION
-  Delegates deployment to AdNoctem.Substrate.PowerShell 0.1.1. Mode is mandatory.
+  Delegates deployment to AdNoctem.Substrate.PowerShell 0.2.0. Mode is mandatory.
   Check is read-only; with a target it returns the complete plan and blockers.
   Prepare publishes verified media. Migrate uses the module's validated plan.
   Recover resumes only the original migration journal.
@@ -158,7 +158,7 @@ param (
   $PassThru
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
 
 # -----------------------------------------------------------------------------
 # Validate the operation before calling any deployment API.

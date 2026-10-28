@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.0' }
 
 <#
 .SYNOPSIS
@@ -176,7 +176,7 @@ param (
   $PassThru
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
 
 # Outlook automation must use the mailbox user's interactive security context.
 $_outlookUser = Get-UserInfo
@@ -318,16 +318,63 @@ function Get-OutlookStateSourceInfo {
     throw 'Cannot determine the source ExchangeStoreType. No survey was started.'
   }
 
-  # olNotExchange (3) also describes non-Exchange OST providers. An OST
-  # extension alone cannot distinguish IMAP from another synchronized provider.
+  # Raw facts only, and synchronization starts fail-closed. Neither the file
+  # extension nor olNotExchange (3) distinguishes an Outlook 2007 IMAP store
+  # from a local PST; only the delivering accounts do.
   [PSCustomObject]@{
     DisplayName       = [string]$Store.DisplayName
     StoreID           = [string]$Store.StoreID
     FilePath          = $_path
     DataFileFormat    = $_format
     ExchangeStoreType = [int]$_exchangeType
-    MaySynchronize    = $_format -eq 'OST' -or [int]$_exchangeType -ne 3
+    MaySynchronize    = $true
+    DeliveredFrom     = @()
   }
+}
+
+function Get-OutlookStateProfileInfo {
+  param (
+    [object]
+    $Namespace
+  )
+
+  # One correlated read of the accounts and data files. No folder is opened,
+  # so this also completes on Outlook 2007 Exchange and OST profiles.
+  foreach ($_record in @(Get-OutlookStore -Namespace $Namespace)) {
+    [PSCustomObject]@{
+      DisplayName       = [string]$_record.DisplayName
+      StoreID           = [string]$_record.StoreID
+      FilePath          = [string]$_record.FilePath
+      DataFileFormat    = [string]$_record.DataFileFormat
+      ExchangeStoreType = [int]$_record.ExchangeStoreType
+      MaySynchronize    = [bool]$_record.IsSynchronized
+      DeliveredFrom     = @($_record.DeliveredFrom)
+    }
+  }
+}
+
+function Resolve-OutlookStateStoreInfo {
+  param (
+    [object]
+    $Namespace,
+
+    [object]
+    $Store
+  )
+
+  $_info = Get-OutlookStateSourceInfo -Store $Store
+  $_record = @(Get-OutlookStore -Namespace $Namespace | Where-Object { $_.StoreID -eq $_info.StoreID })
+
+  if ($_record.Count -eq 0) {
+    Write-Warning "Store '$($_info.DisplayName)' was not found in the profile inventory, so it is reported as possibly synchronized."
+
+    return $_info
+  }
+
+  $_info.MaySynchronize = [bool]$_record[0].IsSynchronized
+  $_info.DeliveredFrom = @($_record[0].DeliveredFrom)
+
+  return $_info
 }
 
 function Test-OutlookStateInWindow {
@@ -723,20 +770,8 @@ try {
 
   # Inventory every data file first. This alone answers which store holds the
   # mail, which is the question a wrong store selection hides.
-  $_stores = $_context.Namespace.Stores
-  try {
-    for ($_storeIndex = 1; $_storeIndex -le $_stores.Count; $_storeIndex++) {
-      $_store = $_stores.Item($_storeIndex)
-      try {
-        $null = $_profile.Add((Get-OutlookStateSourceInfo -Store $_store))
-      }
-      finally {
-        Remove-ComObject $_store
-      }
-    }
-  }
-  finally {
-    Remove-ComObject $_stores
+  foreach ($_info in @(Get-OutlookStateProfileInfo -Namespace $_context.Namespace)) {
+    $null = $_profile.Add($_info)
   }
 
   # Resolve which stores to survey, then survey each with the shared selection.
@@ -754,7 +789,7 @@ try {
     try {
       $null = $_targets.Add([PSCustomObject]@{
           Root  = $_sourceRoot
-          Info  = Get-OutlookStateSourceInfo -Store $_selectedStore
+          Info  = Resolve-OutlookStateStoreInfo -Namespace $_context.Namespace -Store $_selectedStore
           Owned = $false
         })
     }
@@ -776,7 +811,7 @@ try {
     try {
       $null = $_targets.Add([PSCustomObject]@{
           Root  = $_selectedStore.GetRootFolder()
-          Info  = Get-OutlookStateSourceInfo -Store $_selectedStore
+          Info  = Resolve-OutlookStateStoreInfo -Namespace $_context.Namespace -Store $_selectedStore
           Owned = $true
         })
     }

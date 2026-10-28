@@ -6,7 +6,7 @@ generated in the ignored `build/` directory. Both scripts are standalone and do 
 ## Installation and updates
 
 Use x64 Windows PowerShell 5.1 or PowerShell 7 on x64 Windows. ARM64 and 32-bit hosts are unsupported. The installer supplies the exact
-`AdNoctem.Substrate.PowerShell` 0.1.1 dependency; no .NET SDK or separate NuGet libraries are needed:
+`AdNoctem.Substrate.PowerShell` 0.2.0 dependency; no .NET SDK or separate NuGet libraries are needed:
 
 ```powershell
 irm https://raw.githubusercontent.com/adnoctem/winkit/main/dist/install.ps1 | iex

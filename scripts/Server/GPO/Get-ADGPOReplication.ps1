@@ -1,7 +1,7 @@
 ﻿#Requires -Version 5.1
 #Requires -Module ActiveDirectory
 #Requires -Module GroupPolicy
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.1.1' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.0' }
 
 <#
 .SYNOPSIS
@@ -52,7 +52,7 @@ param (
   $OutputPath
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.1.1 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
 
 $commonParams = @{}
 if ($Server) {
