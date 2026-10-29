@@ -2547,7 +2547,7 @@ Describe 'Outlook account and delivery store inventory' {
     @(@($inventory.Stores)[0].DeliveredFrom).Count | Should -Be 0
   }
 
-  It 'warns rather than fails when an account resolves no delivery store' {
+  It 'warns rather than fails when an account resolves no delivery store and no store is Exchange-backed' {
     $global:WinkitInventoryStores = @(
       (New-FakeStoreRecord -Name 'Personal Folders' -StoreID 'pst-store' -Path 'C:\Synthetic\orphan.pst')
     )
@@ -2560,6 +2560,55 @@ Describe 'Outlook account and delivery store inventory' {
     $inventory.CriticalCount | Should -Be 0
     @($inventory.Findings | Where-Object { $_.Code -eq 'NoDeliveryStore' }).Count | Should -Be 1
     @($inventory.Accounts)[0].AccountTypeName | Should -Be 'IMAP'
+  }
+
+  # Outlook 2007 has no Account.DeliveryStore, so every account on a 2007
+  # profile resolves no delivery store. The report must not clear such a
+  # profile: the store that could not be named may be the OST, which is the
+  # configuration that makes removing the Exchange account destructive.
+  It 'fails closed when delivery is unresolved on a profile holding an Exchange-backed store' {
+    $global:WinkitInventoryStores = @(
+      (New-FakeStoreRecord -Name 'Archivordner' -StoreID 'archive-store' -Path 'C:\Synthetic\archive.pst'),
+      (New-FakeStoreRecord -Name 'Postfach - Test' -StoreID 'exchange-store' -Path 'C:\Synthetic\outlook.ost' -Format 'OST' -ExchangeStoreType 0)
+    )
+    $global:WinkitInventoryAccounts = @(
+      (New-FakeAccountRecord -Name 'buchhaltung@example.de' -TypeName 'POP3' -Type 2 -StoreID '' -StoreName ''),
+      (New-FakeAccountRecord -Name 'legacy@example.com' -TypeName 'POP3' -Type 2 -StoreID '' -StoreName ''),
+      (New-FakeAccountRecord -Name 'mailbox@example.com' -TypeName 'Exchange' -Type 0 -StoreID '' -StoreName '')
+    )
+
+    $inventory = & $script:AccountScriptPath -PassThru -WarningAction SilentlyContinue
+
+    # Both POP accounts are critical; the Exchange account is not, because its
+    # mail belongs in the mailbox whichever store that turns out to be.
+    $unresolved = @($inventory.Findings | Where-Object { $_.Code -eq 'NoDeliveryStore' })
+    $unresolved.Count | Should -Be 3
+    @($unresolved | Where-Object { $_.Severity -eq 'Critical' }).Count | Should -Be 2
+    @($unresolved | Where-Object { $_.Severity -eq 'Critical' -and $_.Subject -eq 'mailbox@example.com' }).Count | Should -Be 0
+    $inventory.CriticalCount | Should -Be 2
+
+    # The detail must name the client limit, so the report is read as
+    # undeterminable rather than as a misconfigured profile.
+    @($unresolved | Where-Object { $_.Severity -eq 'Critical' })[0].Detail | Should -Match 'does not expose a per-account delivery store'
+  }
+
+  It 'reports local IMAP sent mail even where the delivery store cannot be resolved' {
+    # The pre-upgrade sweep depends on this finding, and it disappears from the
+    # fleet once the clients reach Outlook 2013. It must not be suppressed just
+    # because the same client cannot name the delivery store.
+    $global:WinkitInventoryStores = @(
+      (New-FakeStoreRecord -Name 'Postfach - Test' -StoreID 'exchange-store' -Path 'C:\Synthetic\outlook.ost' -Format 'OST' -ExchangeStoreType 0)
+    )
+    $global:WinkitInventoryAccounts = @(
+      (New-FakeAccountRecord -Name 'info@example.de' -TypeName 'IMAP' -Type 1 -StoreID '' -StoreName '')
+    )
+
+    $inventory = & $script:AccountScriptPath -PassThru -WarningAction SilentlyContinue
+
+    $sent = @($inventory.Findings | Where-Object { $_.Code -eq 'LocalImapSentItems' })
+    $sent.Count | Should -Be 1
+    $sent[0].Subject | Should -Be 'info@example.de'
+    $sent[0].Detail | Should -Match 'the local delivery store,'
   }
 
   It 'reports local IMAP sent mail on Outlook <Release> as <Expected>' -ForEach @(

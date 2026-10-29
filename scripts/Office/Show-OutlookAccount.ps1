@@ -96,6 +96,12 @@ $_defaultWarningFileSizeMb = 19456
 # in the server's folders instead of the local delivery store.
 $_serverSentItemsMajor = 15
 
+# Outlook 14 (2010) is the first release whose object model exposes
+# Account.DeliveryStore. Below it the per-account delivery store cannot be read
+# at all, so an unresolved delivery reports a limit of the client rather than a
+# misconfigured profile.
+$_deliveryStoreMajor = 14
+
 $_startedAt = Get-Date
 
 if ($PSBoundParameters.ContainsKey('ReportPath') -and $PSBoundParameters.ContainsKey('ReportDirectory')) {
@@ -290,16 +296,70 @@ function Add-OutlookAccountFinding {
     })
 }
 
+# An Exchange-backed store in the profile is what makes an unresolved delivery
+# dangerous rather than merely untidy: the store that could not be named may be
+# the OST, and removing the Exchange account would take that mail with it.
+$_hasExchangeBackedStore = @($_stores | Where-Object { $_.IsExchangeBacked }).Count -gt 0
+
+# Stated once so the reports distinguish a profile that cannot be read from one
+# that is configured wrongly. The two call for different work.
+$_unresolvedCause = 'The delivery store did not resolve.'
+
+if ($_outlookMajor -lt $_deliveryStoreMajor) {
+  $_unresolvedCause = "Outlook $_outlookVersion does not expose a per-account delivery store; Outlook 2010 is the first version that does."
+}
+
 foreach ($_account in $_accounts) {
+  $_target = @()
+
+  if ($_account.DeliveryStoreID) {
+    $_target = @($_stores | Where-Object { $_.StoreID -eq $_account.DeliveryStoreID })
+  }
+
+  # Reported ahead of the delivery findings because it depends only on the
+  # account type and the client version. On a client that cannot name the
+  # delivery store this is still the record of which workstation holds the
+  # mailbox's local sent mail, and that record disappears on upgrade.
+  if ($_account.AccountTypeName -eq 'IMAP' -and $_outlookMajor -lt $_serverSentItemsMajor) {
+    $_sentItemsStore = 'the local delivery store'
+
+    if ($_target.Count -eq 1) {
+      $_sentItemsStore = "the local delivery store '$($_target[0].DisplayName)'"
+    }
+
+    Add-OutlookAccountFinding -Severity 'Warning' -Code 'LocalImapSentItems' -Subject $_account.DisplayName -Detail "Outlook $_outlookVersion saves this IMAP account's sent mail and drafts into $_sentItemsStore, not into the server's folders. Collect Sent Items and Drafts from this workstation before the mailbox counts as archived."
+  }
+
+  # Fail closed. An unresolved delivery store cannot be shown to be safe, so on
+  # a profile holding an Exchange-backed store it is reported as critical and
+  # the report stops being an exit gate. Exchange mail belongs in the mailbox
+  # regardless, so only the other account types are at risk.
+  $_unresolvedSeverity = 'Warning'
+
+  if ($_hasExchangeBackedStore -and $_account.AccountType -ne 0) {
+    $_unresolvedSeverity = 'Critical'
+  }
+
   if (-not $_account.DeliveryStoreID) {
-    Add-OutlookAccountFinding -Severity 'Warning' -Code 'NoDeliveryStore' -Subject $_account.DisplayName -Detail 'No delivery store resolved. Confirm the delivery location in Account Settings before changing this profile.'
+    $_detail = 'No delivery store resolved. Confirm the delivery location in Account Settings before changing this profile.'
+
+    if ($_unresolvedSeverity -eq 'Critical') {
+      $_detail = "$_unresolvedCause This profile holds an Exchange-backed store, so this $($_account.AccountTypeName) account may deliver into it. Read the delivery location in Account Settings, re-point it to a PST, and treat this account as unresolved rather than clear until a client that can report it confirms the change."
+    }
+
+    Add-OutlookAccountFinding -Severity $_unresolvedSeverity -Code 'NoDeliveryStore' -Subject $_account.DisplayName -Detail $_detail
 
     continue
   }
 
-  $_target = @($_stores | Where-Object { $_.StoreID -eq $_account.DeliveryStoreID })
   if ($_target.Count -ne 1) {
-    Add-OutlookAccountFinding -Severity 'Warning' -Code 'UnknownDeliveryStore' -Subject $_account.DisplayName -Detail "Delivery store '$($_account.DeliveryStoreName)' is not among the profile data files."
+    $_detail = "Delivery store '$($_account.DeliveryStoreName)' is not among the profile data files."
+
+    if ($_unresolvedSeverity -eq 'Critical') {
+      $_detail = "$_detail This profile holds an Exchange-backed store, so it cannot be ruled out as the destination. Confirm the delivery location in Account Settings before removing any account."
+    }
+
+    Add-OutlookAccountFinding -Severity $_unresolvedSeverity -Code 'UnknownDeliveryStore' -Subject $_account.DisplayName -Detail $_detail
 
     continue
   }
@@ -308,12 +368,6 @@ foreach ($_account in $_accounts) {
   # mail lands in a store belonging to a different account.
   if ($_account.AccountType -ne 0 -and $_target[0].IsExchangeBacked) {
     Add-OutlookAccountFinding -Severity 'Critical' -Code 'DeliversIntoExchange' -Subject $_account.DisplayName -Detail "$($_account.AccountTypeName) mail is delivered into the Exchange-backed store '$($_target[0].DisplayName)'. Removing the Exchange account discards this account's mail with the OST. Re-point delivery to a PST first."
-  }
-
-  # Sent mail that never reaches the server is only on this workstation, so a
-  # server-side or archival-home archive does not contain it.
-  if ($_account.AccountTypeName -eq 'IMAP' -and $_outlookMajor -lt $_serverSentItemsMajor) {
-    Add-OutlookAccountFinding -Severity 'Warning' -Code 'LocalImapSentItems' -Subject $_account.DisplayName -Detail "Outlook $_outlookVersion saves this IMAP account's sent mail and drafts into the local delivery store '$($_target[0].DisplayName)', not into the server's folders. Collect Sent Items and Drafts from this workstation before the mailbox counts as archived."
   }
 }
 
