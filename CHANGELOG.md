@@ -2,7 +2,8 @@
 
 ### Features
 
-* **scripts:** classify Outlook stores by their delivering accounts ([c796e47](https://github.com/adnoctem/winkit/commit/c796e4739618de151daf1800d4453e270cf89083))
+- **scripts:** classify Outlook stores by their delivering accounts
+  ([c796e47](https://github.com/adnoctem/winkit/commit/c796e4739618de151daf1800d4453e270cf89083))
 
 ## [2.1.0](https://github.com/adnoctem/winkit/compare/v2.0.1...v2.1.0) (2026-10-20)
 
