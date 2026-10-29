@@ -40,28 +40,37 @@ A `DeliversIntoExchange` finding means account removal is destructive in that pr
 own and lives only in the OST. Re-point delivery to a PST and migrate the contents before removing anything. `FileSizeLimit` reports a data
 file near its configured ceiling, which Outlook 2007 defaults to 20480 MB; Outlook stops delivering into the file when it is reached.
 
-| Finding                | Severity          | Meaning                                                                                          |
-| ---------------------- | ----------------- | ------------------------------------------------------------------------------------------------ |
-| `DeliversIntoExchange` | Critical          | An account's mail lands in an Exchange-backed store it does not own. Removal destroys that mail. |
-| `FileSizeLimit`        | Critical          | A data file is at or past the configured warning size. Outlook stops delivering when it is full. |
-| `NoDeliveryStore`      | Critical, Warning | The account reports no delivery store. Critical where any store is Exchange-backed. See below.   |
-| `UnknownDeliveryStore` | Critical, Warning | The delivery store is not among the profile's data files. Same rule as `NoDeliveryStore`.        |
-| `LocalImapSentItems`   | Warning           | Before Outlook 2013, IMAP sent mail and drafts stay local. See below.                            |
-| `SynchronizedStore`    | Informational     | Removing mail from this store can remove the server copy and reach every other client.           |
-| `HeaderOnlyItems`      | Informational     | Items here can be stubs. Archiving verifies each body and stops rather than moving a stub.       |
+| Finding                 | Severity          | Meaning                                                                                          |
+| ----------------------- | ----------------- | ------------------------------------------------------------------------------------------------ |
+| `DeliversIntoExchange`  | Critical          | An account's mail lands in an Exchange-backed store it does not own. Removal destroys that mail. |
+| `FileSizeLimit`         | Critical          | A data file is at or past the configured warning size. Outlook stops delivering when it is full. |
+| `NoDeliveryStore`       | Critical, Warning | The account reports no delivery store. Critical where any store is Exchange-backed. See below.   |
+| `UnknownDeliveryStore`  | Critical, Warning | The delivery store is not among the profile's data files. Same rule as `NoDeliveryStore`.        |
+| `InferredDeliveryStore` | Warning           | Delivery was taken from the profile default, not read from the account. Confirm it. See below.   |
+| `LocalImapSentItems`    | Warning           | Before Outlook 2013, IMAP sent mail and drafts stay local. See below.                            |
+| `SynchronizedStore`     | Informational     | Removing mail from this store can remove the server copy and reach every other client.           |
+| `HeaderOnlyItems`       | Informational     | Items here can be stubs. Archiving verifies each body and stops rather than moving a stub.       |
 
-### An unresolved delivery store is not a clear profile
+### Where delivery comes from on Outlook 2007
 
-Outlook 2010 is the first version whose object model exposes a per-account delivery store. **On Outlook 2007 it cannot be read at all**, so
-every account on a 2007 profile reports `NoDeliveryStore` and `DeliversIntoExchange` can never be raised there.
+Outlook 2010 is the first version whose object model exposes a per-account delivery store. **On Outlook 2007 that property does not exist**,
+and reading it fails with `DISP_E_UNKNOWNNAME` on every account in the profile.
 
-The inventory therefore fails closed. When delivery is unresolved and any store in the profile is Exchange-backed, each non-Exchange account
-raises `NoDeliveryStore` as **critical**: the store that could not be named may be the OST, which is exactly the configuration that makes
-removing the Exchange account destructive. The Exchange account itself stays a warning, because its mail belongs in the mailbox whichever
-store that is. The detail text names the client limitation, so a report distinguishes _undeterminable_ from _misconfigured_.
+The inventory falls back to the profile's **default delivery store**, taken from the Inbox that Outlook reports as the default. New mail
+lands there unless the account was re-pointed, so a POP account sharing a 2007 profile with an Exchange mailbox now raises
+`DeliversIntoExchange` and names the OST — the finding that matters most, on the clients that could never report it.
 
-Read the delivery location from Account Settings on these profiles and treat `CriticalCount` as a floor, not a verdict. A zero from a 2007
-client means only that nothing disproved safety.
+Every account resolved that way also raises `InferredDeliveryStore`. A client that cannot report delivery cannot report an override either,
+so an account re-pointed to a PST would still be listed against the default store. The account records carry `DeliveryStoreSource`
+(`Account`, `ProfileDefault`, or `Unresolved`) and `IsDeliveryStoreInferred` so a report never presents the two as the same fact.
+
+**Confirm each inferred destination in Account Settings** before removing an account or a data file. The delivery location is shown per
+account, below the account list.
+
+Where neither route answers — no per-account store and no readable default — the inventory fails closed instead of guessing. With any store
+in the profile Exchange-backed, each non-Exchange account raises `NoDeliveryStore` as **critical**: the store that could not be named may be
+the OST. The Exchange account itself stays a warning, because its mail belongs in the mailbox whichever store that is. The detail text names
+the client limitation, so a report distinguishes _undeterminable_ from _misconfigured_.
 
 Store classification comes from the accounts, not the file name. An Outlook 2007 IMAP account is backed by a **PST** that reports
 `ExchangeStoreType 3`, so by extension alone it is indistinguishable from an ordinary local data file — while its items can still be

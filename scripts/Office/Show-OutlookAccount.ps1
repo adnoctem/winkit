@@ -309,11 +309,27 @@ if ($_outlookMajor -lt $_deliveryStoreMajor) {
   $_unresolvedCause = "Outlook $_outlookVersion does not expose a per-account delivery store; Outlook 2010 is the first version that does."
 }
 
+# Why a delivery store had to be taken from the profile rather than read from
+# the account. Below Outlook 2010 that is the client; above it, the account.
+$_inferenceCause = 'This account reported no delivery store of its own.'
+
+if ($_outlookMajor -lt $_deliveryStoreMajor) {
+  $_inferenceCause = "Outlook $_outlookVersion does not expose a per-account delivery store; Outlook 2010 is the first version that does."
+}
+
 foreach ($_account in $_accounts) {
   $_target = @()
 
   if ($_account.DeliveryStoreID) {
     $_target = @($_stores | Where-Object { $_.StoreID -eq $_account.DeliveryStoreID })
+  }
+
+  # How the delivery store was established decides what the value is worth. A
+  # module that predates the field only ever reported one read from the account.
+  $_inferred = $false
+
+  if ($_account.PSObject.Properties['IsDeliveryStoreInferred']) {
+    $_inferred = [bool]$_account.IsDeliveryStoreInferred
   }
 
   # Reported ahead of the delivery findings because it depends only on the
@@ -323,7 +339,10 @@ foreach ($_account in $_accounts) {
   if ($_account.AccountTypeName -eq 'IMAP' -and $_outlookMajor -lt $_serverSentItemsMajor) {
     $_sentItemsStore = 'the local delivery store'
 
-    if ($_target.Count -eq 1) {
+    if ($_target.Count -eq 1 -and $_inferred) {
+      $_sentItemsStore = "the profile's default delivery store '$($_target[0].DisplayName)'"
+    }
+    elseif ($_target.Count -eq 1) {
       $_sentItemsStore = "the local delivery store '$($_target[0].DisplayName)'"
     }
 
@@ -364,10 +383,24 @@ foreach ($_account in $_accounts) {
     continue
   }
 
+  # Named, but not read from the account. The profile default is where new mail
+  # lands unless this account was re-pointed, and a client that cannot report
+  # delivery cannot report the override either. That makes the destination a
+  # reading to confirm rather than an unknown, but not a reading taken here.
+  if ($_inferred) {
+    Add-OutlookAccountFinding -Severity 'Warning' -Code 'InferredDeliveryStore' -Subject $_account.DisplayName -Detail "$_inferenceCause Delivery is reported from the profile's default store '$($_target[0].DisplayName)', which is where new mail lands unless this account was re-pointed. Confirm it against the delivery location shown on the account's entry in Account Settings before removing any account or data file."
+  }
+
   # The configuration that makes account removal destructive: an account whose
   # mail lands in a store belonging to a different account.
   if ($_account.AccountType -ne 0 -and $_target[0].IsExchangeBacked) {
-    Add-OutlookAccountFinding -Severity 'Critical' -Code 'DeliversIntoExchange' -Subject $_account.DisplayName -Detail "$($_account.AccountTypeName) mail is delivered into the Exchange-backed store '$($_target[0].DisplayName)'. Removing the Exchange account discards this account's mail with the OST. Re-point delivery to a PST first."
+    $_detail = "$($_account.AccountTypeName) mail is delivered into the Exchange-backed store '$($_target[0].DisplayName)'. Removing the Exchange account discards this account's mail with the OST. Re-point delivery to a PST first."
+
+    if ($_inferred) {
+      $_detail = "$($_account.AccountTypeName) mail is delivered into the Exchange-backed store '$($_target[0].DisplayName)' by the profile default, and Outlook $_outlookVersion cannot report a per-account override. Removing the Exchange account discards this account's mail with the OST. Confirm the delivery location in Account Settings, then re-point delivery to a PST."
+    }
+
+    Add-OutlookAccountFinding -Severity 'Critical' -Code 'DeliversIntoExchange' -Subject $_account.DisplayName -Detail $_detail
   }
 }
 

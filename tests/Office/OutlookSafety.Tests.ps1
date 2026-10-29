@@ -2384,19 +2384,40 @@ Describe 'Outlook account and delivery store inventory' {
   BeforeAll {
     function New-FakeAccountRecord {
       [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Creates only in-memory test fixtures.')]
-      param ([string]$Name, [string]$TypeName, [int]$Type, [string]$StoreID, [string]$StoreName)
+      param (
+        [string]$Name,
+        [string]$TypeName,
+        [int]$Type,
+        [string]$StoreID,
+        [string]$StoreName,
+        [switch]$Inferred
+      )
+
+      # Inferred marks a delivery store taken from the profile default because the
+      # client exposes no per-account one, as every account on Outlook 2007 is.
+      $source = 'Unresolved'
+
+      if ($Inferred) {
+        $source = 'ProfileDefault'
+      }
+      elseif ($StoreID) {
+        $source = 'Account'
+      }
+
       [PSCustomObject]@{
-        DisplayName          = $Name
-        SmtpAddress          = $Name
-        UserName             = $Name
-        AccountType          = $Type
-        AccountTypeName      = $TypeName
-        DeliveryStoreID      = $StoreID
-        DeliveryStoreName    = $StoreName
-        DeliveryFilePath     = ''
-        IsServerSynchronized = $TypeName -in @('Exchange', 'IMAP', 'HTTP', 'EAS')
-        MayDeferItemBodies   = $TypeName -in @('IMAP', 'HTTP', 'EAS')
-        Evidence             = ''
+        DisplayName             = $Name
+        SmtpAddress             = $Name
+        UserName                = $Name
+        AccountType             = $Type
+        AccountTypeName         = $TypeName
+        DeliveryStoreID         = $StoreID
+        DeliveryStoreName       = $StoreName
+        DeliveryFilePath        = ''
+        DeliveryStoreSource     = $source
+        IsDeliveryStoreInferred = [bool]$Inferred
+        IsServerSynchronized    = $TypeName -in @('Exchange', 'IMAP', 'HTTP', 'EAS')
+        MayDeferItemBodies      = $TypeName -in @('IMAP', 'HTTP', 'EAS')
+        Evidence                = ''
       }
     }
 
@@ -2590,6 +2611,78 @@ Describe 'Outlook account and delivery store inventory' {
     # The detail must name the client limit, so the report is read as
     # undeterminable rather than as a misconfigured profile.
     @($unresolved | Where-Object { $_.Severity -eq 'Critical' })[0].Detail | Should -Match 'does not expose a per-account delivery store'
+  }
+
+  # The DLT0PC32 profile as a client that cannot report per-account delivery is
+  # read: two POP accounts and an Exchange mailbox, all three delivering into the
+  # OST according to the profile default. Account Settings confirmed exactly this.
+  It 'names the Exchange mailbox as the destination when delivery comes from the profile default' {
+    $global:WinkitInventoryVersion = '12.0.0.6785'
+    $global:WinkitInventoryStores = @(
+      (New-FakeStoreRecord -Name 'Archivordner' -StoreID 'archive-store' -Path 'C:\Synthetic\archive.pst'),
+      (New-FakeStoreRecord -Name 'Postfach - Test' -StoreID 'exchange-store' -Path 'C:\Synthetic\outlook.ost' -Format 'OST' -ExchangeStoreType 0 -DeliveredFrom @('buchhaltung@example.de', 'legacy@example.com', 'mailbox@example.com'))
+    )
+    $global:WinkitInventoryAccounts = @(
+      (New-FakeAccountRecord -Name 'buchhaltung@example.de' -TypeName 'POP3' -Type 2 -StoreID 'exchange-store' -StoreName 'Postfach - Test' -Inferred),
+      (New-FakeAccountRecord -Name 'legacy@example.com' -TypeName 'POP3' -Type 2 -StoreID 'exchange-store' -StoreName 'Postfach - Test' -Inferred),
+      (New-FakeAccountRecord -Name 'mailbox@example.com' -TypeName 'Exchange' -Type 0 -StoreID 'exchange-store' -StoreName 'Postfach - Test' -Inferred)
+    )
+
+    $inventory = & $script:AccountScriptPath -PassThru -WarningAction SilentlyContinue
+
+    # This is the finding the survey exists for, and it was unreachable on every
+    # client in the fleet while delivery came back empty.
+    $delivers = @($inventory.Findings | Where-Object { $_.Code -eq 'DeliversIntoExchange' })
+    $delivers.Count | Should -Be 2
+    @($delivers | Where-Object { $_.Severity -eq 'Critical' }).Count | Should -Be 2
+    @($delivers | Where-Object { $_.Subject -eq 'mailbox@example.com' }).Count | Should -Be 0
+    $delivers[0].Detail | Should -Match 'Postfach - Test'
+    $delivers[0].Detail | Should -Match 'cannot report a per-account override'
+    $inventory.CriticalCount | Should -Be 2
+
+    # Every account still needs the destination confirmed by hand, because an
+    # account re-pointed elsewhere would be reported against the default anyway.
+    $confirm = @($inventory.Findings | Where-Object { $_.Code -eq 'InferredDeliveryStore' })
+    $confirm.Count | Should -Be 3
+    @($confirm | Where-Object { $_.Severity -eq 'Warning' }).Count | Should -Be 3
+    $confirm[0].Detail | Should -Match 'does not expose a per-account delivery store'
+    $confirm[0].Detail | Should -Match 'Account Settings'
+
+    # Nothing is reported as unresolved: the destination is named.
+    @($inventory.Findings | Where-Object { $_.Code -eq 'NoDeliveryStore' }).Count | Should -Be 0
+  }
+
+  It 'does not claim an inferred destination when a resolved store was read from the account' {
+    $global:WinkitInventoryStores = @(
+      (New-FakeStoreRecord -Name 'Postfach - Test' -StoreID 'exchange-store' -Path 'C:\Synthetic\outlook.ost' -Format 'OST' -ExchangeStoreType 0 -DeliveredFrom @('buchhaltung@example.de'))
+    )
+    $global:WinkitInventoryAccounts = @(
+      (New-FakeAccountRecord -Name 'buchhaltung@example.de' -TypeName 'POP3' -Type 2 -StoreID 'exchange-store' -StoreName 'Postfach - Test')
+    )
+
+    $inventory = & $script:AccountScriptPath -PassThru -WarningAction SilentlyContinue
+
+    @($inventory.Findings | Where-Object { $_.Code -eq 'InferredDeliveryStore' }).Count | Should -Be 0
+    @($inventory.Findings | Where-Object { $_.Code -eq 'DeliversIntoExchange' })[0].Detail | Should -Not -Match 'profile default'
+    $inventory.CriticalCount | Should -Be 1
+  }
+
+  # A module older than the delivery-source field reports neither property. The
+  # script must still read such a record rather than treating it as inferred.
+  It 'treats a record without a delivery source as read from the account' {
+    $global:WinkitInventoryStores = @(
+      (New-FakeStoreRecord -Name 'Postfach - Test' -StoreID 'exchange-store' -Path 'C:\Synthetic\outlook.ost' -Format 'OST' -ExchangeStoreType 0 -DeliveredFrom @('buchhaltung@example.de'))
+    )
+    $legacy = New-FakeAccountRecord -Name 'buchhaltung@example.de' -TypeName 'POP3' -Type 2 -StoreID 'exchange-store' -StoreName 'Postfach - Test'
+    $legacy.PSObject.Properties.Remove('DeliveryStoreSource')
+    $legacy.PSObject.Properties.Remove('IsDeliveryStoreInferred')
+    $global:WinkitInventoryAccounts = @($legacy)
+
+    $inventory = & $script:AccountScriptPath -PassThru -WarningAction SilentlyContinue
+
+    @($inventory.Findings | Where-Object { $_.Code -eq 'InferredDeliveryStore' }).Count | Should -Be 0
+    @($inventory.Findings | Where-Object { $_.Code -eq 'DeliversIntoExchange' }).Count | Should -Be 1
+    $inventory.CriticalCount | Should -Be 1
   }
 
   It 'reports local IMAP sent mail even where the delivery store cannot be resolved' {
