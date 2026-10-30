@@ -1,3 +1,10 @@
+## [2.2.2](https://github.com/adnoctem/winkit/compare/v2.2.1...v2.2.2) (2026-10-30)
+
+### Bug Fixes
+
+* **scripts:** report the delivery store a 2007 client cannot name ([14ec1d2](https://github.com/adnoctem/winkit/commit/14ec1d2a840be81d24df5595534afba63aa8f732))
+* **scripts:** require Substrate 0.2.1 for delivery store resolution ([c5ae202](https://github.com/adnoctem/winkit/commit/c5ae202b0539615f063876223ca095fde210b992))
+
 ## [2.2.1](https://github.com/adnoctem/winkit/compare/v2.2.0...v2.2.1) (2026-10-29)
 
 ### Bug Fixes
