@@ -5,7 +5,7 @@
 param ()
 
 BeforeAll {
-  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
+  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.1 -Force
   $script:BackupScript = Join-Path $PSScriptRoot '../../scripts/Office/Backup-Outlook.ps1'
 }
 

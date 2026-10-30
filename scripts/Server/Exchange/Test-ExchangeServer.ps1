@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.0' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.1' }
 
 <#
 .SYNOPSIS
@@ -96,7 +96,7 @@ param (
   [int]$HealthCheckerTimeoutMinutes = 30
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.1 -Force
 $ProgressPreference = 'SilentlyContinue'
 
 $healthCheckerUrl = 'https://github.com/microsoft/CSS-Exchange/releases/latest/download/HealthChecker.ps1'

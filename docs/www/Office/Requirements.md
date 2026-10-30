@@ -2,11 +2,11 @@
 
 [Office overview](README.md)
 
-The winkit installer supplies the pinned AdNoctem.Substrate.PowerShell dependency. Scripts require exactly version 0.2.0. Use x64 Windows
+The winkit installer supplies the pinned AdNoctem.Substrate.PowerShell dependency. Scripts require exactly version 0.2.1. Use x64 Windows
 PowerShell 5.1 or PowerShell 7 on x64 Windows; 32-bit and ARM64 PowerShell hosts are unsupported. No .NET SDK or separate NuGet libraries
 are required.
 
-Archiving, splitting PST archives, and duplicate review require AdNoctem.Substrate.PowerShell 0.2.0, including its PST attachment lifetime
+Archiving, splitting PST archives, and duplicate review require AdNoctem.Substrate.PowerShell 0.2.1, including its PST attachment lifetime
 helpers.
 
 ## Choose the session

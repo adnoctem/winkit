@@ -7,7 +7,7 @@ param ()
 # Exercise real script functions with mutable Outlook-shaped objects. No COM,
 # profile, or real mail is opened. Script-level guards are tested with mocks.
 BeforeAll {
-  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
+  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.1 -Force
   $script:CompiledFolderPlan = Get-Command Get-OutlookFolderPlan -CommandType Cmdlet -Module AdNoctem.Substrate.PowerShell
   if (-not ('Winkit.Tests.OutlookAutomationProxy' -as [type])) {
     Add-Type -Path (Join-Path $PSScriptRoot 'OutlookAutomationProxy.cs')

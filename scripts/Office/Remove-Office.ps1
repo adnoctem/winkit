@@ -1,12 +1,12 @@
 ﻿#Requires -Version 5.1
 #Requires -RunAsAdministrator
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.0' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.1' }
 
 <#
 .SYNOPSIS
   Inventories or removes explicitly selected Click-to-Run Office products.
 .DESCRIPTION
-  Uses AdNoctem.Substrate.PowerShell 0.2.0 for removal planning, confirmation, execution, and
+  Uses AdNoctem.Substrate.PowerShell 0.2.1 for removal planning, confirmation, execution, and
   verification. Never defaults to removing all Office. Selected products already
   absent are a successful no-op. Unselected products must remain unchanged.
   Standalone MSI removal is unsupported; use an approved migration where applicable.
@@ -75,7 +75,7 @@ param (
   $PassThru
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.1 -Force
 
 # -----------------------------------------------------------------------------
 # Validate the operation before calling any deployment API.

@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.0' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.1' }
 
 <#
 .SYNOPSIS
@@ -242,7 +242,7 @@ param (
   $QuitOutlook
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.1 -Force
 
 # Outlook automation must use the mailbox user's interactive security context.
 $_outlookUser = Get-UserInfo

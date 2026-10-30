@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.1
 #Requires -Module UpdateServices
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.0' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.1' }
 
 <#
 .SYNOPSIS
@@ -79,7 +79,7 @@ param (
   $OutputPath
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.1 -Force
 
 Write-Log -Message "Querying WSUS server $(if ($ServerName) { $ServerName } else { 'localhost' }) for $Classification updates with status $Status..." -Color Cyan
 

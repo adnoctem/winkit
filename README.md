@@ -39,7 +39,7 @@ configuration state.
 
 The [`scripts`](scripts) directory contains executable scripts intended to be run directly by an administrator, deployment process,
 bootstrap routine, scheduled task or other automation system. Scripts depend on the
-[`AdNoctem.Substrate.PowerShell`](https://www.powershellgallery.com/packages/AdNoctem.Substrate.PowerShell) module at exactly version 0.2.0,
+[`AdNoctem.Substrate.PowerShell`](https://www.powershellgallery.com/packages/AdNoctem.Substrate.PowerShell) module at exactly version 0.2.1,
 installed from the PowerShell Gallery. No .NET SDK or separate NuGet libraries are required; the [`bin`](bin) directory holds convenience
 `.cmd` launchers for selected entry-point scripts.
 

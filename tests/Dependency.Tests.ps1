@@ -40,7 +40,7 @@ Describe 'Substrate dependency contract' {
 
 Describe 'developer dependency initialization' {
   BeforeEach {
-    Mock Import-PowerShellDataFile { @{ 'AdNoctem.Substrate.PowerShell' = '0.2.0' } }
+    Mock Import-PowerShellDataFile { @{ 'AdNoctem.Substrate.PowerShell' = '0.2.1' } }
     Mock Install-PackageProvider { }
     Mock Install-Module { }
     # Stands for any installed version ahead of the pin. It must stay out of
@@ -53,7 +53,7 @@ Describe 'developer dependency initialization' {
   It 'does not substitute a newer installed version for the pinned release' {
     & (Join-Path $script:RepositoryRoot 'tools/initialize.ps1')
     Should -Invoke Install-Module -Times 1 -Exactly -ParameterFilter {
-      $Name -eq 'AdNoctem.Substrate.PowerShell' -and $RequiredVersion -eq '0.2.0' -and $Repository -eq 'PSGallery'
+      $Name -eq 'AdNoctem.Substrate.PowerShell' -and $RequiredVersion -eq '0.2.1' -and $Repository -eq 'PSGallery'
     }
   }
 

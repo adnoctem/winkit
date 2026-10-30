@@ -38,7 +38,7 @@ Describe 'Office script file conventions' {
 
   It 'imports AdNoctem.Substrate.PowerShell after the parameter block' {
     foreach ($_script in $script:Scripts) {
-      (Get-Content -LiteralPath $_script.FullName -Raw) -match 'Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force' | Should -BeTrue -Because "$($_script.Name) must import AdNoctem.Substrate.PowerShell"
+      (Get-Content -LiteralPath $_script.FullName -Raw) -match 'Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.1 -Force' | Should -BeTrue -Because "$($_script.Name) must import AdNoctem.Substrate.PowerShell"
     }
   }
 
@@ -49,7 +49,7 @@ Describe 'Office script file conventions' {
   ) {
     $path = Join-Path $script:OfficeScripts "$ScriptName.ps1"
     $ast = [Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
-    $ast.ScriptRequirements.RequiredModules[0].RequiredVersion | Should -Be ([version]'0.2.0')
+    $ast.ScriptRequirements.RequiredModules[0].RequiredVersion | Should -Be ([version]'0.2.1')
   }
 
   It 'documents .SYNOPSIS and a complete .NOTES block' {

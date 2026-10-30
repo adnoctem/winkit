@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.1
 #Requires -Module ActiveDirectory
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.0' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.1' }
 
 <#
 .SYNOPSIS
@@ -60,7 +60,7 @@ param (
   $OutputPath
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.1 -Force
 
 $now = Get-Date
 $cutoff = $now.AddDays($DaysUntilExpiry)

@@ -3,7 +3,7 @@
 
 # Wrapper contracts only. Native Office behavior is tested in Substrate.
 BeforeAll {
-  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.0 -Force
+  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.1 -Force
 
   $script:EntryPoints = @{}
   $script:ScriptAsts = @{}
@@ -113,11 +113,11 @@ Describe 'Office wrapper contracts' {
     Mock Remove-Item { throw 'Wrapper must not remove files.' }
   }
 
-  It 'requires AdNoctem.Substrate.PowerShell 0.2.0 and a mandatory mode in <Entry>' -ForEach @(
+  It 'requires AdNoctem.Substrate.PowerShell 0.2.1 and a mandatory mode in <Entry>' -ForEach @(
     @{ Entry = 'Install-Office' }, @{ Entry = 'Remove-Office' }, @{ Entry = 'Switch-OfficeVersion' }
   ) {
     $ast = $script:ScriptAsts[$Entry]
-    $ast.ScriptRequirements.RequiredModules[0].RequiredVersion | Should -Be ([version]'0.2.0')
+    $ast.ScriptRequirements.RequiredModules[0].RequiredVersion | Should -Be ([version]'0.2.1')
     $mode = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Mode' }
     $mode.Extent.Text | Should -Match 'Mandatory = \$true'
     $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $true).Count | Should -Be 0

@@ -63,7 +63,7 @@ BeforeAll {
     Set-Content -LiteralPath (Join-Path -Path $source -ChildPath 'scripts\Invoke-Bootstrap.ps1') -Value "# fixture $Version"
     Set-Content -LiteralPath (Join-Path -Path $source -ChildPath 'bin\bootstrap.cmd') -Value "rem fixture $Version"
     Set-Content -LiteralPath (Join-Path -Path $source -ChildPath 'resources\version.txt') -Value $Version
-    Set-Content -LiteralPath (Join-Path -Path $source -ChildPath 'requirements.psd1') -Value "@{ 'AdNoctem.Substrate.PowerShell' = '0.2.0' }"
+    Set-Content -LiteralPath (Join-Path -Path $source -ChildPath 'requirements.psd1') -Value "@{ 'AdNoctem.Substrate.PowerShell' = '0.2.1' }"
     Set-Content -LiteralPath (Join-Path -Path $source -ChildPath 'LICENSE') -Value 'MIT fixture'
 
     $items = @(
@@ -117,7 +117,7 @@ BeforeAll {
   }
 
   Mock Get-Module {
-    [pscustomobject]@{ Version = [version]'0.2.0' }
+    [pscustomobject]@{ Version = [version]'0.2.1' }
   } -ParameterFilter { $ListAvailable -and $Name -eq 'AdNoctem.Substrate.PowerShell' }
 }
 
@@ -747,26 +747,26 @@ Describe 'runtime dependency selection' {
     } -ParameterFilter { $ListAvailable -and $Name -eq 'AdNoctem.Substrate.PowerShell' }
     Mock Get-PackageProvider { [pscustomobject]@{ Name = 'NuGet' } }
     Mock Install-PackageProvider { throw 'The installed provider must be reused.' }
-    Mock Install-Module { $script:AvailableRuntimeVersion = [version]'0.2.0' }
+    Mock Install-Module { $script:AvailableRuntimeVersion = [version]'0.2.1' }
   }
 
   It 'reads the exact Substrate pin from the distribution manifest' {
     $manifest = Join-Path $TestDrive 'runtime.psd1'
-    Set-Content -LiteralPath $manifest -Value "@{ 'AdNoctem.Substrate.PowerShell' = '0.2.0' }"
-    Get-RuntimeRequirement -RequirementsPath $manifest | Should -Be '0.2.0'
+    Set-Content -LiteralPath $manifest -Value "@{ 'AdNoctem.Substrate.PowerShell' = '0.2.1' }"
+    Get-RuntimeRequirement -RequirementsPath $manifest | Should -Be '0.2.1'
   }
 
   It 'installs the pinned release even when a newer module is available' {
-    Invoke-DependencyInstall -RequiredVersion '0.2.0' -InstallScope CurrentUser | Should -BeTrue
+    Invoke-DependencyInstall -RequiredVersion '0.2.1' -InstallScope CurrentUser | Should -BeTrue
     Should -Invoke Install-Module -Times 1 -Exactly -ParameterFilter {
-      $Name -eq 'AdNoctem.Substrate.PowerShell' -and $RequiredVersion -eq '0.2.0' -and
+      $Name -eq 'AdNoctem.Substrate.PowerShell' -and $RequiredVersion -eq '0.2.1' -and
       $Repository -eq 'PSGallery' -and $Scope -eq 'CurrentUser'
     }
   }
 
   It 'reuses the exact installed release without installing another version' {
-    $script:AvailableRuntimeVersion = [version]'0.2.0'
-    Invoke-DependencyInstall -RequiredVersion '0.2.0' -InstallScope CurrentUser | Should -BeFalse
+    $script:AvailableRuntimeVersion = [version]'0.2.1'
+    Invoke-DependencyInstall -RequiredVersion '0.2.1' -InstallScope CurrentUser | Should -BeFalse
     Should -Invoke Install-Module -Times 0
   }
 }
