@@ -2,7 +2,8 @@
 
 ### Bug Fixes
 
-* **scripts:** fail closed when a client cannot report delivery stores ([94ca51a](https://github.com/adnoctem/winkit/commit/94ca51a5a9a7c34ff2a1c7213d036bdabc44e031))
+- **scripts:** fail closed when a client cannot report delivery stores
+  ([94ca51a](https://github.com/adnoctem/winkit/commit/94ca51a5a9a7c34ff2a1c7213d036bdabc44e031))
 
 ## [2.2.0](https://github.com/adnoctem/winkit/compare/v2.1.0...v2.2.0) (2026-10-28)
 
