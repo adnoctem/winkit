@@ -1,3 +1,10 @@
+## [2.3.0](https://github.com/adnoctem/winkit/compare/v2.2.2...v2.3.0) (2026-11-02)
+
+### Features
+
+* **scripts:** build derived pfSense configurations from an existing backup ([f4ab0e0](https://github.com/adnoctem/winkit/commit/f4ab0e0b4f87eb5b22fc904691b04e8008282a2b))
+* **scripts:** import staged user profile data ([c5baf48](https://github.com/adnoctem/winkit/commit/c5baf480e45c5a92826149cebb026d0b4e2e839e))
+
 ## [2.2.2](https://github.com/adnoctem/winkit/compare/v2.2.1...v2.2.2) (2026-10-30)
 
 ### Bug Fixes
