@@ -1,6 +1,6 @@
 # Press-release document builds
 
-`Build-PressRelease.ps1` requires **x64 PowerShell 7.4 or later** and exactly **AdNoctem.Substrate.PowerShell 0.3.0**, supplied by the
+`Build-PressRelease.ps1` requires **x64 PowerShell 7.4 or later** and exactly **AdNoctem.Substrate.PowerShell 0.3.1**, supplied by the
 winkit installer. It needs no Word installation or elevation. This is a non-interactive build engine; a selection UI is future work.
 
 Start in the installed winkit directory, normally `C:\Program Files\winkit`. Open your approved authoring `.dotx` in Word, complete its

@@ -237,7 +237,7 @@ New can also select an existing source PST directly. Here, `ArchivePath` retains
 ```
 
 `SourceArchivePath` replaces `StoreName`; it cannot be combined with it. These operations require classic Outlook and
-AdNoctem.Substrate.PowerShell 0.3.0's `Open-OutlookPstStore`/`Close-OutlookPstStore` commands. A source PST already attached to Outlook
+AdNoctem.Substrate.PowerShell 0.3.1's `Open-OutlookPstStore`/`Close-OutlookPstStore` commands. A source PST already attached to Outlook
 stays attached. Otherwise the script temporarily attaches it and cleans up afterward, including during previews. Opening a PST can update
 its metadata. Source files must be writable and local; network paths and paths traversing reparse points are refused. Do not replace the
 source or change its profile attachment during a run. Other attached data-file paths must also be inspectable and local; an inaccessible,

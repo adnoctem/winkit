@@ -4,7 +4,7 @@
 # The document API ships only for Core. Keep discovery compatible with existing 5.1 suites.
 Describe 'Build-PressRelease' -Skip:($PSVersionTable.PSVersion -lt [version]'7.4') {
   BeforeAll {
-    Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.3.0 -Force
+    Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.3.1 -Force
     $script:BuildScript = Join-Path $PSScriptRoot '../../scripts/Files/Build-PressRelease.ps1'
     $script:Utf8 = [Text.UTF8Encoding]::new($false)
 
@@ -161,6 +161,7 @@ Describe 'Build-PressRelease' -Skip:($PSVersionTable.PSVersion -lt [version]'7.4
     $manifest.schema | Should -Be 'press-release-build/1'
     $manifest.status | Should -Be 'Completed'
     $manifest.tool.version | Should -Not -BeNullOrEmpty
+    $manifest.tool.substrateVersion | Should -Be (Get-Module AdNoctem.Substrate.PowerShell).Version.ToString()
     $manifest.input.sha256 | Should -Be $before
     $manifest.input.schema | Should -Be 'press-release/1'
     $manifest.input.templateVersion | Should -Be '1.0'
@@ -170,6 +171,22 @@ Describe 'Build-PressRelease' -Skip:($PSVersionTable.PSVersion -lt [version]'7.4
     [IO.File]::ReadAllBytes($result.ManifestPath)[0] | Should -Be 123
     @(Get-ChildItem -LiteralPath $script:Output -Force).Count | Should -Be 3
     Get-Content -LiteralPath $result.HtmlPath -Raw | Should -Match 'Neutral release headline'
+  }
+
+  It 'turns a plain HTTPS URL in the source body into an HTML hyperlink' {
+    Edit-SyntheticDocument -Path $script:Input -Edit {
+      param (
+        $xml,
+
+        $namespace
+      )
+
+      $text = $xml.SelectSingleNode('//w:sdt[w:sdtPr/w:tag/@w:val="pr.body"]//w:t', $namespace)
+      $text.InnerText = 'Media: https://example.com/neutral-release'
+    }
+
+    $result = Invoke-ReleaseBuild
+    Get-Content -LiteralPath $result.HtmlPath -Raw | Should -Match '<a href="https://example\.com/neutral-release">'
   }
 
   It 'rejects an authoring .dotx path' {

@@ -1,5 +1,5 @@
 ﻿#Requires -Version 7.4
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.3.0' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.3.1' }
 
 <#
 .SYNOPSIS
@@ -67,7 +67,7 @@ param (
   $PassThru
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.3.0 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.3.1 -Force
 
 $ErrorActionPreference = 'Stop'
 if ($DryRun) {
@@ -249,7 +249,7 @@ try {
         name             = 'winkit/Build-PressRelease'
         version          = '1.0.0'
         scriptSha256     = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
-        substrateVersion = '0.3.0'
+        substrateVersion = (Get-Module AdNoctem.Substrate.PowerShell).Version.ToString()
       }
       input          = [ordered]@{
         path            = $_input
