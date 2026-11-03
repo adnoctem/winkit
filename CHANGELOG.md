@@ -1,3 +1,9 @@
+## [2.4.0](https://github.com/adnoctem/winkit/compare/v2.3.0...v2.4.0) (2026-11-03)
+
+### Features
+
+* **scripts:** add press release build ([6e77fa5](https://github.com/adnoctem/winkit/commit/6e77fa51e358e218950d1c34823c439e3f777def))
+
 ## [2.3.0](https://github.com/adnoctem/winkit/compare/v2.2.2...v2.3.0) (2026-11-02)
 
 ### Features
