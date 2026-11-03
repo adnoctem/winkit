@@ -39,19 +39,20 @@ root `AGENTS.md` is a symlink to this file — edit this one.
 ## Script conventions (non-negotiable)
 
 - Every script opens with `#Requires -Version 5.1`, `#Requires -RunAsAdministrator` (when elevation is required), and
-  `#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.2.1' }` — pin the exact adopted version;
+  `#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.3.0' }` — pin the exact adopted version;
   Substrate 0.x releases may change APIs
 - `dist/install.ps1` and `dist/uninstall.ps1` are the AdNoctem.Substrate.PowerShell exceptions: distribution maintenance must remain
   standalone
 - The web installer `dist/install.ps1` takes configuration only from `WINKIT_*` process environment variables, including `WINKIT_DRY_RUN`;
   it has no public script parameters. Keep the documented `irm | iex` entry point working in Windows PowerShell 5.1
-- `Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.1 -Force` after the param block
+- `Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.3.0 -Force` after the param block
 - Comment-based help with `.SYNOPSIS`/`.DESCRIPTION`/`.PARAMETER`/`.EXAMPLE`, plus a `.NOTES` block (Author, License, Server Core support,
   SYSTEM-account suitability)
 - `[CmdletBinding(SupportsShouldProcess = $true)]` with `-DryRun` (sets `$WhatIfPreference`) and `-PassThru` switches
 - Results use AdNoctem.Substrate.PowerShell `New-OperationResult`/`Add-OperationResult`; user feedback via `Write-Log -Message -Color`
 - Runtime: x64 Windows PowerShell 5.1 or PowerShell 7 on x64 Windows; no .NET SDK is needed. Keep PowerShell 5.0-compatible syntax: no
   ternary, `??`, or null-conditional operators (PSUseCompatibleSyntax targets 5.0/5.1/7.0)
+- `scripts/Files/Build-PressRelease.ps1` requires PowerShell 7.4 or later: Substrate's document-generation types ship only for Core.
 - Encoding: UTF-8 with BOM, CRLF (enforced by formatter and pre-commit `mixed-line-ending`); 2-space indentation
 - `dist/install.ps1` is the encoding exception: keep it ASCII-only UTF-8 **without BOM**, with CRLF. Windows PowerShell 5.1 treats a BOM
   preserved in downloaded text as code, breaking the documented `irm | iex` entry point

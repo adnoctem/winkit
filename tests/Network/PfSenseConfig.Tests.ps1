@@ -148,9 +148,9 @@ BeforeAll {
 Describe 'Build-PfSenseConfig script conventions' {
   It 'pins AdNoctem.Substrate.PowerShell and documents .SYNOPSIS and a complete .NOTES block' {
     $_header = Get-Content -LiteralPath $script:BuildScript -TotalCount 3
-    $_header -match "^#Requires -Modules @\{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0\.2\.1' \}" | Should -Not -BeNullOrEmpty
+    $_header -match "^#Requires -Modules @\{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0\.3\.0' \}" | Should -Not -BeNullOrEmpty
     $_content = Get-Content -LiteralPath $script:BuildScript -Raw
-    $_content -match 'Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.2.1 -Force' | Should -BeTrue
+    $_content -match 'Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.3.0 -Force' | Should -BeTrue
     (Get-Help $script:BuildScript).Synopsis | Should -Not -Match 'Build-PfSenseConfig\.ps1'
     $_content -match 'Server Core:' | Should -BeTrue
     $_content -match 'SYSTEM-account execution:' | Should -BeTrue
