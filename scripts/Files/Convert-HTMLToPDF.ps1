@@ -3,120 +3,100 @@
 
 <#
 .SYNOPSIS
-  Converts an HTML file to PDF using the EuroPDF or DocRaptor cloud APIs, or PSWritePDF locally.
-
+  Converts HTML to PDF and records a separate PDF audit manifest.
 .DESCRIPTION
-  Three conversion modes:
-
-  EuroPDF mode (default):
-    Sends the HTML content to the EuroPDF cloud API (Prince-based). Supports PDF profiles
-    (PDF/UA-1, PDF/A-3a+PDF/UA-1), named Prince pipeline selection, and async processing.
-
-  DocRaptor mode:
-    Sends the HTML content to the DocRaptor cloud API (Prince-based, same engine as EuroPDF).
-    Supports the same PDF profiles, numeric pipeline selection (9, 10, 10.1), strict HTML
-    validation, and async processing with up to 600 seconds of server time.
-
-  PS mode:
-    Uses the locally installed PSWritePDF module (iText 7). Works offline with no API key or
-    time limits.
-
-  Authentication for cloud APIs uses HTTP Basic Auth (API key as username, empty password).
-  Set -ApiKey, or the EUROPDF_API_KEY / DOCRAPTOR_API_KEY environment variable.
-
+  Uses EuroPDF (default), DocRaptor, or local PSWritePDF. Cloud modes send HTML to
+  the selected service and can incur charges. Test requests are watermarked.
+  Saves binary responses directly to staging files, verifies a PDF signature,
+  and publishes the PDF and pdf.manifest.json. This is not conformance validation.
+  Conversion failures record sanitized errors and null output in the manifest.
+  The HTML/DOCX build and build.manifest.json are never modified.
+  Use one output directory per conversion and keep it unchanged during the run.
+  Preflight errors and previews do not write manifests. Existing PDFs or manifests
+  require Overwrite. An unsuccessful retry preserves the old PDF but writes a
+  failure manifest for the latest attempt; it does not certify the old PDF.
 .PARAMETER InputPath
-  Path to the HTML file to convert. Must be a single .html or .htm file.
-
+  Existing .html or .htm file. Path is an alias. UTF-8 is recommended.
 .PARAMETER OutputPath
-  Path for the output PDF. Defaults to InputPath with .pdf extension.
-
+  Output .pdf path. Defaults to the input basename with a .pdf extension.
+  The output directory also contains pdf.manifest.json.
 .PARAMETER Mode
-  Conversion engine: 'EuroPDF' (default), 'DocRaptor', or 'PS' (PSWritePDF).
-
+  EuroPDF, DocRaptor, or PS (local PSWritePDF). Default: EuroPDF.
 .PARAMETER ApiKey
-  API key for cloud services. Can also be set via the EUROPDF_API_KEY or DOCRAPTOR_API_KEY
-  environment variables.
-
+  SecureString API key, for example Read-Host -AsSecureString. If omitted, reads
+  only EUROPDF_API_KEY for EuroPDF or DOCRAPTOR_API_KEY for DocRaptor.
 .PARAMETER Async
-  Use the async endpoint. Recommended for large documents. Async requests get up to
-  600 seconds of server time vs 60 for sync. Valid with -Mode EuroPDF and DocRaptor.
-
+  Submit a cloud job and wait for completion. No detached job is returned.
 .PARAMETER Profile
-  PDF profile for the output document. Supported values include:
-    PDF/UA-1, PDF/A-1a, PDF/A-2a, PDF/A-3a, PDF/A-3a+PDF/UA-1, PDF/X-4, etc.
-
+  Optional Prince PDF profile for cloud modes. No profile is forced by default.
+  Archival/accessibility profiles impose requirements on the HTML and assets.
 .PARAMETER Pipeline
-  Prince pipeline. EuroPDF: Prince16.2, Prince16-msfonts, Prince16, Prince15.4.
-  DocRaptor: numeric (9, 10, 10.1). Freeform string — see each API's docs.
-
+  Optional cloud pipeline. EuroPDF uses names such as Prince16.2 or
+  Prince16-msfonts; DocRaptor uses numeric versions such as 10.1.
 .PARAMETER Test
-  Generate a test document (watermarked, doesn't count against usage quota).
-
+  Request a watermarked cloud test document. Still sends HTML to the service.
 .PARAMETER PollInterval
-  Seconds between async status checks (default: 5).
-
+  Seconds between async status checks. Default: 5.
 .PARAMETER Timeout
-  Maximum wait time in seconds for async conversion (default: 900, max: 3600).
-
+  Total cloud-operation timeout in seconds, including submission and download.
+  Default: 900. A timeout does not cancel a job already submitted to the service.
 .PARAMETER NoNetwork
-  Block external resource fetching during PDF generation (Prince option).
-
+  Disable external resource fetching in Prince. Does not disable API calls.
 .PARAMETER Strict
-  Only valid with -Mode DocRaptor. When set, validates HTML input and fails on markup errors.
-
+  Request strict HTML validation. Only valid for DocRaptor.
+.PARAMETER Overwrite
+  Replace an existing PDF or pdf.manifest.json. Retains HTML/DOCX build artifacts.
+.PARAMETER DryRun
+  Validate local paths and options without credentials, network calls, or writes.
+  WhatIf has the same effect; Confirm gates the entire conversion.
 .PARAMETER PassThru
-  Return the output PDF path to the pipeline.
-
+  Return an operation result with Status, InputPath,
+  InputHash, OutputPath, OutputHash, ManifestPath, ManifestWritten and Engine.
+  On failure the terminating error's TargetObject contains the same result.
 .EXAMPLE
-  PS> Convert-HTMLToPDF.ps1 -InputPath merged/all.html -ApiKey "my-key"
-
-  Converts all.html to all.pdf using EuroPDF (synchronous).
-
+  PS> .\Convert-HTMLToPDF.ps1 -InputPath C:\Releases\release.html -DryRun -PassThru
+  Preview without contacting a service.
 .EXAMPLE
-  PS> Convert-HTMLToPDF.ps1 -InputPath merged/all.html -ApiKey "my-key" -Async -Profile "PDF/A-3a+PDF/UA-1" -Mode DocRaptor
-
-  Async conversion with DocRaptor and PDF/UA-1 accessibility profile.
-
+  PS> $key = Read-Host 'EuroPDF API key' -AsSecureString
+  PS> .\Convert-HTMLToPDF.ps1 -InputPath C:\Releases\release.html -ApiKey $key -Test -PassThru
+  Generate a watermarked test PDF with the default PDF profile.
 .EXAMPLE
-  PS> Convert-HTMLToPDF.ps1 -InputPath page.html -Mode PS
-
-  Converts using the locally installed PSWritePDF module.
-
+  PS> .\Convert-HTMLToPDF.ps1 -InputPath C:\Releases\release.html -Mode DocRaptor -Async -Profile 'PDF/A-3a+PDF/UA-1' -Overwrite -PassThru
+  Use DOCRAPTOR_API_KEY and wait for an asynchronous conversion.
+.EXAMPLE
+  PS> .\Convert-HTMLToPDF.ps1 -InputPath C:\Releases\release.html -Mode PS -PassThru
+  Convert locally with PSWritePDF.
 .LINK
-  https://github.com/adnoctem/winkit
   https://www.europdf.eu/docs/api/
   https://docraptor.com/documentation/api
-
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
+  Server Core: supported when the selected backend is available; no Word needed.
+  SYSTEM-account execution: supported with accessible paths and backend credentials.
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (
   [Parameter(Mandatory = $true)]
-  [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })]
+  [Alias('Path')]
+  [ValidateNotNullOrEmpty()]
   [string]
   $InputPath,
 
-  [Parameter(Mandatory = $false)]
   [string]
   $OutputPath,
 
-  [Parameter(Mandatory = $false)]
   [ValidateSet('EuroPDF', 'PS', 'DocRaptor')]
   [string]
   $Mode = 'EuroPDF',
 
-  [Parameter(Mandatory = $false)]
-  [string]
+  [SecureString]
   $ApiKey,
 
-  [Parameter(Mandatory = $false)]
   [switch]
   $Async,
 
-  [Parameter(Mandatory = $false)]
   [ValidateSet(
     'PDF/A-1a',
     'PDF/A-1b',
@@ -138,532 +118,532 @@ param (
   [string]
   $Profile,
 
-  [Parameter(Mandatory = $false)]
   [string]
   $Pipeline,
 
-  [Parameter(Mandatory = $false)]
   [switch]
   $Test,
 
-  [Parameter(Mandatory = $false)]
   [ValidateRange(1, 300)]
   [int]
   $PollInterval = 5,
 
-  [Parameter(Mandatory = $false)]
   [ValidateRange(10, 3600)]
   [int]
   $Timeout = 900,
 
-  [Parameter(Mandatory = $false)]
   [switch]
   $NoNetwork,
 
-  [Parameter(Mandatory = $false)]
   [switch]
   $Strict,
 
-  [Parameter(Mandatory = $false)]
+  [switch]
+  $Overwrite,
+
+  [switch]
+  $DryRun,
+
   [switch]
   $PassThru
 )
 
 Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.3.1 -Force
 
-# -----------------------------------------------------------------------------
-# Script-wide state
-# -----------------------------------------------------------------------------
-
-$_results = New-Object System.Collections.ArrayList
-
-$_euroPdfBase = 'https://api.europdf.eu/v1'
-$_docRaptorBase = 'https://api.docraptor.com'
-
-# -----------------------------------------------------------------------------
-# Helper functions
-# -----------------------------------------------------------------------------
-
-function Resolve-ApiKey {
-  param ([string] $Key)
-
-  if ($Key) { return $Key }
-  $_envKey = $env:DOCRAPTOR_API_KEY
-  if ($_envKey) { return $_envKey }
-  $_envKey = $env:EUROPDF_API_KEY
-  if ($_envKey) { return $_envKey }
-  throw "No API key provided. Set -ApiKey or the DOCRAPTOR_API_KEY / EUROPDF_API_KEY environment variable."
+$ErrorActionPreference = 'Stop'
+if ($DryRun) {
+  $WhatIfPreference = $true
 }
 
-function ConvertTo-BasicAuth {
-  param ([string] $ApiKey)
+$_stage = $null
+$_lock = $null
+$_inputLock = $null
+$_manifest = $null
+$_manifestWritten = $false
+$_failure = $null
+$_phase = 'preflight'
+$_status = 'Failed'
+$_outputHash = $null
+$_inputHash = $null
+$_manifestPath = $null
+$_input = $InputPath
+$_output = $OutputPath
+$_published = $false
+$_rollbackFailed = $false
 
-  $_bytes = [System.Text.Encoding]::UTF8.GetBytes("${ApiKey}:")
-  $_base64 = [Convert]::ToBase64String($_bytes)
-  return "Basic $_base64"
-}
-
-function Get-DocRaptorError {
-  param ([string] $RawBody)
-
-  if ($RawBody -match '<error>([^<]*)</error>') {
-    return $matches[1]
-  }
-  return $RawBody
-}
-
-function Invoke-EuroPdfSync {
+function New-PdfFailure {
+  [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Constructs an exception without changing external state.')]
+  [CmdletBinding()]
   param (
-    [string] $BaseUrl,
-    [string] $ApiKey,
-    [string] $HtmlContent,
-    [string] $PdfProfile,
-    [string] $Pipeline,
-    [bool] $Test,
-    [bool] $NoNetwork
+    [string]
+    $Code,
+
+    [string]
+    $Message
   )
 
-  $_body = @{ document_content = $HtmlContent }
-  if ($PdfProfile) { $_body.profile = $PdfProfile }
-  if ($Pipeline) { $_body.pipeline = $Pipeline }
-  if ($Test) { $_body.test = $true }
-  if ($NoNetwork) { $_body.prince_options = @{ no_network = $true } }
-
-  $_authHeader = ConvertTo-BasicAuth -ApiKey $ApiKey
-  $_json = $_body | ConvertTo-Json -Depth 5 -Compress
-
-  try {
-    $_response = Invoke-WebRequest -Uri "$BaseUrl/docs" `
-      -Method Post `
-      -Headers @{ Authorization = $_authHeader } `
-      -ContentType 'application/json' `
-      -Body $_json `
-      -SkipHttpErrorCheck `
-      -ErrorAction Stop
-
-    if ($_response.StatusCode -ne 200) {
-      $_apiError = try { $_response.Content } catch { '(could not read response)' }
-      throw "EuroPDF returned HTTP $($_response.StatusCode): $_apiError"
-    }
-
-    return $_response.Content
-  }
-  catch {
-    throw "EuroPDF sync request failed: $($_.Exception.Message)"
-  }
+  $exception = [InvalidOperationException]::new($Message)
+  $exception.Data['PdfErrorCode'] = $Code
+  return $exception
 }
 
-function Invoke-EuroPdfAsync {
+function Resolve-PdfPath {
   param (
-    [string] $BaseUrl,
-    [string] $ApiKey,
-    [string] $HtmlContent,
-    [string] $PdfProfile,
-    [string] $Pipeline,
-    [bool] $Test,
-    [bool] $NoNetwork,
-    [int] $PollInterval,
-    [int] $Timeout
+    [string]
+    $Path
   )
 
-  $_body = @{
-    document_content = $HtmlContent
-    async            = $true
+  $provider = $null
+  $drive = $null
+  $resolved = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path, [ref]$provider, [ref]$drive)
+  if ($provider.Name -ne 'FileSystem') {
+    throw (New-PdfFailure 'InvalidPath' 'Only filesystem paths are supported.')
   }
-  if ($PdfProfile) { $_body.profile = $PdfProfile }
-  if ($Pipeline) { $_body.pipeline = $Pipeline }
-  if ($Test) { $_body.test = $true }
-  if ($NoNetwork) { $_body.prince_options = @{ no_network = $true } }
-
-  $_authHeader = ConvertTo-BasicAuth -ApiKey $ApiKey
-  $_json = $_body | ConvertTo-Json -Depth 5 -Compress
-
-  Write-Log -Message '  Submitting async conversion job ...' -Color Cyan
-  try {
-    $_response = Invoke-WebRequest -Uri "$BaseUrl/docs" `
-      -Method Post `
-      -Headers @{ Authorization = $_authHeader } `
-      -ContentType 'application/json' `
-      -Body $_json `
-      -SkipHttpErrorCheck `
-      -ErrorAction Stop
-
-    if ($_response.StatusCode -ne 200) {
-      $_apiError = try { $_response.Content } catch { '(could not read response)' }
-      throw "EuroPDF returned HTTP $($_response.StatusCode): $_apiError"
-    }
-
-    $_statusResponse = $_response.Content | ConvertFrom-Json
-    $_statusId = $_statusResponse.status_id
-    if (-not $_statusId) {
-      throw "Async response did not contain a status_id: $($_response.Content)"
-    }
-
-    Write-Log -Message "  Job submitted: $_statusId" -Color Green
-  }
-  catch {
-    throw "Failed to submit async job: $($_.Exception.Message)"
-  }
-
-  $_deadline = (Get-Date).AddSeconds($Timeout)
-
-  while ((Get-Date) -lt $_deadline) {
-    Start-Sleep -Seconds $PollInterval
-
-    try {
-      $_statusResponse = Invoke-WebRequest -Uri "$BaseUrl/status/$_statusId" `
-        -Headers @{ Authorization = $_authHeader } `
-        -ErrorAction Stop |
-        Select-Object -ExpandProperty Content |
-        ConvertFrom-Json
-
-      switch ($_statusResponse.status) {
-        'completed' {
-          Write-Log -Message "  Status: completed." -Color Green
-          Write-Log -Message '  Downloading ...' -Color Cyan
-
-          $_downloadId = $_statusResponse.download_id
-          if (-not $_downloadId) {
-            $_downloadId = $_statusResponse.download_url -replace '.*/([^/]+)$', '$1'
-          }
-
-          $_pdfResponse = Invoke-WebRequest -Uri "$BaseUrl/download/$_downloadId" `
-            -Headers @{ Authorization = $_authHeader } `
-            -ErrorAction Stop
-
-          return $_pdfResponse.Content
-        }
-        'failed' {
-          throw "EuroPDF conversion failed: $($_statusResponse.error_message)"
-        }
-        'incinerated' {
-          throw 'Document was deleted (incinerated) before download could complete.'
-        }
-        default {
-          Write-Log -Message "  Status: $($_statusResponse.status) - waiting ..." -Color Gray
-        }
+  $ancestor = $resolved
+  while ($ancestor) {
+    if (Test-Path -LiteralPath $ancestor) {
+      if ((Get-Item -LiteralPath $ancestor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw (New-PdfFailure 'InvalidPath' 'Junctions and symbolic links are not supported in conversion paths.')
       }
     }
-    catch {
-      if ($_.Exception.Message -match 'EuroPDF conversion failed|Document was deleted|Failed to submit') {
-        throw
-      }
-      Write-Log -Message "  Status check error: $($_.Exception.Message) - retrying ..." -Color DarkYellow
-    }
+    $ancestor = [IO.Path]::GetDirectoryName($ancestor)
   }
-
-  throw "Async conversion timed out after $Timeout seconds."
+  return $resolved
 }
 
-function Invoke-DocRaptorSync {
+function Get-PdfAuthorization {
   param (
-    [string] $BaseUrl,
-    [string] $ApiKey,
-    [string] $HtmlContent,
-    [string] $PdfProfile,
-    [string] $Pipeline,
-    [bool] $Test,
-    [bool] $NoNetwork,
-    [bool] $Strict
+    [SecureString]
+    $Key,
+
+    [string]
+    $Engine
   )
 
-  $_body = @{
-    type             = 'pdf'
-    document_content = $HtmlContent
-  }
-
-  if ($PdfProfile) { $_body.prince_options = @{ profile = $PdfProfile } }
-  if ($Pipeline) { $_body.pipeline = $Pipeline }
-  if ($Test) { $_body.test = $true }
-  if ($NoNetwork) {
-    if (-not $_body.prince_options) { $_body.prince_options = @{} }
-    $_body.prince_options.no_network = $true
-  }
-  if ($Strict) { $_body.strict = 'html' }
-
-  $_authHeader = ConvertTo-BasicAuth -ApiKey $ApiKey
-  $_json = $_body | ConvertTo-Json -Depth 5 -Compress
-
-  try {
-    $_response = Invoke-WebRequest -Uri "$BaseUrl/docs" `
-      -Method Post `
-      -Headers @{ Authorization = $_authHeader } `
-      -ContentType 'application/json' `
-      -Body $_json `
-      -SkipHttpErrorCheck `
-      -ErrorAction Stop
-
-    if ($_response.StatusCode -ne 200) {
-      $_apiError = try { Get-DocRaptorError -RawBody $_response.Content } catch { '(could not read response)' }
-      throw "DocRaptor returned HTTP $($_response.StatusCode): $_apiError"
-    }
-
-    return $_response.Content
-  }
-  catch {
-    throw "DocRaptor sync request failed: $($_.Exception.Message)"
-  }
-}
-
-function Invoke-DocRaptorAsync {
-  param (
-    [string] $BaseUrl,
-    [string] $ApiKey,
-    [string] $HtmlContent,
-    [string] $PdfProfile,
-    [string] $Pipeline,
-    [bool] $Test,
-    [bool] $NoNetwork,
-    [bool] $Strict,
-    [int] $PollInterval,
-    [int] $Timeout
-  )
-
-  $_body = @{
-    type             = 'pdf'
-    document_content = $HtmlContent
-    async            = $true
-  }
-
-  if ($PdfProfile) { $_body.prince_options = @{ profile = $PdfProfile } }
-  if ($Pipeline) { $_body.pipeline = $Pipeline }
-  if ($Test) { $_body.test = $true }
-  if ($NoNetwork) {
-    if (-not $_body.prince_options) { $_body.prince_options = @{} }
-    $_body.prince_options.no_network = $true
-  }
-  if ($Strict) { $_body.strict = 'html' }
-
-  $_authHeader = ConvertTo-BasicAuth -ApiKey $ApiKey
-  $_json = $_body | ConvertTo-Json -Depth 5 -Compress
-
-  Write-Log -Message '  Submitting async conversion job ...' -Color Cyan
-  try {
-    $_response = Invoke-WebRequest -Uri "$BaseUrl/docs" `
-      -Method Post `
-      -Headers @{ Authorization = $_authHeader } `
-      -ContentType 'application/json' `
-      -Body $_json `
-      -SkipHttpErrorCheck `
-      -ErrorAction Stop
-
-    if ($_response.StatusCode -ne 200) {
-      $_apiError = try { Get-DocRaptorError -RawBody $_response.Content } catch { '(could not read response)' }
-      throw "DocRaptor returned HTTP $($_response.StatusCode): $_apiError"
-    }
-
-    $_statusResponse = $_response.Content | ConvertFrom-Json
-    $_statusId = $_statusResponse.status_id
-    if (-not $_statusId) {
-      throw "Async response did not contain a status_id: $($_response.Content)"
-    }
-
-    Write-Log -Message "  Job submitted: $_statusId" -Color Green
-  }
-  catch {
-    throw "Failed to submit async job: $($_.Exception.Message)"
-  }
-
-  $_deadline = (Get-Date).AddSeconds($Timeout)
-
-  while ((Get-Date) -lt $_deadline) {
-    Start-Sleep -Seconds $PollInterval
-
-    try {
-      $_statusResponse = Invoke-WebRequest -Uri "$BaseUrl/status/$_statusId" `
-        -Headers @{ Authorization = $_authHeader } `
-        -ErrorAction Stop |
-        Select-Object -ExpandProperty Content |
-        ConvertFrom-Json
-
-      switch ($_statusResponse.status) {
-        'completed' {
-          Write-Log -Message "  Status: completed." -Color Green
-          Write-Log -Message '  Downloading ...' -Color Cyan
-
-          $_downloadUrl = $_statusResponse.download_url
-          if (-not $_downloadUrl) {
-            throw 'No download URL in completed status response.'
-          }
-
-          $_pdfResponse = Invoke-WebRequest -Uri $_downloadUrl `
-            -Headers @{ Authorization = $_authHeader } `
-            -ErrorAction Stop
-
-          return $_pdfResponse.Content
-        }
-        'failed' {
-          $_errorMsg = if ($_statusResponse.validation_errors) {
-            $_statusResponse.validation_errors
-          }
-          else {
-            $_statusResponse.message
-          }
-          throw "DocRaptor conversion failed: $_errorMsg"
-        }
-        default {
-          Write-Log -Message "  Status: $($_statusResponse.status) - waiting ..." -Color Gray
-        }
-      }
-    }
-    catch {
-      if ($_.Exception.Message -match 'DocRaptor conversion failed|No download URL|Failed to submit') {
-        throw
-      }
-      Write-Log -Message "  Status check error: $($_.Exception.Message) - retrying ..." -Color DarkYellow
-    }
-  }
-
-  throw "Async conversion timed out after $Timeout seconds."
-}
-
-function Invoke-PsWritePdfConversion {
-  param ([string] $InputPath, [string] $OutputPath)
-
-  $_module = Get-Module -ListAvailable -Name PSWritePDF -ErrorAction SilentlyContinue
-  if (-not $_module) {
-    throw "PSWritePDF module is not installed. Install it with: Install-Module PSWritePDF -RequiredVersion 0.0.20"
-  }
-
-  Import-Module PSWritePDF -Force -ErrorAction Stop
-
-  Write-Log -Message '  Converting with PSWritePDF (Convert-HTMLToPDF) ...' -Color Cyan
-
-  Convert-HTMLToPDF -FilePath $InputPath -OutputFilePath $OutputPath -ErrorAction Stop
-
-  if (Test-Path -LiteralPath $OutputPath) {
-    return $OutputPath
-  }
-
-  throw 'PSWritePDF completed but no output file was created.'
-}
-
-# -----------------------------------------------------------------------------
-# Validation
-# -----------------------------------------------------------------------------
-
-if ($OutputPath) {
-  $_outputPath = $OutputPath
-}
-else {
-  $_outputPath = [System.IO.Path]::ChangeExtension($InputPath, '.pdf')
-}
-
-if (-not (Test-Path -LiteralPath ([System.IO.Path]::GetDirectoryName($_outputPath)))) {
-  New-Item -Path ([System.IO.Path]::GetDirectoryName($_outputPath)) -ItemType Directory -Force | Out-Null
-}
-
-if ($Async -and $Mode -eq 'PS') {
-  throw "-Async is only valid with -Mode EuroPDF or DocRaptor."
-}
-
-if ($Strict -and $Mode -ne 'DocRaptor') {
-  throw "-Strict is only valid with -Mode DocRaptor."
-}
-
-if ($WhatIfPreference) {
-  $WhatIfPreference = $false
-}
-
-# -----------------------------------------------------------------------------
-# Conversion
-# -----------------------------------------------------------------------------
-
-Write-Log -Message "===== Convert HTML to PDF =====" -Color Cyan
-Write-Log -Message "Input:    $InputPath" -Color White
-Write-Log -Message "Output:   $_outputPath" -Color White
-Write-Log -Message "Mode:     $Mode" -Color White
-
-if ($Mode -eq 'EuroPDF') {
-  $_apiKey = Resolve-ApiKey -Key $ApiKey
-  Write-Log -Message "API mode: $(if ($Async) { 'async' } else { 'sync' })" -Color White
-  if ($Async) {
-    Write-Log -Message "Timeout:  $Timeout s (poll every $PollInterval s)" -Color White
-  }
-  if ($Profile) { Write-Log -Message "Profile:  $Profile" -Color White }
-  if ($Pipeline) { Write-Log -Message "Pipeline: $Pipeline" -Color White }
-
-  Write-Log -Message 'Reading HTML content ...' -Color Cyan
-  $_htmlContent = [System.IO.File]::ReadAllText($InputPath)
-  Write-Log -Message "  Read $($_htmlContent.Length) characters." -Color Gray
-
-  if ($Async) {
-    $_pdfBytes = Invoke-EuroPdfAsync -BaseUrl $_euroPdfBase -ApiKey $_apiKey `
-      -HtmlContent $_htmlContent -PdfProfile $Profile -Pipeline $Pipeline `
-      -Test:$Test.IsPresent -NoNetwork:$NoNetwork.IsPresent `
-      -PollInterval $PollInterval -Timeout $Timeout
+  $environmentName = if ($Engine -eq 'EuroPDF') { 'EUROPDF_API_KEY' } else { 'DOCRAPTOR_API_KEY' }
+  $plainKey = if ($Key) {
+    [pscredential]::new('api', $Key).GetNetworkCredential().Password
   }
   else {
-    $_pdfBytes = Invoke-EuroPdfSync -BaseUrl $_euroPdfBase -ApiKey $_apiKey `
-      -HtmlContent $_htmlContent -PdfProfile $Profile -Pipeline $Pipeline `
-      -Test:$Test.IsPresent -NoNetwork:$NoNetwork.IsPresent
+    [Environment]::GetEnvironmentVariable($environmentName, 'Process')
   }
-
-  [System.IO.File]::WriteAllBytes($_outputPath, $_pdfBytes)
+  if ([string]::IsNullOrWhiteSpace($plainKey)) {
+    throw (New-PdfFailure 'MissingCredential' "Supply a SecureString ApiKey or set $environmentName for this engine.")
+  }
+  return 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($plainKey + ':'))
 }
-elseif ($Mode -eq 'DocRaptor') {
-  $_apiKey = Resolve-ApiKey -Key $ApiKey
-  Write-Log -Message "API mode: $(if ($Async) { 'async' } else { 'sync' })" -Color White
-  if ($Async) {
-    Write-Log -Message "Timeout:  $Timeout s (poll every $PollInterval s)" -Color White
+
+function Invoke-PdfRequest {
+  param (
+    [string]
+    $Uri,
+
+    [string]
+    $Authorization,
+
+    [string]
+    $Destination,
+
+    [Diagnostics.Stopwatch]
+    $Clock,
+
+    [string]
+    $Json
+  )
+
+  $remaining = [int][Math]::Ceiling($Timeout - $Clock.Elapsed.TotalSeconds)
+  if ($remaining -le 0) {
+    throw (New-PdfFailure 'Timeout' 'PDF conversion timed out. A submitted cloud job may still complete; inspect the service dashboard before retrying.')
   }
-  if ($Profile) { Write-Log -Message "Profile:  $Profile" -Color White }
-  if ($Pipeline) { Write-Log -Message "Pipeline: $Pipeline" -Color White }
-  if ($Strict) { Write-Log -Message "Strict:   enabled" -Color White }
+  $request = @{
+    Uri                = $Uri
+    Method             = 'Get'
+    Headers            = @{ Authorization = $Authorization }
+    OutFile            = $Destination
+    PassThru           = $true
+    SkipHttpErrorCheck = $true
+    MaximumRedirection = 0
+    TimeoutSec         = $remaining
+    ErrorAction        = 'Stop'
+  }
+  if ($Json) {
+    $request.Method = 'Post'
+    $request.ContentType = 'application/json; charset=utf-8'
+    $request.Body = [Text.Encoding]::UTF8.GetBytes($Json)
+  }
+  if ((Get-Command Invoke-WebRequest).Parameters.ContainsKey('OperationTimeoutSeconds')) {
+    $request.OperationTimeoutSeconds = $remaining
+  }
+  try {
+    $response = Invoke-WebRequest @request
+  }
+  catch {
+    # Original errors can contain credentials, HTML, or PDF bytes; never retain them.
+    throw (New-PdfFailure 'RequestFailed' 'The PDF service request failed or timed out. Check connectivity and the service dashboard before retrying; no submission was retried automatically.')
+  }
+  if ([int]$response.StatusCode -ne 200) {
+    $hint = switch ([int]$response.StatusCode) {
+      401 { 'Check the API key for the selected engine.' }
+      403 { 'Check the API key and account permissions.' }
+      422 { 'Check the service dashboard for input/profile validation or account quota errors.' }
+      429 { 'The service request limit was reached; retry later.' }
+      default { 'Check the service dashboard for details.' }
+    }
+    throw (New-PdfFailure 'HttpError' ("{0} returned HTTP {1}. {2} Response bodies are omitted from errors and manifests." -f $Mode, [int]$response.StatusCode, $hint))
+  }
+}
 
-  Write-Log -Message 'Reading HTML content ...' -Color Cyan
-  $_htmlContent = [System.IO.File]::ReadAllText($InputPath)
-  Write-Log -Message "  Read $($_htmlContent.Length) characters." -Color Gray
+function Read-PdfJob {
+  param (
+    [string]
+    $Path
+  )
 
+  try {
+    if ((Get-Item -LiteralPath $Path).Length -gt 1MB) {
+      throw 'Unexpected job response size.'
+    }
+    return [IO.File]::ReadAllText($Path) | ConvertFrom-Json -ErrorAction Stop
+  }
+  catch {
+    throw (New-PdfFailure 'InvalidResponse' 'The PDF service returned an invalid job response. Inspect the service dashboard.')
+  }
+}
+
+function Invoke-CloudPdfConversion {
+  param (
+    [string]
+    $Html,
+
+    [string]
+    $Destination,
+
+    [string]
+    $JobPath
+  )
+
+  $authorization = Get-PdfAuthorization -Key $ApiKey -Engine $Mode
+  $baseUrl = if ($Mode -eq 'EuroPDF') { 'https://api.europdf.eu/v1' } else { 'https://api.docraptor.com' }
+  $body = @{
+    document_content = $Html
+  }
+  if ($Mode -eq 'DocRaptor') {
+    $body.type = 'pdf'
+  }
+  $prince = @{}
+  if ($Profile) {
+    $prince.profile = $Profile
+  }
+  if ($NoNetwork) {
+    $prince.no_network = $true
+  }
+  if ($prince.Count) {
+    $body.prince_options = $prince
+  }
+  if ($Pipeline) {
+    $body.pipeline = $Pipeline
+  }
+  if ($Test) {
+    $body.test = $true
+  }
+  if ($Strict) {
+    $body.strict = 'html'
+  }
   if ($Async) {
-    $_pdfBytes = Invoke-DocRaptorAsync -BaseUrl $_docRaptorBase -ApiKey $_apiKey `
-      -HtmlContent $_htmlContent -PdfProfile $Profile -Pipeline $Pipeline `
-      -Test:$Test.IsPresent -NoNetwork:$NoNetwork.IsPresent -Strict:$Strict.IsPresent `
-      -PollInterval $PollInterval -Timeout $Timeout
+    $body.async = $true
+  }
+
+  $clock = [Diagnostics.Stopwatch]::StartNew()
+  $request = @{
+    Uri           = "$baseUrl/docs"
+    Authorization = $authorization
+    Destination   = $Destination
+    Clock         = $clock
+    Json          = ConvertTo-Json -InputObject $body -Depth 5 -Compress
+  }
+  if (-not $Async) {
+    Invoke-PdfRequest @request
+    return
+  }
+  $request.Destination = $JobPath
+  Invoke-PdfRequest @request
+  $job = Read-PdfJob $JobPath
+  if ([string]$job.status_id -notmatch '^[a-zA-Z0-9_-]+$') {
+    throw (New-PdfFailure 'InvalidResponse' 'The PDF service did not return a valid status identifier.')
+  }
+  $request.Remove('Json')
+  $request.Uri = "$baseUrl/status/$($job.status_id)"
+
+  while ($true) {
+    Invoke-PdfRequest @request
+    $job = Read-PdfJob $JobPath
+    if ($job.status -eq 'completed') {
+      break
+    }
+    if ($job.status -eq 'failed' -or $job.status -eq 'incinerated') {
+      throw (New-PdfFailure 'JobFailed' 'The PDF service reported a failed or expired job. Inspect its dashboard for document/profile errors.')
+    }
+    if ($job.status -notin @('requested', 'started', 'queued', 'working')) {
+      throw (New-PdfFailure 'InvalidResponse' 'The PDF service returned an unknown job status.')
+    }
+    $remaining = $Timeout - $clock.Elapsed.TotalSeconds
+    if ($remaining -le 0) {
+      throw (New-PdfFailure 'Timeout' 'PDF conversion timed out. Inspect the service dashboard before retrying.')
+    }
+    Start-Sleep -Milliseconds ([int](1000 * [Math]::Min($PollInterval, $remaining)))
+  }
+
+  if ($Mode -eq 'EuroPDF' -and [string]$job.download_id -match '^[a-zA-Z0-9_-]+$') {
+    $download = [uri]"$baseUrl/download/$($job.download_id)"
   }
   else {
-    $_pdfBytes = Invoke-DocRaptorSync -BaseUrl $_docRaptorBase -ApiKey $_apiKey `
-      -HtmlContent $_htmlContent -PdfProfile $Profile -Pipeline $Pipeline `
-      -Test:$Test.IsPresent -NoNetwork:$NoNetwork.IsPresent -Strict:$Strict.IsPresent
+    $download = $null
+    $validUri = [uri]::TryCreate([string]$job.download_url, [UriKind]::Absolute, [ref]$download)
+    $hosts = if ($Mode -eq 'EuroPDF') { @('api.europdf.eu') } else { @('api.docraptor.com', 'docraptor.com') }
+    if (-not $validUri -or $download.Scheme -ne 'https' -or $download.Host -notin $hosts -or
+      $download.Port -ne 443 -or $download.UserInfo -or $download.Fragment) {
+      throw (New-PdfFailure 'InvalidResponse' 'The PDF service returned an untrusted download URL; no credentials were forwarded.')
+    }
+  }
+  $request.Uri = $download.AbsoluteUri
+  $request.Destination = $Destination
+  Invoke-PdfRequest @request
+}
+
+function Assert-PdfFile {
+  param (
+    [string]
+    $Path
+  )
+
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    throw (New-PdfFailure 'InvalidPdf' 'The converter did not create a PDF file.')
+  }
+  $stream = [IO.File]::OpenRead($Path)
+  try {
+    $header = [byte[]]::new(5)
+    if ($stream.Read($header, 0, 5) -ne 5 -or [Text.Encoding]::ASCII.GetString($header) -ne '%PDF-') {
+      throw (New-PdfFailure 'InvalidPdf' 'The converter returned non-PDF content. No PDF was published; inspect the service dashboard.')
+    }
+  }
+  finally {
+    $stream.Dispose()
+  }
+}
+
+try {
+  # Validate destinations before ShouldProcess or filesystem mutation.
+  $_input = Resolve-PdfPath $InputPath
+  if (-not (Test-Path -LiteralPath $_input -PathType Leaf) -or [IO.Path]::GetExtension($_input) -notin @('.html', '.htm')) {
+    throw (New-PdfFailure 'InvalidInput' 'InputPath must be an existing .html or .htm file.')
+  }
+  if (-not $OutputPath) {
+    $OutputPath = [IO.Path]::ChangeExtension($_input, '.pdf')
+  }
+  $_output = Resolve-PdfPath $OutputPath
+  $_directory = [IO.Path]::GetDirectoryName($_output)
+  $_manifestPath = Resolve-PdfPath (Join-Path $_directory 'pdf.manifest.json')
+  if ([IO.Path]::GetExtension($_output) -ne '.pdf' -or $_output -eq $_input) {
+    throw (New-PdfFailure 'InvalidOutput' 'OutputPath must name a .pdf file distinct from the input.')
+  }
+  foreach ($_destination in @($_output, $_manifestPath)) {
+    if (Test-Path -LiteralPath $_destination) {
+      if (-not (Test-Path -LiteralPath $_destination -PathType Leaf) -or -not $Overwrite) {
+        throw (New-PdfFailure 'OutputCollision' 'Output PDF or pdf.manifest.json already exists. Use Overwrite to replace files; directories cannot be replaced.')
+      }
+    }
+  }
+  if ((Test-Path -LiteralPath $_directory) -and -not (Test-Path -LiteralPath $_directory -PathType Container)) {
+    throw (New-PdfFailure 'InvalidOutput' 'The output parent must be a directory.')
+  }
+  if ($Mode -eq 'PS') {
+    foreach ($_option in @('ApiKey', 'Async', 'Profile', 'Pipeline', 'Test', 'NoNetwork', 'Strict', 'PollInterval', 'Timeout')) {
+      if ($PSBoundParameters.ContainsKey($_option)) {
+        throw (New-PdfFailure 'InvalidOption' "$_option is only supported by cloud engines.")
+      }
+    }
+  }
+  if ($Strict -and $Mode -ne 'DocRaptor') {
+    throw (New-PdfFailure 'InvalidOption' 'Strict is only supported by DocRaptor.')
+  }
+  if ($PSBoundParameters.ContainsKey('PollInterval') -and -not $Async) {
+    throw (New-PdfFailure 'InvalidOption' 'PollInterval requires Async.')
+  }
+  if ($Pipeline -and (($Mode -eq 'EuroPDF' -and $Pipeline -notmatch '^Prince\d+(\.\d+)?(-msfonts)?$') -or
+      ($Mode -eq 'DocRaptor' -and $Pipeline -notmatch '^\d+(\.\d+)?$'))) {
+    throw (New-PdfFailure 'InvalidOption' 'EuroPDF requires a named Prince pipeline; DocRaptor requires a numeric pipeline.')
   }
 
-  [System.IO.File]::WriteAllBytes($_outputPath, $_pdfBytes)
+  $_inputLock = [IO.File]::Open($_input, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+  $_inputHash = (Get-FileHash -LiteralPath $_input -Algorithm SHA256).Hash
+  $_manifest = [ordered]@{
+    schema         = 'press-release-pdf/1'
+    generatedAtUtc = $null
+    input          = [ordered]@{
+      path   = $_input
+      sha256 = $_inputHash
+    }
+    converter      = [ordered]@{
+      path   = $PSCommandPath
+      sha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
+      engine = $Mode
+    }
+    options        = [ordered]@{
+      profile   = $Profile
+      pipeline  = $Pipeline
+      async     = [bool]$Async
+      test      = [bool]$Test
+      noNetwork = [bool]$NoNetwork
+      strict    = [bool]$Strict
+    }
+    output         = $null
+    status         = 'Failed'
+    error          = $null
+  }
+
+  if ($PSCmdlet.ShouldProcess($_output, "Convert HTML with $Mode and write pdf.manifest.json")) {
+    $_phase = 'output preparation'
+    $null = New-Item -ItemType Directory -Path $_directory -Force -Confirm:$false
+    $_lockPath = Join-Path $_directory '.pdf-conversion.lock'
+    $_lock = [IO.FileStream]::new($_lockPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write,
+      [IO.FileShare]::None, 4096, [IO.FileOptions]::DeleteOnClose)
+    $_stage = Join-Path $_directory ('.pdf-conversion-' + [guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $_stage -Confirm:$false
+    $_pdfStage = Join-Path $_stage 'output.pdf'
+    $_manifestStage = Join-Path $_stage 'pdf.manifest.json'
+    $_backup = Join-Path $_stage 'previous.pdf'
+
+    $_phase = 'conversion'
+    if ($Mode -eq 'PS') {
+      Import-Module PSWritePDF -RequiredVersion 0.0.20 -ErrorAction Stop
+      $null = PSWritePDF\Convert-HTMLToPDF -FilePath $_input -OutputFilePath $_pdfStage -WarningAction SilentlyContinue -ErrorAction Stop
+    }
+    else {
+      Invoke-CloudPdfConversion -Html ([IO.File]::ReadAllText($_input)) -Destination $_pdfStage -JobPath (Join-Path $_stage 'job.json')
+    }
+    Assert-PdfFile $_pdfStage
+    $_outputHash = (Get-FileHash -LiteralPath $_pdfStage -Algorithm SHA256).Hash
+    $_manifest.output = [ordered]@{
+      path   = $_output
+      sha256 = $_outputHash
+    }
+    $_manifest.status = 'Completed'
+    $_manifest.generatedAtUtc = [DateTime]::UtcNow.ToString('o')
+    [IO.File]::WriteAllText($_manifestStage, (ConvertTo-Json $_manifest -Depth 8), [Text.UTF8Encoding]::new($false))
+
+    # Publish verified bytes; restore the old PDF if manifest publication fails.
+    $_phase = 'publication'
+    if (Test-Path -LiteralPath $_output) {
+      if (-not $Overwrite) {
+        throw (New-PdfFailure 'OutputCollision' 'The output PDF appeared during conversion. It was not replaced.')
+      }
+      [IO.File]::Replace($_pdfStage, $_output, $_backup)
+    }
+    else {
+      [IO.File]::Move($_pdfStage, $_output)
+    }
+    $_published = $true
+    [IO.File]::Move($_manifestStage, $_manifestPath, [bool]$Overwrite)
+    $_manifestWritten = $true
+    $_status = 'Completed'
+  }
+  else {
+    $_status = 'Skipped'
+  }
 }
-elseif ($Mode -eq 'PS') {
-  Invoke-PsWritePdfConversion -InputPath $InputPath -OutputPath $_outputPath
+catch {
+  $_exception = $_.Exception
+  while ($_exception.InnerException -and -not $_exception.Data.Contains('PdfErrorCode')) {
+    $_exception = $_exception.InnerException
+  }
+  $_failure = [ordered]@{
+    code    = 'ConversionFailed'
+    message = "PDF conversion failed during $_phase. Check paths, permissions, backend installation, and the service dashboard. Raw errors are omitted."
+  }
+  if ($_exception.Data.Contains('PdfErrorCode')) {
+    $_failure.code = [string]$_exception.Data['PdfErrorCode']
+    $_failure.message = $_exception.Message
+  }
+  if ($_published) {
+    try {
+      if (Test-Path -LiteralPath $_backup) {
+        [IO.File]::Move($_backup, $_output, $true)
+      }
+      else {
+        [IO.File]::Delete($_output)
+      }
+      $_published = $false
+    }
+    catch {
+      $_rollbackFailed = $true
+      $_failure.message += ' PDF rollback failed; recovery files remain in the output staging directory.'
+    }
+  }
+  $_outputHash = $null
+  if ($_stage -and $_lock -and $_manifest) {
+    $_manifest.status = 'Failed'
+    $_manifest.output = $null
+    $_manifest.error = $_failure
+    $_manifest.generatedAtUtc = [DateTime]::UtcNow.ToString('o')
+    try {
+      [IO.File]::WriteAllText($_manifestStage, (ConvertTo-Json $_manifest -Depth 8), [Text.UTF8Encoding]::new($false))
+      [IO.File]::Move($_manifestStage, $_manifestPath, [bool]$Overwrite)
+      $_manifestWritten = $true
+    }
+    catch {
+      $_failure.message += ' The failure manifest could not be published.'
+    }
+  }
+}
+finally {
+  if ($_stage -and -not $_rollbackFailed) {
+    try {
+      $_resolvedStage = [IO.Path]::GetFullPath($_stage)
+      if ([IO.Path]::GetDirectoryName($_resolvedStage) -ne $_directory -or
+        [IO.Path]::GetFileName($_resolvedStage) -notmatch '^\.pdf-conversion-[a-f0-9]{32}$') {
+        throw 'Unsafe staging cleanup path.'
+      }
+      Remove-Item -LiteralPath $_resolvedStage -Recurse -Force -Confirm:$false -ErrorAction Stop
+    }
+    catch {
+      Write-Log -Message 'PDF staging cleanup failed; inspect the output directory.' -Color Yellow
+    }
+  }
+  if ($_lock) {
+    $_lock.Dispose()
+  }
+  if ($_inputLock) {
+    $_inputLock.Dispose()
+  }
 }
 
-# -----------------------------------------------------------------------------
-# Verification
-# -----------------------------------------------------------------------------
-
-if (Test-Path -LiteralPath $_outputPath) {
-  $_fileInfo = Get-Item -LiteralPath $_outputPath
-  $_fileSize = $_fileInfo.Length
-  Write-Log -Message "  Wrote: $_outputPath ($([Math]::Round($_fileSize / 1MB, 1)) MB)" -Color Green
-
-  Add-OperationResult -Results $_results -Target $InputPath `
-    -Source 'FileSystem' -Action 'Convert' -Status 'Completed' `
-    -Detail "PDF: $_outputPath ($([Math]::Round($_fileSize / 1MB, 1)) MB)"
+$_resultParameters = @{
+  Target   = $_output
+  Source   = 'FileSystem'
+  Action   = 'Convert'
+  Status   = $_status
+  Changed  = ($_status -eq 'Completed' -or $_manifestWritten -or $_published)
+  Property = @{
+    InputPath       = $_input
+    InputHash       = $_inputHash
+    OutputPath      = $_output
+    OutputHash      = $_outputHash
+    ManifestPath    = $_manifestPath
+    ManifestWritten = $_manifestWritten
+    Engine          = $Mode
+  }
 }
-else {
-  Write-Log -Message '  ERROR: Output file was not created.' -Color Red
-  Add-OperationResult -Results $_results -Target $InputPath `
-    -Source 'FileSystem' -Action 'Convert' -Status 'Failed' `
-    -Detail 'Output file not created'
+if ($_failure) {
+  $_resultParameters.ErrorMessage = $_failure.message
 }
-
-# -----------------------------------------------------------------------------
-# Report
-# -----------------------------------------------------------------------------
-
-$_completed = @($_results | Where-Object { $_.Status -eq 'Completed' }).Count
-$_failed = @($_results | Where-Object { $_.Status -eq 'Failed' }).Count
-
-Write-Log -Message ("`n===== Conversion Summary =====") -Color Cyan
-Write-Log -Message ("Completed: $_completed | Failed: $_failed") `
-  -Color $(if ($_failed -gt 0) { 'Red' } else { 'Green' })
-
+$_result = New-OperationResult @_resultParameters
+if ($_failure) {
+  $_errorRecord = [Management.Automation.ErrorRecord]::new(
+    [InvalidOperationException]::new($_failure.message),
+    $_failure.code, [Management.Automation.ErrorCategory]::InvalidOperation, $_result)
+  $PSCmdlet.ThrowTerminatingError($_errorRecord)
+}
+Write-Log -Message "PDF conversion: $_status." -Color Cyan
 if ($PassThru) {
-  $_outputPath
+  $_result
 }

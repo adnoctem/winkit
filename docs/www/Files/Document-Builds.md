@@ -89,12 +89,92 @@ the local PSWritePDF backend:
 if ($result.Status -eq 'Completed') {
   $pdf = [IO.Path]::ChangeExtension($result.HtmlPath, '.pdf')
   try {
-    .\scripts\Files\Convert-HTMLToPDF.ps1 -InputPath $result.HtmlPath -OutputPath $pdf -Mode PS
+    $conversion = .\scripts\Files\Convert-HTMLToPDF.ps1 -InputPath $result.HtmlPath -OutputPath $pdf -Mode PS -PassThru
+    $conversion | Format-List OutputPath, OutputHash, ManifestPath
   } catch {
     Write-Warning "PDF conversion failed; the completed HTML/DOCX build remains valid: $_"
   }
 }
 ```
 
-Use `Get-Help .\scripts\Files\Convert-HTMLToPDF.ps1 -Full` for cloud modes and backend requirements. PDF rendering quality depends on that
-backend. A PDF failure must not change the HTML/DOCX build status or its manifest. The build engine never invokes a PDF converter.
+The converter needs PowerShell 7 or later. Local mode requires PSWritePDF 0.0.20. PDF rendering quality depends on the backend. The build
+engine never invokes a PDF converter, and conversion never changes the HTML/DOCX build status or `build.manifest.json`.
+
+### EuroPDF and DocRaptor
+
+Cloud conversion sends the HTML to the selected service. Configure `EUROPDF_API_KEY` for EuroPDF or `DOCRAPTOR_API_KEY` for DocRaptor in the
+process environment, or supply a SecureString with `-ApiKey`. Credentials are selected for that engine only. Do not put keys in script text
+or command history.
+
+```powershell
+$conversionOptions = @{
+  InputPath = 'C:\ReleaseWork\announcement\Output\en\release-en.html'
+  Mode      = 'EuroPDF'
+}
+
+# Preview: validates the input without credentials, network requests or output writes.
+.\scripts\Files\Convert-HTMLToPDF.ps1 @conversionOptions -DryRun -PassThru
+
+# Omit ApiKey when EUROPDF_API_KEY is already configured.
+$key = Read-Host 'EuroPDF API key' -AsSecureString
+$conversion = .\scripts\Files\Convert-HTMLToPDF.ps1 @conversionOptions -ApiKey $key -Test -PassThru
+$conversion | Format-List OutputPath, OutputHash, ManifestPath
+
+# Replace a prior test PDF/manifest with a normal conversion (may incur charges).
+$conversion = .\scripts\Files\Convert-HTMLToPDF.ps1 @conversionOptions -ApiKey $key -Overwrite -PassThru
+```
+
+`-Test` requests a watermarked cloud document; it still contacts the service. `-DryRun` and `-WhatIf` validate local paths/options and
+return `Skipped` without writes or service calls. `-Confirm` gates the conversion. Local `-Mode PS` rejects cloud-only parameters.
+
+No PDF profile is forced by default. Add `-Profile 'PDF/UA-1'` or `-Profile 'PDF/A-3a+PDF/UA-1'` only when the source and assets satisfy
+those requirements. Both cloud modes send this as `prince_options.profile`; EuroPDF does not need DocRaptor's `type = pdf` parameter.
+Pipeline names differ: EuroPDF uses names such as `Prince16.2` or `Prince16-msfonts`; DocRaptor uses numeric versions such as `10.1`.
+`-Strict` is DocRaptor-only. `-NoNetwork` blocks Prince from fetching external resources; it does not block the API request.
+
+`-Async` submits a job, polls, downloads and returns only when finished. `-PollInterval` controls the delay between checks; `-Timeout`
+bounds the cloud operation, including submission and download, and also applies to synchronous requests. A timeout does not cancel a
+submitted cloud job. No submission is retried automatically; check the provider dashboard before retrying an uncertain request.
+
+The converter saves binary HTTP responses directly to files. Seeing `xref`, `trailer` or `%%EOF` inside a numeric conversion error in an
+older installation indicates PDF bytes were decoded as text and then cast back to bytes. It does not by itself indicate an invalid PDF
+profile. For HTTP 401/403, check the selected engine's key. For HTTP 422, check the provider dashboard for input/profile or quota errors.
+Raw response bodies and exception details are excluded from errors and manifests.
+
+See the [EuroPDF API documentation](https://www.europdf.eu/docs/api/) and [DocRaptor API reference](https://docraptor.com/documentation/api)
+for supported options and service limits.
+
+### PDF audit record and results
+
+Each output directory has one `pdf.manifest.json`. Use a separate directory per conversion, or pass `-Overwrite` to replace an existing PDF
+or PDF manifest. Do not edit the source/output paths during conversion. Junctions and symbolic links are rejected.
+
+The UTF-8, no-BOM `press-release-pdf/1` record contains:
+
+- `generatedAtUtc`: UTC completion/failure time.
+- `input`: absolute HTML `path` and `sha256`.
+- `converter`: script `path`, `sha256` and selected `engine` (`EuroPDF`, `DocRaptor` or `PS`).
+- `options`: profile, pipeline and conversion switches; no credentials or HTML content.
+- `output`: PDF `path` and `sha256` on success, otherwise `null`.
+- `status`: `Completed` or `Failed`; `error` is `null` or a sanitized `code`/`message` object.
+
+The PDF is staged and checked for a PDF signature before publication. This verifies the response type, not PDF/A or PDF/UA conformance. The
+manifest is published last. Individual file replacements are atomic, but the pair is not a filesystem transaction. A directory lock prevents
+cooperating conversions from interleaving. Readers should wait for completion and verify hashes.
+
+Conversion failures terminate and write a failure manifest when the output directory is writable. A failed retry preserves the previous PDF,
+but its new failure manifest has `output: null` and does not certify that previous file. If publication fails, the converter attempts to
+restore the previous PDF; rollback failure retains staging files for recovery. Preflight/parameter errors, output collisions, previews, and
+a competing lock do not replace an existing manifest. An unwritable manifest destination is reported as a failure, not success.
+
+`-PassThru` returns an operation result, rather than the output-path string returned by older versions. Use `$conversion.OutputPath` for the
+path. The result also includes input/output hashes, engine, manifest path and `ManifestWritten`. `-ApiKey` now takes a SecureString instead
+of a plain string. Failures expose the result through the error's `TargetObject`:
+
+```powershell
+try {
+  $conversion = .\scripts\Files\Convert-HTMLToPDF.ps1 @conversionOptions -ApiKey $key -Overwrite -PassThru
+} catch {
+  $_.TargetObject | Format-List Status, ErrorMessage, OutputPath, ManifestPath, ManifestWritten
+}
+```
