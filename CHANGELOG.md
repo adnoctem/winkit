@@ -1,3 +1,16 @@
+## [3.0.0](https://github.com/adnoctem/winkit/compare/v2.4.0...v3.0.0) (2026-11-03)
+
+### ⚠ BREAKING CHANGES
+
+* **scripts:** Convert-HTMLToPDF.ps1 now requires SecureString values for
+ApiKey, returns a structured operation result from PassThru, and requires
+Overwrite when a PDF or pdf.manifest.json already exists. Environment key
+configuration remains supported; use result.OutputPath for the PDF path.
+
+### Bug Fixes
+
+* **scripts:** audit PDF conversion and preserve binary responses ([328b780](https://github.com/adnoctem/winkit/commit/328b78081c3bc5dddb096c1243660e187ee792cb))
+
 ## [2.4.0](https://github.com/adnoctem/winkit/compare/v2.3.0...v2.4.0) (2026-11-03)
 
 ### Features
