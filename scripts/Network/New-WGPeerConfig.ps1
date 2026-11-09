@@ -33,7 +33,7 @@
   Allowed IP ranges for the [Peer] section (defaults: the local subnets).
 
 .PARAMETER ConfigurationPeerEndpoint
-  The WireGuard server endpoint (e.g., hq.delta4x4.net:57173).
+  The WireGuard server endpoint (e.g., vpn.adnoctem.co:51820).
 
 .PARAMETER ConfigurationPersistentKeepalive
   Persistent keepalive interval in seconds (default: 25).
@@ -87,8 +87,8 @@ param (
   [Parameter(Position = 5, Mandatory = $false, HelpMessage = "The peer allowed IP addresses.")]
   [string[]]$ConfigurationPeerAllowedIPs = @("192.168.99.0/24", "192.168.0.0/23"),
 
-  [Parameter(Position = 6, Mandatory = $false, HelpMessage = "The peer endpoint (e.g., hq.delta4x4.net:57173).")]
-  [string]$ConfigurationPeerEndpoint = "hq.delta4x4.net:57173",
+  [Parameter(Position = 6, Mandatory = $false, HelpMessage = "The peer endpoint (e.g., vpn.adnoctem.co:51820).")]
+  [string]$ConfigurationPeerEndpoint = "vpn.adnoctem.co:51820",
 
   [Parameter(Position = 7, Mandatory = $false, HelpMessage = "The persistent keepalive interval in seconds (default: 25).")]
   [int]$ConfigurationPersistentKeepalive = 25,
