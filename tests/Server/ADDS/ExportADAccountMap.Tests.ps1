@@ -48,6 +48,41 @@ BeforeAll {
       Enabled           = $Enabled
     }
   }
+
+  function ConvertFrom-AdRecordCsv {
+    param (
+      [string]
+      $Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+      throw "AD fixture not found: $Path"
+    }
+
+    $property = @(Get-ADResourceProperty -Resource Users)
+    $rows = @(Import-Csv -LiteralPath $Path -Delimiter ';')
+    $records = foreach ($row in $rows) {
+      $enabled = $false
+      $enabledText = [string]$row.Enabled
+      if (-not [bool]::TryParse($enabledText, [ref]$enabled)) {
+        throw "AD fixture row '$($row.sAMAccountName)' has invalid Enabled value '$enabledText'."
+      }
+
+      $source = [PSCustomObject]@{
+        DistinguishedName = $row.DistinguishedName
+        Enabled           = $enabled
+        Surname           = $row.Surname
+        sAMAccountName    = $row.sAMAccountName
+        Name              = $row.Name
+        displayName       = $row.displayName
+        mail              = $row.mail
+      }
+
+      New-ADDirectoryRecord -InputObject $source -Resource Users -Property $property
+    }
+
+    return @($records)
+  }
 }
 
 Describe 'Export-ADAccountMap conventions' {
@@ -208,28 +243,44 @@ Describe 'Export-ADAccountMap workflow' {
 }
 
 Describe 'Owner-provided AD fixture' {
-  It 'generates the committed account map from the owner CSV fixture' -Skip {
-    # TODO: Enable after the owner supplies tests/Server/ADDS/fixtures/ad-records.csv.
-    #
-    # Required CSV columns (header names case-insensitive):
-    #   sAMAccountName, Enabled, mail, displayName, distinguishedName
-    #
-    # Required rows (at least eight):
-    #   1. An enabled user with a valid adnoctem.co mail value.
-    #   2. An enabled user with a valid example.com mail value.
-    #   3. An enabled user with an empty mail value (missing-mail case).
-    #   4. An enabled user whose mail is outside the allowlist.
-    #   5. A disabled user with a valid mail value.
-    #   6. Two rows with the same sAMAccountName and different
-    #      distinguishedName values (duplicate case).
-    #   7. A case-variant sAMAccountName that must preserve its AD casing.
-    #
-    # The test will convert each row into a Winkit.ADDS.User record, feed the
-    # records to New-ADAccountMap with AllowedDomain adnoctem.co and
-    # example.com, and compare the exported map with the owner-provided
-    # tests/Server/ADDS/fixtures/ad-account-map.golden.json. An optional
-    # tests/Server/ADDS/fixtures/account-map-overrides.csv will cover override
-    # precedence, an intentional exclusion, an unmatched override, and an
-    # outside-domain override.
+  BeforeAll {
+    $script:FixtureRecordsPath = Join-Path $PSScriptRoot 'fixtures/ad-records.csv'
+    $script:FixtureOverridesPath = Join-Path $PSScriptRoot 'fixtures/account-map-overrides.csv'
+    $script:FixtureGoldenPath = Join-Path $PSScriptRoot 'fixtures/ad-account-map.golden.json'
+  }
+
+  BeforeEach {
+    $script:FixtureOutputDirectory = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $script:FixtureOutputDirectory
+    $script:FixtureMapPath = Join-Path $script:FixtureOutputDirectory 'ad-account-map.json'
+  }
+
+  It 'matches the committed golden map for the real AD export and overrides' {
+    $records = @(ConvertFrom-AdRecordCsv -Path $script:FixtureRecordsPath)
+
+    $blocked = @($records) | New-ADAccountMap -AllowedDomain @('adnoctem.co', 'example.com') -OverridePath $script:FixtureOverridesPath
+    $blocked.Status | Should -Be 'Failed'
+    @($blocked.Unresolved).Count | Should -Be 1
+    $blocked.Unresolved[0].SamAccountName | Should -Be 'MGindorfer'
+    $blocked.Unresolved[0].Reason | Should -Be 'OverrideDomainNotAllowed'
+
+    $result = @($records) | New-ADAccountMap -AllowedDomain @('adnoctem.co', 'example.com') -OverridePath $script:FixtureOverridesPath -AllowOverrideOutsideDomain
+
+    $result.Status | Should -Be 'Completed'
+    $result.EntryCount | Should -Be 9
+    $result.ResolvedCount | Should -Be 9
+    $result.SourceSummary.ADMail | Should -Be 8
+    $result.SourceSummary.Override | Should -Be 1
+    $result.Map['MGindorfer'] | Should -Be 'admin@adnoctem.net'
+
+    $schulz = @($records | Where-Object { $_.SamAccountName -eq 'JSchulz' })
+    $schulz.Properties['displayName'] | Should -Be 'Jürgen Schulz'
+
+    $null = $result | Export-ADAccountMap -OutputPath $script:FixtureMapPath
+
+    $expected = [Convert]::ToBase64String([IO.File]::ReadAllBytes($script:FixtureGoldenPath))
+    $actual = [Convert]::ToBase64String([IO.File]::ReadAllBytes($script:FixtureMapPath))
+
+    $actual | Should -Be $expected
   }
 }

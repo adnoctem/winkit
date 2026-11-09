@@ -1,0 +1,10 @@
+"DistinguishedName";"Enabled";"Surname";"sAMAccountName";"Name";"displayName";"mail"
+CN=Andreas Meyer,OU=SBSUsers,OU=Users,OU=MyBusiness,DC=adnoctem,DC=local;True;Meyer;AMeyer;Andreas;Andreas Meyer;andreas.meyer@adnoctem.co
+CN=Erika Mustermann,OU=SBSUsers,OU=Users,OU=MyBusiness,DC=adnoctem,DC=local;True;Mustermann;EMustermann;Erika;Erika Mustermann;erika.mustermann@adnoctem.co
+CN=Johann Schmidt,OU=SBSUsers,OU=Users,OU=MyBusiness,DC=adnoctem,DC=local;True;Schmidt;JSchmidt;Johann;Johann Schmidt;johann.schmidt@adnoctem.co
+CN=Jürgen Schulz,OU=SBSUsers,OU=Users,OU=MyBusiness,DC=adnoctem,DC=local;True;Schulz;JSchulz;Jürgen;Jürgen Schulz;juergen.schulz@adnoctem.co
+CN=Maximilian Gindorfer,OU=SBSUsers,OU=Users,OU=MyBusiness,DC=adnoctem,DC=local;True;Gindorfer;MGindorfer;Maximilian;Maximilian Gindorfer;maximilian.gindorfer@adnoctem.co
+CN=Maximilian Mustermann,OU=SBSUsers,OU=Users,OU=MyBusiness,DC=adnoctem,DC=local;True;Mustermann;MMustermann;Maximilian;Maximilian Mustermann;maximilian.mustermann@adnoctem.co
+CN=Sabine Schneider,OU=SBSUsers,OU=Users,OU=MyBusiness,DC=adnoctem,DC=local;True;Schneider;SSchneider;Sabine;Sabine Schneider;sabine.schneider@adnoctem.co
+CN=Susanne Weber,OU=SBSUsers,OU=Users,OU=MyBusiness,DC=adnoctem,DC=local;True;Weber;SWeber;Susanne;Susanne Weber;susanne.weber@adnoctem.co
+CN=Thomas Müller,OU=SBSUsers,OU=Users,OU=MyBusiness,DC=adnoctem,DC=local;True;Müller;TMueller;Müller;Thomas Müller;thomas.mueller@adnoctem.co
