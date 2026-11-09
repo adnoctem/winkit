@@ -30,6 +30,8 @@ root `AGENTS.md` is a symlink to this file — edit this one.
   instead of creating one page per script. Assume installer-managed winkit and installer-provided dependencies, not a Git checkout. Prefer
   short explanations and generous, copyable examples; state the installed working directory, define inputs, and write user data outside the
   managed installation. Keep contributor setup, tests, and fixture generation in `docs/CONTRIBUTING.md` or alongside tests
+- `scripts/<Area>/lib/` — dot-sourced helper libraries shared by that area's entry scripts (for example `scripts/Server/ADDS/lib/ADDS.ps1`).
+  They are not standalone entry points and are not PowerShell modules
 - `scripts/<Area>/README.md` — concise script catalogue and index linking to the area's task guides. Describe current behavior,
   requirements, examples, and limitations without development history, sketches, change narratives, or old review/test-run reports
 - `requirements.psd1` — exact module version pins (also a semantic-release commit asset); bump when adopting newer

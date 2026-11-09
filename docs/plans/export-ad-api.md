@@ -16,7 +16,7 @@ The work has two deliverables:
    `samAccountName` to full email address - with explicit source precedence, validation, auditing, and deterministic bytes.
 
 Non-goals: writing to AD, provisioning mailboxes, talking to Plesk/`plead`, guessing addresses from a domain name, changing the `plead`
-inbox schema, or adding a PowerShell module to winkit. The `delta4x4/ad` entry-creation script and `plead` are consumers of the generated
+inbox schema, or adding a PowerShell module to winkit. The owner's `ad` entry-creation script and `plead` are consumers of the generated
 file; this plan does not change either repository.
 
 ## 2. Assessment of the current script
@@ -774,7 +774,7 @@ Examples for the user guide:
 ```powershell
 # All users with an explicit allowlist and a curated override file.
 .\scripts\Server\ADDS\Export-ADAccountMap.ps1 `
-  -AllowedDomain delta4x4.com, delta4x4.de `
+  -AllowedDomain adnoctem.co, example.com `
   -OverridePath C:\ADReports\account-map-overrides.csv `
   -OutputPath C:\ADReports\ad-account-map.json `
   -ReportPath C:\ADReports\ad-account-map-audit.csv `
@@ -784,9 +784,9 @@ Examples for the user guide:
 ```powershell
 # Only one OU, only enabled users, and replace the previous file.
 .\scripts\Server\ADDS\Export-ADAccountMap.ps1 `
-  -SearchBase 'OU=Users,OU=Delta4x4,DC=delta4x4,DC=local' `
+  -SearchBase 'OU=Users,OU=AdNoctem,DC=adnoctem,DC=co' `
   -Filter 'Enabled -eq $true' `
-  -AllowedDomain delta4x4.com, delta4x4.de `
+  -AllowedDomain adnoctem.co, example.com `
   -OutputPath C:\ADReports\ad-account-map.json `
   -Force
 ```
@@ -794,7 +794,7 @@ Examples for the user guide:
 ```powershell
 # Reuse an existing export instead of querying AD again.
 Get-ADDirectoryRecord -Resource Users -Filter * |
-  New-ADAccountMap -AllowedDomain delta4x4.com, delta4x4.de |
+  New-ADAccountMap -AllowedDomain adnoctem.co, example.com |
   Export-ADAccountMap -OutputPath C:\ADReports\ad-account-map.json -Force -PassThru
 ```
 
@@ -829,9 +829,9 @@ The generated file is exactly the object map the consumer expects, with no wrapp
 
 ```json
 {
-  "CFischer": "christopher.fischer@delta4x4.com",
-  "LHippmann": "l.hippmann@delta4x4.com",
-  "RRudorfer": "rene.rudorfer@delta4x4.de"
+  "MGindorfer": "maximilian.gindorfer@adnoctem.co",
+  "MMustermann": "maximilian.mustermann@adnoctem.co",
+  "EMustermann": "erika.mustermann@example.com"
 }
 ```
 
@@ -867,7 +867,7 @@ override CSV > mail attribute (valid and allowed) > explicit DefaultDomain (only
 ```
 
 `userPrincipalName`, `proxyAddresses`, `targetAddress`, and `<samAccountName>@<domain>` guesses are not consulted. This is deliberate: the
-production domain has an unreliable `mail` attribute and users span `delta4x4.com` and `delta4x4.de`, so any automatic fallback would create
+production domain has an unreliable `mail` attribute and users span `adnoctem.co` and `example.com`, so any automatic fallback would create
 plausible but wrong addresses. An operator who wants a fallback must name it with `-DefaultDomain`, and every fallback is counted and
 reported. When `mail` exists but is invalid or outside the allowlist, the entry is unresolved; `-DefaultDomain` does not mask a value that
 looks intentional but is wrong.
@@ -898,9 +898,9 @@ are visible in the audit report. Example:
 
 ```csv
 samAccountName,email,note
-CFischer,christopher.fischer@delta4x4.com,mail attribute is stale
-LHippmann,l.hippmann@delta4x4.com,
-RRudorfer,rene.rudorfer@delta4x4.de,second mail domain
+MGindorfer,maximilian.gindorfer@adnoctem.co,mail attribute is stale
+MMustermann,maximilian.mustermann@adnoctem.co,
+EMustermann,erika.mustermann@example.com,second mail domain
 ServiceAccount,,intentionally excluded
 ```
 
@@ -933,8 +933,8 @@ still produce duplicates. Handling:
 `Test-ADMailAddress` implements the rules in section 3.2. In addition:
 
 - The final value must be the bare address, not `Name <address>`.
-- The domain allowlist is compared case-insensitively and must match exactly; `delta4x4.com` does not automatically permit
-  `mail.delta4x4.com`.
+- The domain allowlist is compared case-insensitively and must match exactly; `adnoctem.co` does not automatically permit
+  `mail.adnoctem.co`.
 - Validation happens before the map is built, so an invalid value is reported against its `samAccountName` rather than failing later during
   serialization.
 - The report records the raw `mail` value next to the final value, so a wrong-but-valid address can still be audited.
@@ -1014,12 +1014,12 @@ New files under `tests/Server/ADDS/`:
 
 - `ADDS.Tests.ps1` - library functions.
 - `ExportAD.Tests.ps1` - entry script and CSV writer.
-- `ExportADAccountMap.Tests.ps1` - mapping, overrides, JSON, and safety. Tests must run without a domain, Outlook, or the `delta4x4`
-  environment. Because Pester cannot mock a command that does not exist, `BeforeAll` defines lightweight stubs for `Get-ADUser`,
-  `Get-ADComputer`, `Get-ADGroup`, and `Get-ADGroupMember` when the real ActiveDirectory module is absent, then mocks them per test. The
-  tests dot-source `lib/ADDS.ps1` the same way the entry scripts do. Entry-script tests run the script through a generated harness with the
-  `#Requires` lines removed (the pattern already used by `tests/Administration/UserProfileData.Tests.ps1`) or skip the test when the
-  ActiveDirectory module is absent; the library tests never require the module.
+- `ExportADAccountMap.Tests.ps1` - mapping, overrides, JSON, and safety. Tests must run without a domain, Outlook, or an AD environment.
+  Because Pester cannot mock a command that does not exist, `BeforeAll` defines lightweight stubs for `Get-ADUser`, `Get-ADComputer`,
+  `Get-ADGroup`, and `Get-ADGroupMember` when the real ActiveDirectory module is absent, then mocks them per test. The tests dot-source
+  `lib/ADDS.ps1` the same way the entry scripts do. Entry-script tests run the script through a generated harness with the `#Requires` lines
+  removed (the pattern already used by `tests/Administration/UserProfileData.Tests.ps1`) or skip the test when the ActiveDirectory module is
+  absent; the library tests never require the module.
 
 Coverage matrix:
 
@@ -1155,7 +1155,7 @@ Resolve the questions in section 8. Record the decisions in this document or the
    this change, with Substrate promotion as a follow-up.
 2. **CSV contract:** must `Export-AD.ps1` produce byte-identical column order to today's module-defined output, or is a documented, stable
    column order acceptable? A stable order is recommended; it is the only way to test the schema.
-3. **Domain matching:** is an exact allowlist (`delta4x4.com`, `delta4x4.de`) sufficient, or must subdomains and IDN forms be accepted? The
+3. **Domain matching:** is an exact allowlist (`adnoctem.co`, `example.com`) sufficient, or must subdomains and IDN forms be accepted? The
    recommendation is exact matching, with every accepted domain listed explicitly.
 4. **Override format:** is CSV sufficient for v1, or is JSON override input required so the emitted map can be edited and fed back? The
    recommendation is CSV only, to keep duplicate-key detection reliable on Windows PowerShell 5.1.
