@@ -17,7 +17,8 @@ execution is supported when the module and network/AD permissions are available.
 
 Users and computers include enabled accounts only by default. Use `-IncludeDisabled` to include disabled accounts. `-Omit` removes
 attributes from either output format. Missing requested attributes stop the export by default; use `-Omit` for attributes you do not need,
-or `-IncludeMissing` to export records with empty values.
+or `-IncludeMissing` to export records with empty values. The user `homeDirectory`, `homeDrive`, and `profilePath` attributes are optional:
+they remain columns but never fail the export when empty.
 
 ```powershell
 # Enabled users, computers, and groups as CSV.

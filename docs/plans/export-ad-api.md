@@ -1208,4 +1208,6 @@ Implementation notes:
   mapping. `-Omit` belongs to the general `Export-AD.ps1` export surface.
 - The synthetic golden fixture is `tests/Server/ADDS/fixtures/ad-account-map.synthetic.json`. The skipped real-AD test and the fixture
   contract live in `tests/Server/ADDS/ExportADAccountMap.Tests.ps1` and `tests/Server/ADDS/fixtures/README.md`.
+- User `homeDirectory`, `homeDrive`, and `profilePath` are optional export columns: empty values are written normally, never trigger the
+  missing-property error, and can still be removed with `-Omit`.
 - The library is dot-sourced by both entry scripts. It contains no elevation requirement and no main workflow.

@@ -18,7 +18,9 @@
 
   Missing requested attributes fail the export by default. Use -Omit to remove
   unwanted attributes from the output or -IncludeMissing to export records with
-  empty values. CSV and JSON are first-class output formats.
+  empty values. User homeDirectory, homeDrive, and profilePath are optional:
+  empty values are exported and never fail the export. CSV and JSON are
+  first-class output formats.
 
 .PARAMETER OutputPath
   Existing directory that receives the export files.

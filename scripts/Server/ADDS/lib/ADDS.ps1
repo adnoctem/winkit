@@ -113,6 +113,43 @@ function Get-ADResourceProperty {
   }
 }
 
+function Get-ADOptionalProperty {
+  <#
+  .SYNOPSIS
+    Returns export properties that may be empty without failing the export.
+
+  .DESCRIPTION
+    Optional properties remain columns in the output and can still be removed
+    with -Omit, but an empty value never counts as missing. User home-directory
+    and profile attributes are commonly unset on service and shared accounts,
+    so they must not require -IncludeMissing.
+
+  .PARAMETER Resource
+    Resource whose optional property list is returned.
+
+  .OUTPUTS
+    System.String[]
+  #>
+  [CmdletBinding()]
+  [OutputType([string[]])]
+  param (
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('Users', 'Computers', 'Groups')]
+    [string]
+    $Resource
+  )
+
+  if ($Resource -eq 'Users') {
+    return @(
+      'homeDirectory',
+      'homeDrive',
+      'profilePath'
+    )
+  }
+
+  return @()
+}
+
 function Get-ADAttributeValue {
   <#
   .SYNOPSIS
@@ -797,8 +834,10 @@ function Export-ADDirectoryRecord {
   .DESCRIPTION
     Writes AD-Users.csv, AD-Computers.csv, or AD-Groups.csv (or the JSON
     equivalents) with a stable property order. Missing requested attributes
-    terminate the export unless -IncludeMissing is supplied. -Omit removes
-    attributes from the output and from the missing-value check.
+    terminate the export unless -IncludeMissing is supplied. User homeDirectory,
+    homeDrive, and profilePath are optional: empty values are exported and never
+    count as missing. -Omit removes attributes from the output and from the
+    missing-value check.
 
   .PARAMETER InputObject
     Typed records from Get-ADDirectoryRecord.
@@ -942,10 +981,17 @@ function Export-ADDirectoryRecord {
       throw "All properties for $Resource were omitted; at least one output property is required."
     }
 
+    # Optional attributes stay in the output but never fail the missing-value check.
+    $optionalProperties = @(Get-ADOptionalProperty -Resource $Resource)
+
     $missingRecords = New-Object System.Collections.Generic.List[object]
     foreach ($record in $records) {
       $missing = @()
       foreach ($column in $columns) {
+        if ($optionalProperties -contains $column) {
+          continue
+        }
+
         $value = $null
         if ($null -ne $record.Properties -and $record.Properties -is [System.Collections.IDictionary]) {
           $value = $record.Properties[$column]

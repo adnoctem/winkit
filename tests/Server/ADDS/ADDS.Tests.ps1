@@ -217,6 +217,14 @@ Describe 'Get-ADResourceProperty' {
     @(Get-ADResourceProperty -Resource Computers) | Should -Contain 'DNSHostName'
     @(Get-ADResourceProperty -Resource Groups) | Should -Contain 'GroupScope'
   }
+
+  It 'marks only user home and profile attributes optional' {
+    $optional = @(Get-ADOptionalProperty -Resource Users)
+
+    ($optional -join ',') | Should -Be 'homeDirectory,homeDrive,profilePath'
+    @(Get-ADOptionalProperty -Resource Computers).Count | Should -Be 0
+    @(Get-ADOptionalProperty -Resource Groups).Count | Should -Be 0
+  }
 }
 
 Describe 'Get-ADDirectoryRecord' {
@@ -616,6 +624,38 @@ Describe 'Export-ADDirectoryRecord' {
     $rows = @(Import-Csv -LiteralPath (Join-Path $script:OutputDirectory 'AD-Users.csv') -Delimiter ';')
 
     @($rows[0].PSObject.Properties.Name) | Should -Not -Contain 'mail'
+  }
+
+  It 'allows empty home and profile attributes without IncludeMissing' {
+    $record = New-TestUserRecord -SamAccountName 'nohome' -Mail 'nohome@adnoctem.co'
+    foreach ($name in @('homeDirectory', 'homeDrive', 'profilePath')) {
+      $record.Properties[$name] = $null
+    }
+
+    $result = @($record) | Export-ADDirectoryRecord -Resource Users -OutputPath $script:OutputDirectory -PassThru
+    $rows = @(Import-Csv -LiteralPath (Join-Path $script:OutputDirectory 'AD-Users.csv') -Delimiter ';')
+
+    $result.Status | Should -Be 'Completed'
+    @($rows[0].PSObject.Properties.Name) | Should -Contain 'homeDirectory'
+    @($rows[0].PSObject.Properties.Name) | Should -Contain 'homeDrive'
+    @($rows[0].PSObject.Properties.Name) | Should -Contain 'profilePath'
+    $rows[0].homeDirectory | Should -BeNullOrEmpty
+    $rows[0].homeDrive | Should -BeNullOrEmpty
+    $rows[0].profilePath | Should -BeNullOrEmpty
+  }
+
+  It 'still allows optional home attributes to be omitted' {
+    $record = New-TestUserRecord -SamAccountName 'nohome' -Mail 'nohome@adnoctem.co'
+
+    $null = @($record) | Export-ADDirectoryRecord `
+      -Resource Users `
+      -OutputPath $script:OutputDirectory `
+      -Omit 'homeDirectory', 'homeDrive', 'profilePath'
+    $rows = @(Import-Csv -LiteralPath (Join-Path $script:OutputDirectory 'AD-Users.csv') -Delimiter ';')
+
+    @($rows[0].PSObject.Properties.Name) | Should -Not -Contain 'homeDirectory'
+    @($rows[0].PSObject.Properties.Name) | Should -Not -Contain 'homeDrive'
+    @($rows[0].PSObject.Properties.Name) | Should -Not -Contain 'profilePath'
   }
 
   It 'fails on missing properties unless IncludeMissing is supplied' {
