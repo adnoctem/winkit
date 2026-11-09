@@ -1,3 +1,14 @@
+## [3.1.0](https://github.com/adnoctem/winkit/compare/v3.0.0...v3.1.0) (2026-11-09)
+
+### Features
+
+* **scripts:** add AD export and account-map API ([8b509e0](https://github.com/adnoctem/winkit/commit/8b509e020b62019a5275869e54c78a52ee3e9a19))
+
+### Bug Fixes
+
+* **scripts:** treat home and profile attributes as optional in AD exports ([634b1d5](https://github.com/adnoctem/winkit/commit/634b1d552ab62ab4d0037425d7b5cda146c14ea9))
+* **scripts:** use generic WireGuard endpoint default ([386442b](https://github.com/adnoctem/winkit/commit/386442bcada1c33f34461bd8e72c5935e92b7957))
+
 ## [3.0.0](https://github.com/adnoctem/winkit/compare/v2.4.0...v3.0.0) (2026-11-03)
 
 ### ⚠ BREAKING CHANGES
