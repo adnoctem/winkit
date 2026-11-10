@@ -11,9 +11,14 @@ defaults:
   run:
     shell: pwsh
 
+concurrency:
+  group: "${{ github.workflow }}"
+  cancel-in-progress: false
+
 jobs:
   dependencies:
     runs-on: windows-latest
+    timeout-minutes: 15
     env:
       GITHUB_TOKEN: ${{ secrets.ANC_GITHUB_TOKEN }}
     permissions:
@@ -25,5 +30,5 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Open dependency update pull request
+      - name: Create or update the dependency pull request
         run: .\winkit.ps1 deps
