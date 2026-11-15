@@ -11,6 +11,9 @@ installed-toolkit usage, session requirements, and topic guides.
 | [Switch-OfficeVersion.ps1](Switch-OfficeVersion.ps1) | Inventory and migrate Office products or architectures.  | [Migrations](../../docs/www/Office/Office-Migrations.md)                                                      |
 | [Remove-Office.ps1](Remove-Office.ps1)               | Inventory or remove selected Click-to-Run products.      | [Installation and removal](../../docs/www/Office/Office-Installation-and-Removal.md#remove-selected-products) |
 
+House standard: pass `-ExcludeApp Groove,OneDrive,OneNote,Publisher`. `Groove` and `OneDrive` are distinct ODT IDs; excluding `OneDrive`
+alone does not remove the legacy OneDrive for Business sync client. This does not remove the OneDrive client that ships with Windows.
+
 Recorded installations and migrations use the [Office recovery workflow](../../docs/www/Office/Office-Recovery.md).
 
 ## Outlook
