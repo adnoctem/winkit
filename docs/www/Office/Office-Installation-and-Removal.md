@@ -71,18 +71,23 @@ $target = @{
 }
 New-Item -ItemType Directory -Path (Split-Path -Parent $target.SourcePath) -Force | Out-Null
 
-# Optional application selection; use the same request through Check and installation.
-$target.ExcludeApp = @('Groove', 'OneDrive')
+# House standard application selection. Use the same request through Check, Prepare, and Install.
+$target.ExcludeApp = @('Groove', 'OneDrive', 'OneNote', 'Publisher')
 ```
 
-| Option                            | Behavior                                                                                                                                |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `Architecture`                    | `32` or `64`; defaults to `64`.                                                                                                         |
-| `Version`                         | Optional exact `16.0` build; Prepare otherwise resolves and pins one.                                                                   |
-| `ExcludeApp` / `ExcludePublisher` | Omit selected applications / add Publisher to the exclusions.                                                                           |
-| `Language`                        | Defaults to exactly `en-us`, regardless of Windows or account locale. First entry is the primary shell language.                        |
-| `AutoSourceLocales`               | Explicit opt-in to discovery; defaults to `LocaleSource InstalledOffice`. Requires unambiguous languages and primary-language evidence. |
-| `LocaleSource OperatingSystem`    | With `AutoSourceLocales`, use the machine installation UI language, not the administrator's culture.                                    |
+The house standard excludes `Groove`, `OneDrive`, `OneNote`, and `Publisher`. `Groove` and `OneDrive` are separate ODT IDs; excluding
+`OneDrive` alone does not remove the legacy OneDrive for Business sync client. This selection does not remove the OneDrive client that ships
+with Windows itself.
+
+| Option                         | Behavior                                                                                                                                |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `Architecture`                 | `32` or `64`; defaults to `64`.                                                                                                         |
+| `Version`                      | Optional exact `16.0` build; Prepare otherwise resolves and pins one.                                                                   |
+| `ExcludeApp`                   | Applications to omit. House standard: `Groove`, `OneDrive`, `OneNote`, and `Publisher`.                                                 |
+| `ExcludePublisher`             | Compatibility shorthand that adds Publisher; prefer listing Publisher in `ExcludeApp`.                                                  |
+| `Language`                     | Defaults to exactly `en-us`, regardless of Windows or account locale. First entry is the primary shell language.                        |
+| `AutoSourceLocales`            | Explicit opt-in to discovery; defaults to `LocaleSource InstalledOffice`. Requires unambiguous languages and primary-language evidence. |
+| `LocaleSource OperatingSystem` | With `AutoSourceLocales`, use the machine installation UI language, not the administrator's culture.                                    |
 
 Explicit `Language` and automatic sourcing are mutually exclusive. Discovery failures do not silently fall back to English or OS detection.
 Office languages do not change Windows locale, keyboards, or per-user editing/display preferences. ODT's XML chooses products/languages; one

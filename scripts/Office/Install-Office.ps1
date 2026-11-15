@@ -33,11 +33,13 @@
 .PARAMETER Version
   Optional exact 16.0 build. Prepare resolves a build; deployment uses the media manifest.
 .PARAMETER ExcludeApp
-  Applications to exclude. Values are validated by Substrate.
-  OneDrive and Groove are distinct ODT IDs; neither implies removing a separately
-  installed sync client. Keep the same exclusions for preparation and execution.
+  Applications to exclude. Values are validated by Substrate. The house standard
+  is Groove, OneDrive, OneNote, and Publisher. OneDrive and Groove are distinct
+  ODT IDs; neither implies removing a separately installed sync client. Keep the
+  same exclusions for preparation and execution.
 .PARAMETER ExcludePublisher
-  Add Publisher to ExcludeApp.
+  Compatibility shorthand for adding Publisher to ExcludeApp. Prefer listing
+  Publisher in ExcludeApp.
 .PARAMETER SourcePath
   Absolute or relative local/UNC package directory. Prepare needs an existing parent.
   Deployment needs compatible schema-2 media unless the target is already compliant.
@@ -59,11 +61,11 @@
 .PARAMETER PassThru
   Return structured results, including module reason codes and recovery information.
 .EXAMPLE
-  .\Install-Office.ps1 -Mode Check -PassThru
+  .\Install-Office.ps1 -Mode Check -ExcludeApp Groove,OneDrive,OneNote,Publisher -PassThru
 .EXAMPLE
-  .\Install-Office.ps1 -Mode Prepare -TargetProductId Standard2024Volume -SourcePath C:\Managed\Media\Office2024 -OdtPath C:\Managed\ODT\setup.exe -Language en-us,de-de
+  .\Install-Office.ps1 -Mode Prepare -TargetProductId Standard2024Volume -SourcePath C:\Managed\Media\Office2024 -OdtPath C:\Managed\ODT\setup.exe -Language en-us,de-de -ExcludeApp Groove,OneDrive,OneNote,Publisher
 .EXAMPLE
-  .\Install-Office.ps1 -Mode Install -TargetProductId Standard2024Volume -SourcePath C:\Managed\Media\Office2024 -OdtPath C:\Managed\ODT\setup.exe -DryRun
+  .\Install-Office.ps1 -Mode Install -TargetProductId Standard2024Volume -SourcePath C:\Managed\Media\Office2024 -OdtPath C:\Managed\ODT\setup.exe -ExcludeApp Groove,OneDrive,OneNote,Publisher -DryRun
 .EXAMPLE
   .\Install-Office.ps1 -Mode Recover -RunId 0123456789abcdef0123456789abcdef -OdtPath C:\Managed\ODT\setup.exe -DryRun
 .NOTES
