@@ -253,6 +253,29 @@ Describe 'Outlook user checkpoints' {
     @($result.Results | Where-Object { $_.OriginalPath -eq $global:WinkitCheckpointContext.App.ShutdownFile -and $_.Status -eq 'Completed' }).Count | Should -Be 1
   }
 
+  It 'skips an unreadable Outlook store and captures the remaining stores' {
+    $readable = [PSCustomObject]@{ DisplayName = 'Mailbox'; FilePath = $script:Source }
+    $stores = [PSCustomObject]@{ Count = 2 }
+    $stores | Add-Member ScriptMethod Item {
+      param($Index)
+      if ($Index -eq 1) {
+        throw 'The information store is currently unavailable.'
+      }
+      return $readable
+    }
+    $global:WinkitCheckpointContext = [PSCustomObject]@{
+      App       = [PSCustomObject]@{ Version = '16.0' }
+      Namespace = [PSCustomObject]@{ Stores = $stores }
+    }
+    Mock Connect-Outlook { $global:WinkitCheckpointContext }
+
+    $result = & $script:CheckpointScript -Destination $script:Destination -PassThru -Confirm:$false -WarningAction SilentlyContinue
+
+    $result.Status | Should -Be Completed
+    @($result.Results | Where-Object Category -EQ Store).Count | Should -Be 1
+    (@($result.Warnings) -join "`n") | Should -Match 'store 1 could not be read'
+  }
+
   It 'does not broaden explicit store selection through settings-directory discovery' {
     $outlook = Join-Path $env:APPDATA 'Microsoft\Outlook'
     $null = [IO.Directory]::CreateDirectory($outlook)
