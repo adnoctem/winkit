@@ -12,7 +12,9 @@
   Includes signatures, templates, dictionaries, Outlook application data,
   AutoComplete cache, and Ribbon/Quick Access Toolbar customization files.
   SHA-256 verifies file copies by default. Missing optional folders are reported;
-  inaccessible, missing selected, or locked files fail the checkpoint.
+  inaccessible, missing selected, or locked files fail the checkpoint. A failure
+  after planning still writes manifest.json with the failure; preview runs write
+  nothing.
   This is a file/settings checkpoint, not a transactional system snapshot or
   automatic restore. OST copies are caches, not portable mailbox backups.
 .PARAMETER Destination
@@ -121,6 +123,7 @@ $_manifestStream = $null
 $_copied = 0
 $_failed = 0
 $_status = 'Failed'
+$_reportAllowed = $false
 $_sessionId = (Get-Process -Id $PID -ErrorAction Stop).SessionId
 
 try {
@@ -356,18 +359,29 @@ try {
     throw 'No data files or Office user settings were found for this checkpoint.'
   }
 
+  $_reportAllowed = $true
+
   Write-Progress -Id 61 -Activity 'Outlook checkpoint' -Status 'Reading Office inventory and activation'
-  $_inventory = Get-OfficeInventory -ErrorAction Stop
-  foreach ($_product in $_inventory.Products) {
-    try {
-      $null = $_activation.Add((Get-OfficeActivationStatus -TargetProductId $_product.ProductId -ErrorAction Stop))
-    }
-    catch {
-      $null = $_activation.Add([PSCustomObject]@{
-          TargetProductId = $_product.ProductId
-          Status          = 'Unknown'
-        })
-      $null = $_warnings.Add("Activation could not be read for $($_product.ProductId): $($_.Exception.Message)")
+  try {
+    $_inventory = Get-OfficeInventory -ErrorAction Stop
+  }
+  catch {
+    $_inventory = $null
+    $null = $_warnings.Add("Office inventory could not be read: $($_.Exception.Message)")
+  }
+
+  if ($_inventory) {
+    foreach ($_product in $_inventory.Products) {
+      try {
+        $null = $_activation.Add((Get-OfficeActivationStatus -TargetProductId $_product.ProductId -ErrorAction Stop))
+      }
+      catch {
+        $null = $_activation.Add([PSCustomObject]@{
+            TargetProductId = $_product.ProductId
+            Status          = 'Unknown'
+          })
+        $null = $_warnings.Add("Activation could not be read for $($_product.ProductId): $($_.Exception.Message)")
+      }
     }
   }
 
@@ -509,6 +523,21 @@ finally {
     Remove-ComObject $_context.Namespace $_context.App
     Invoke-ComGarbageCollection
   }
+
+  # A failed run after planning still gets a manifest, so the operator has a
+  # record even when no copy or export completed. Preview runs write nothing.
+  if (-not $_manifestStream -and -not $WhatIfPreference -and $_reportAllowed -and $_status -eq 'Failed' -and $_runDirectory) {
+    try {
+      $null = [IO.Directory]::CreateDirectory($_runDirectory)
+      $_reportPath = Join-Path $_runDirectory 'manifest.json'
+      $_manifestStream = [IO.File]::Open($_reportPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
+    }
+    catch {
+      $_reportPath = $null
+      Write-Warning "Could not create checkpoint manifest: $($_.Exception.Message)"
+    }
+  }
+
   if ($_manifestStream) {
     try {
       $_manifest = [ordered]@{
@@ -552,17 +581,22 @@ finally {
 foreach ($_warning in $_warnings) {
   Write-Warning $_warning
 }
+$_checkpointDirectoryCreated = $false
+if ($_runDirectory) {
+  $_checkpointDirectoryCreated = [bool](Test-Path -LiteralPath $_runDirectory -PathType Container)
+}
 Write-Log -Message "Outlook checkpoint: $_status | Copied: $_copied | Failed: $_failed | Manifest: $_reportPath" -Color $(if ($_failed) { 'Yellow' } else { 'Green' })
 if ($PassThru -or $WhatIfPreference) {
   New-OperationResult -Target $Destination -Source Outlook -Action Checkpoint -Status $_status -Detail 'User data/settings checkpoint; inspect Results and ReportPath before manual restore.' -Property @{
-    Preview             = [bool]$WhatIfPreference
-    Copied              = $_copied
-    Failed              = $_failed
-    CheckpointDirectory = $_runDirectory
-    ReportPath          = $_reportPath
-    Hashed              = (-not $SkipHash)
-    Warnings            = @($_warnings.ToArray())
-    Results             = @($_results.ToArray())
+    Preview                    = [bool]$WhatIfPreference
+    Copied                     = $_copied
+    Failed                     = $_failed
+    CheckpointDirectory        = $_runDirectory
+    CheckpointDirectoryCreated = $_checkpointDirectoryCreated
+    ReportPath                 = $_reportPath
+    Hashed                     = (-not $SkipHash)
+    Warnings                   = @($_warnings.ToArray())
+    Results                    = @($_results.ToArray())
   }
 }
 if ($_failed) {

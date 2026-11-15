@@ -77,6 +77,7 @@ Describe 'Outlook user checkpoints' {
     $result = & $script:CheckpointScript @arguments
     $result.Status | Should -Be Preview
     $result.ReportPath | Should -BeNullOrEmpty
+    $result.CheckpointDirectoryCreated | Should -BeFalse
     Test-Path -LiteralPath $script:Destination | Should -BeFalse
     Should -Invoke Invoke-SafeProcess -Times 0
     Should -Invoke Connect-Outlook -Times 0
@@ -97,7 +98,12 @@ Describe 'Outlook user checkpoints' {
       $result = & $script:CheckpointScript -Destination $script:Destination -StorePaths $script:Source, $locked -PassThru -Confirm:$false -WarningAction SilentlyContinue
       $result.Status | Should -Be Failed
       $result.Copied | Should -Be 0
-      Test-Path -LiteralPath $script:Destination | Should -BeFalse
+      $result.ReportPath | Should -Not -BeNullOrEmpty
+      $result.CheckpointDirectoryCreated | Should -BeTrue
+      Test-Path -LiteralPath $script:Destination | Should -BeTrue
+      $manifest = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      $manifest.Status | Should -Be Failed
+      @(Get-ChildItem -LiteralPath $result.CheckpointDirectory -Recurse -File).Count | Should -Be 1
     }
     finally {
       $stream.Dispose()
@@ -206,6 +212,17 @@ Describe 'Outlook user checkpoints' {
     $result.Warnings.Count | Should -Be 1
     $manifest = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $manifest.Activation[0].Status | Should -Be Unknown
+  }
+
+  It 'records unavailable Office inventory without losing the user-data checkpoint' {
+    Mock Get-OfficeInventory { throw 'Synthetic inventory failure' }
+    $result = & $script:CheckpointScript -Destination $script:Destination -StorePaths $script:Source -PassThru -Confirm:$false -WarningAction SilentlyContinue
+    $result.Status | Should -Be Completed
+    $result.Copied | Should -Be 2
+    (@($result.Warnings) -join "`n") | Should -Match 'Office inventory could not be read'
+    $manifest = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $manifest.Office | Should -BeNullOrEmpty
+    @($manifest.Activation).Count | Should -Be 0
   }
 
   It 'uses Outlook discovery for the profile and never quits it during preview' {
