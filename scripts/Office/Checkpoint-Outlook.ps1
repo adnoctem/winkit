@@ -14,7 +14,8 @@
   SHA-256 verifies file copies by default. Missing optional folders are reported;
   inaccessible, missing selected, or locked files fail the checkpoint. A failure
   after planning still writes manifest.json with the failure; preview runs write
-  nothing.
+  nothing. Unreadable Outlook stores are skipped with a warning; use StorePaths
+  when profile discovery cannot enumerate stores.
   This is a file/settings checkpoint, not a transactional system snapshot or
   automatic restore. OST copies are caches, not portable mailbox backups.
 .PARAMETER Destination
@@ -159,19 +160,49 @@ try {
     if ([int](($_context.App.Version -split '\.')[0]) -lt 12) {
       throw 'Outlook 2007 or later is required for profile discovery.'
     }
-    $_collection = $_context.Namespace.Stores
+
     try {
-      for ($_index = 1; $_index -le $_collection.Count; $_index++) {
-        $_store = $_collection.Item($_index)
+      $_collection = $_context.Namespace.Stores
+      $_storeCount = [int]$_collection.Count
+    }
+    catch {
+      throw "Outlook store discovery failed: $($_.Exception.Message) Use -StorePaths with the known PST/OST paths to capture files without opening stores."
+    }
+
+    try {
+      for ($_index = 1; $_index -le $_storeCount; $_index++) {
         try {
-          $_path = [string]$_store.FilePath
+          $_store = $_collection.Item($_index)
+        }
+        catch {
+          $null = $_warnings.Add("Outlook store $_index could not be read: $($_.Exception.Message)")
+          continue
+        }
+
+        try {
+          try {
+            $_storeName = [string]$_store.DisplayName
+          }
+          catch {
+            $_storeName = ''
+            $null = $_warnings.Add("Outlook store $_index display name could not be read: $($_.Exception.Message)")
+          }
+
+          try {
+            $_path = [string]$_store.FilePath
+          }
+          catch {
+            $null = $_warnings.Add("Outlook store $_index file path could not be read: $($_.Exception.Message)")
+            continue
+          }
+
           if ([IO.Path]::GetExtension($_path) -notin @('.pst', '.ost')) {
-            Add-OperationResult -Results $_results -Target $_store.DisplayName -Source Outlook -Action Checkpoint -Status Skipped -Detail 'Store has no local PST/OST file; server contents are not captured.'
+            Add-OperationResult -Results $_results -Target $_storeName -Source Outlook -Action Checkpoint -Status Skipped -Detail 'Store has no local PST/OST file; server contents are not captured.'
             continue
           }
           $null = $_stores.Add([PSCustomObject]@{
               Path      = $_path
-              StoreName = [string]$_store.DisplayName
+              StoreName = $_storeName
             })
         }
         finally {
