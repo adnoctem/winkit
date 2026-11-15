@@ -219,7 +219,7 @@ them. Preparation and execution require confirmation; use `-Confirm:$false` only
 | Exit `1`                            | Blocked, failed, or unverified; inspect native outcomes and possible changes.                                                                                                       |
 | Exit `3010`                         | Reboot required, possibly a blocked recovery; inspect status before continuing.                                                                                                     |
 
-Execution keeps protected journals and JSONL logs under `%ProgramData%\PSFoundation-Office`; `-LogRoot` selects another local root. Consume
+Execution keeps protected journals and JSONL logs under `%ProgramData%\winkit-Office`; `-LogRoot` selects another local root. Consume
 objects rather than console text, preserve nested results at depth 30, and pass only mode-appropriate parameters. Missing inputs fail
 instead of prompting midway. `-Confirm:$false` does not bypass validation or language warnings.
 

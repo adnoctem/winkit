@@ -20,7 +20,7 @@
   Existing Microsoft-signed Office Deployment Tool setup.exe. Required for
   execution and preparation; never downloaded implicitly.
 .PARAMETER LogRoot
-  Protected local journal/log directory. Defaults to ProgramData\PSFoundation-Office.
+  Protected local journal/log directory. Defaults to ProgramData\winkit-Office.
   Recover must use the directory containing the original run's journal.
 .PARAMETER ForceCloseApps
   Explicitly allow closing Office applications across sessions; unsaved work can be lost.
@@ -63,7 +63,7 @@ param (
 
   [ValidateNotNullOrEmpty()]
   [string]
-  $LogRoot = (Join-Path $env:ProgramData 'PSFoundation-Office'),
+  $LogRoot = (Join-Path $env:ProgramData 'winkit-Office'),
 
   [switch]
   $ForceCloseApps,
