@@ -7,8 +7,8 @@ rollback, or a journal-free reinstall. Use elevated 64-bit PowerShell from your 
 
 ## Read the original result
 
-Use the original `RunId` and `LogRoot`, not a new target configuration. The default journal/log root is
-`C:\ProgramData\PSFoundation-Office`. If you retained a result JSON:
+Use the original `RunId` and `LogRoot`, not a new target configuration. The default journal/log root is `C:\ProgramData\winkit-Office`. If
+you retained a result JSON:
 
 ```powershell
 # Replace this with the actual retained result file.
@@ -27,7 +27,7 @@ Replace the example RunId and choose the wrapper matching the original action:
 $recovery = @{
   RunId   = '0123456789abcdef0123456789abcdef'
   OdtPath = 'C:\Managed\ODT\setup.exe'
-  LogRoot = 'C:\ProgramData\PSFoundation-Office'
+  LogRoot = 'C:\ProgramData\winkit-Office'
 }
 
 # Original migration:
