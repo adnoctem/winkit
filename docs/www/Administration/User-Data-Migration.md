@@ -10,6 +10,17 @@ applications, or migrate browser and Outlook profiles.
 
 ## Prepare the backup and target
 
+Run the read-only inventory on the **old** machine before downloading anything:
+
+```powershell
+.\scripts\Administration\Show-UserDataInventory.ps1 -OutlookReport C:\Reports -DryRun
+```
+
+It records known-folder redirection, public-folder content and shortcuts, network drives, data outside the profile, and destination path
+lengths. The report includes the ABB download list, suggested `Import-UserProfileData.ps1` folders and mappings, manual PST/signature
+copies, and the decisions that need review. Without `-TargetRoot`, path lengths are reported as absolute source lengths; supply the future
+profile root to check the actual destination lengths.
+
 1. Finish the old user's work and take a final successful ABB backup. Record the device, task, and backup timestamp you select.
 2. Export browser passwords/bookmarks and complete the separate mail migration preparation while the old user session is available.
 3. In **Active Backup for Business Portal**, select the correct device and backup version, then download the required user data folders.
