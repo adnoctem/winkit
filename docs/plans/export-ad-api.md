@@ -118,7 +118,7 @@ Rationale:
   `AdNoctem.Substrate.PowerShell` (section 8, question 1). The API names and schemas below remain the same.
 
 All user-facing scripts keep the repository conventions: `#Requires -Version 5.1`, `#Requires -Module ActiveDirectory`,
-`#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.3.1' }`,
+`#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.4.0' }`,
 `[CmdletBinding(SupportsShouldProcess = $true)]`, `-DryRun`, `-PassThru`, comment-based help, and `Write-Log` feedback.
 
 ### 3.2 Shared library functions

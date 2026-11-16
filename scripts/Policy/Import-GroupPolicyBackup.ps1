@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.3.1' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.4.0' }
 
 <#
 .SYNOPSIS
@@ -113,7 +113,7 @@ param (
   $Elevated
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.3.1 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.0 -Force
 
 # -----------------------------------------------------------------------------
 
