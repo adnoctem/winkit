@@ -47,7 +47,7 @@ application installation directory. Keep reports, checkpoints and personal files
 Repeating installation at the registered location updates it. Setting a different WINKIT_INSTALL_PATH in the same scope fails; there is no
 same-scope relocation mode. To move such an installation, first ensure the desired release is available, preserve personal files, then
 preview and uninstall the exact registered old path. Clear WINKIT_UNINSTALL, select the new path and scope, and preview/install there.
-Shared Substrate modules and any previously installed PSFoundation modules remain installed. Do not manually move the directory or edit
+Shared Substrate modules and any previously installed legacy modules remain installed. Do not manually move the directory or edit
 registration to bypass the ownership manifest. For a simultaneous scope change, use the supported scope-change operation below with the new
 destination instead.
 
