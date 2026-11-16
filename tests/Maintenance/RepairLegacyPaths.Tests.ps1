@@ -2,7 +2,7 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
 BeforeAll {
-  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.3.1 -Force
+  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.0 -Force
   $script:ScriptPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath((Join-Path $PSScriptRoot '../../scripts/Maintenance/Repair-LegacyPaths.ps1'))
   $script:Content = Get-Content -LiteralPath $script:ScriptPath -Raw
   $script:HarnessPath = Join-Path $TestDrive 'Repair-LegacyPaths.ps1'
@@ -65,7 +65,7 @@ Describe 'Repair-LegacyPaths' {
 
   It 'requires elevation and exposes preview conventions' {
     $script:Content | Should -Match '#Requires -RunAsAdministrator'
-    $script:Content | Should -Match "RequiredVersion = '0.3.1'"
+    $script:Content | Should -Match "RequiredVersion = '0.4.0'"
     $script:Content | Should -Match 'SupportsShouldProcess = \$true'
     (Get-Help $script:ScriptPath).Synopsis | Should -Match 'legacy PSFoundation'
   }
