@@ -219,9 +219,10 @@ them. Preparation and execution require confirmation; use `-Confirm:$false` only
 | Exit `1`                            | Blocked, failed, or unverified; inspect native outcomes and possible changes.                                                                                                       |
 | Exit `3010`                         | Reboot required, possibly a blocked recovery; inspect status before continuing.                                                                                                     |
 
-Execution keeps protected journals and JSONL logs under `%ProgramData%\winkit-Office`; `-LogRoot` selects another local root. Consume
-objects rather than console text, preserve nested results at depth 30, and pass only mode-appropriate parameters. Missing inputs fail
-instead of prompting midway. `-Confirm:$false` does not bypass validation or language warnings.
+Execution keeps protected journals and JSONL logs under `%ProgramData%\winkit-Office`; `-LogRoot` selects another local root. Machines that
+still have the legacy PSFoundation Office paths or media manifest must run `scripts\Maintenance\Repair-LegacyPaths.ps1` once before using
+this version. Consume objects rather than console text, preserve nested results at depth 30, and pass only mode-appropriate parameters.
+Missing inputs fail instead of prompting midway. `-Confirm:$false` does not bypass validation or language warnings.
 
 ```powershell
 # After an execution example above, retain its outcome outside the winkit directory.
