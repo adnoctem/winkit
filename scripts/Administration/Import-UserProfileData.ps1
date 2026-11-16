@@ -17,9 +17,17 @@
   user signed out and the staging data unchanged for the entire run.
 
   ABB export/download and extraction are preparation steps. This script does not
-  contact Synology or restore a disk image. AppData, profile hives, PSTs and OSTs are
-  excluded. Source junctions and symbolic links are skipped; destination reparse
-  points, encrypted files, and offline/cloud placeholders stop the run.
+  contact Synology or restore a disk image. AppData, profile hives, PSTs, OSTs,
+  desktop.ini and Thumbs.db are excluded. Source junctions and symbolic links are
+  skipped; destination reparse points, encrypted files, and offline/cloud
+  placeholders stop the run.
+
+  Before hashing, planned destination paths are checked with robocopy /L. A
+  directory path longer than 247 characters or a file path longer than 259
+  characters stops the run with a list; shorten the target path or map the data
+  elsewhere. The public desktop and folders outside the profile are not included;
+  use Show-UserDataInventory.ps1 to plan those and -FolderMap to import selected
+  extra locations.
 
   The default folders are Desktop, Documents, Downloads, Pictures, Music, Videos,
   Favorites, Contacts, Links, Saved Games, and Searches. Missing default folders are
@@ -331,6 +339,15 @@ function Get-ImportInventory {
     foreach ($_item in @(Get-ChildItem -LiteralPath $_directory -Force)) {
       $_attributes = $_item.Attributes
       $_relative = $_item.FullName.Substring($Root.Length).TrimStart('\')
+      if (-not $_item.PSIsContainer -and $_item.Name -in @('desktop.ini', 'Thumbs.db')) {
+        $null = $_excluded.Add([PSCustomObject]@{
+            Path        = $_item.FullName
+            Reason      = 'ExplorerMetadata'
+            IsDirectory = $false
+          })
+        continue
+      }
+
       if (($_attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
         if ($Destination -or $_item.LinkType -notin @('Junction', 'SymbolicLink')) {
           throw "Unsupported reparse point or cloud placeholder: $($_item.FullName)"
@@ -385,6 +402,78 @@ function Get-ImportInventory {
     Directories = @($_directories.ToArray())
     Excluded    = @($_excluded.ToArray())
   }
+}
+
+function Get-ImportLongPath {
+  param (
+    [string]
+    $SourceRoot,
+
+    [string]
+    $DestinationRoot
+  )
+
+  $_arguments = @(
+    $SourceRoot,
+    $DestinationRoot,
+    '/L',
+    '/E',
+    '/NJH',
+    '/NJS',
+    '/FP',
+    '/BYTES',
+    '/NC',
+    '/NS',
+    '/NP',
+    '/XJ'
+  )
+  $_result = Invoke-SafeProcess -FilePath "$env:SystemRoot\System32\robocopy.exe" -ArgumentList $_arguments -AsResult -ErrorAction Stop
+  if ($_result.TimedOut -or $_result.Cancelled -or $null -eq $_result.ExitCode -or $_result.ExitCode -lt 0 -or $_result.ExitCode -ge 8) {
+    throw "Destination path preflight failed for $_SourceRoot (robocopy exit $($_result.ExitCode))."
+  }
+
+  $_sourceRoot = [IO.Path]::GetFullPath($SourceRoot).TrimEnd('\')
+  $_destinationRoot = [IO.Path]::GetFullPath($DestinationRoot).TrimEnd('\')
+  $_seen = @{}
+  $_longPaths = New-Object System.Collections.ArrayList
+  foreach ($_line in ($_result.StdOut -split "`r?`n")) {
+    if ($_line -notmatch '([A-Za-z]:\\[^\r\n]+?)\s*$') {
+      continue
+    }
+
+    $_sourcePath = $Matches[1].TrimEnd()
+    $_isDirectory = $false
+    if ($_sourcePath.EndsWith('\')) {
+      $_isDirectory = $true
+      $_sourcePath = $_sourcePath.TrimEnd('\')
+    }
+    if (-not $_sourcePath.StartsWith($_sourceRoot, [StringComparison]::OrdinalIgnoreCase)) {
+      continue
+    }
+
+    $_relative = $_sourcePath.Substring($_sourceRoot.Length).TrimStart('\')
+    $_destinationPath = $_destinationRoot
+    if ($_relative) {
+      $_destinationPath = Join-Path $_destinationRoot $_relative
+    }
+
+    $_limit = 259
+    if ($_isDirectory) {
+      $_limit = 247
+    }
+    if ($_destinationPath.Length -gt $_limit -and -not $_seen.ContainsKey($_destinationPath)) {
+      $_seen[$_destinationPath] = $true
+      $null = $_longPaths.Add([PSCustomObject]@{
+          Source      = $_sourcePath
+          Destination = $_destinationPath
+          Length      = $_destinationPath.Length
+          Limit       = $_limit
+          IsDirectory = $_isDirectory
+        })
+    }
+  }
+
+  return @($_longPaths.ToArray())
 }
 
 function Assert-ImportPermission {
@@ -609,6 +698,15 @@ try {
         (Test-ImportPathWithin -Path $_existing.Destination -Root $_to)) {
         throw 'Selected source and destination mappings must be distinct and non-overlapping.'
       }
+    }
+
+    Write-Log -Message "Checking destination path lengths: $_from -> $_to" -Color Gray
+    $_longPaths = @(Get-ImportLongPath -SourceRoot $_from -DestinationRoot $_to)
+    if ($_longPaths.Count -gt 0) {
+      $_details = @($_longPaths | Select-Object -First 20 | ForEach-Object {
+          '{0} ({1}/{2})' -f $_.Destination, $_.Length, $_.Limit
+        }) -join "`n"
+      throw "Destination paths exceed the supported length limit:`n$_details"
     }
 
     Write-Log -Message "Inventory and hash: $_from -> $_to" -Color Cyan

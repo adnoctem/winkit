@@ -147,14 +147,14 @@ Describe 'Import-UserProfileData workflow' {
     }
   }
 
-  It 'previews without native processes, logs, copying, ACL changes, or cleanup' {
+  It 'previews without copying, ACL changes, or logs' {
     $run = Invoke-ProfileImport -Extra @{ DryRun = $true; RemoveSource = $true }
     $run.ExitCode | Should -Be 0 -Because $run.Summary.Error
     $run.Summary.Status | Should -Be 'Preview'
     Test-Path -LiteralPath $script:Reports | Should -BeFalse
     Test-Path -LiteralPath (Join-Path $global:WinkitProfileTestContext.Target 'Documents') | Should -BeFalse
     Test-Path -LiteralPath (Join-Path $global:WinkitProfileTestContext.Source 'Documents\report [1].txt') | Should -BeTrue
-    Should -Invoke Invoke-SafeProcess -Times 0 -Exactly
+    Should -Invoke Invoke-SafeProcess -Times 0 -Exactly -ParameterFilter { $ArgumentList -contains '/COPY:DAT' }
     Should -Invoke Invoke-ImportPermission -Times 0 -Exactly
   }
 
@@ -164,7 +164,7 @@ Describe 'Import-UserProfileData workflow' {
     $run.ExitCode | Should -Be 1
     $run.Summary.Error | Should -Match 'content conflict'
     Get-Content -LiteralPath (Join-Path $global:WinkitProfileTestContext.Target 'Documents\report [1].txt') | Should -Be 'newer work'
-    Should -Invoke Invoke-SafeProcess -Times 0 -Exactly
+    Should -Invoke Invoke-SafeProcess -Times 0 -Exactly -ParameterFilter { $ArgumentList -contains '/COPY:DAT' }
     Test-Path -LiteralPath $script:Reports | Should -BeFalse
   }
 
@@ -176,6 +176,42 @@ Describe 'Import-UserProfileData workflow' {
     $run = Invoke-ProfileImport -Extra @{ Overwrite = $true }
     $run.ExitCode | Should -Be 0 -Because $run.Summary.Error
     (Get-FileHash -LiteralPath $target).Hash | Should -Be (Get-FileHash -LiteralPath $source).Hash
+  }
+
+  It 'skips Explorer metadata instead of reporting a destination conflict' {
+    Write-ProfileFixture -Path (Join-Path $global:WinkitProfileTestContext.Source 'Documents\desktop.ini') -Text 'source desktop'
+    Write-ProfileFixture -Path (Join-Path $global:WinkitProfileTestContext.Target 'Documents\desktop.ini') -Text 'target desktop'
+    Write-ProfileFixture -Path (Join-Path $global:WinkitProfileTestContext.Source 'Documents\Thumbs.db') -Text 'source thumbs'
+    Write-ProfileFixture -Path (Join-Path $global:WinkitProfileTestContext.Target 'Documents\Thumbs.db') -Text 'target thumbs'
+
+    $run = Invoke-ProfileImport
+
+    $run.ExitCode | Should -Be 0 -Because $run.Summary.Error
+    Get-Content -LiteralPath (Join-Path $global:WinkitProfileTestContext.Target 'Documents\desktop.ini') | Should -Be 'target desktop'
+    Get-Content -LiteralPath (Join-Path $global:WinkitProfileTestContext.Target 'Documents\Thumbs.db') | Should -Be 'target thumbs'
+    $manifest = Get-Content -LiteralPath $run.Summary.ManifestPath -Raw | ConvertFrom-Json
+    @($manifest.Plan[0].Inventory.Excluded | Where-Object Reason -EQ 'ExplorerMetadata').Count | Should -Be 2
+  }
+
+  It 'stops before copying when a destination path exceeds the supported length' {
+    $long = Join-Path $global:WinkitProfileTestContext.Source 'Documents'
+    for ($index = 0; $index -lt 12; $index++) {
+      $long = Join-Path $long ('segment-{0:D2}-{1}' -f $index, ('x' * 24))
+    }
+    $longFull = '\\?\' + $long
+    $null = [IO.Directory]::CreateDirectory($longFull)
+    [IO.File]::WriteAllText(($longFull + '\payload.txt'), 'x')
+    try {
+      $run = Invoke-ProfileImport
+
+      $run.ExitCode | Should -Be 1
+      $run.Summary.Error | Should -Match 'exceed the supported length'
+      Test-Path -LiteralPath (Join-Path $global:WinkitProfileTestContext.Target 'Documents') | Should -BeFalse
+      Should -Invoke Invoke-SafeProcess -Times 0 -Exactly -ParameterFilter { $ArgumentList -contains '/COPY:DAT' }
+    }
+    finally {
+      [IO.Directory]::Delete($longFull, $true)
+    }
   }
 
   It 'can repeat an already verified import without deleting target-only files' {
@@ -203,7 +239,7 @@ Describe 'Import-UserProfileData workflow' {
   It 'preserves all staging when a later folder copy fails' {
     Write-ProfileFixture -Path (Join-Path $global:WinkitProfileTestContext.Source 'Desktop\second.txt')
     Mock Invoke-SafeProcess {
-      if ($ArgumentList[0] -like '*\Desktop') {
+      if ($ArgumentList -contains '/COPY:DAT' -and $ArgumentList[0] -like '*\Desktop') {
         return [PSCustomObject]@{ ExitCode = 8; TimedOut = $false; Cancelled = $false }
       }
       & $global:WinkitProfileTestContext.NativeProcess -FilePath $FilePath -ArgumentList $ArgumentList -AsResult
@@ -236,7 +272,7 @@ Describe 'Import-UserProfileData workflow' {
     Mock Write-ImportAudit { throw 'audit disk unavailable' }
     $run = Invoke-ProfileImport
     $run.ExitCode | Should -Be 1
-    Should -Invoke Invoke-SafeProcess -Times 0 -Exactly
+    Should -Invoke Invoke-SafeProcess -Times 0 -Exactly -ParameterFilter { $ArgumentList -contains '/COPY:DAT' }
   }
 
   It 'does not clean up when writing the verified audit fails' {
@@ -307,7 +343,7 @@ Describe 'Import-UserProfileData workflow' {
     foreach ($extra in $cases) {
       (Invoke-ProfileImport -Extra $extra).ExitCode | Should -Be 1
     }
-    Should -Invoke Invoke-SafeProcess -Times 0 -Exactly
+    Should -Invoke Invoke-SafeProcess -Times 0 -Exactly -ParameterFilter { $ArgumentList -contains '/COPY:DAT' }
   }
 
   It 'rejects source/target and report/source overlap' {
@@ -344,7 +380,7 @@ Describe 'Import-UserProfileData workflow' {
     try {
       $run = Invoke-ProfileImport
       $run.ExitCode | Should -Be 1
-      Should -Invoke Invoke-SafeProcess -Times 0 -Exactly
+      Should -Invoke Invoke-SafeProcess -Times 0 -Exactly -ParameterFilter { $ArgumentList -contains '/COPY:DAT' }
     }
     finally {
       [IO.Directory]::Delete($link)
