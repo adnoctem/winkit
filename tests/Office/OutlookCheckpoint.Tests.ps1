@@ -83,10 +83,14 @@ Describe 'Outlook user checkpoints' {
     Should -Invoke Connect-Outlook -Times 0
   }
 
-  It 'rejects missing selected files before creating checkpoint artifacts' {
+  It 'reports missing selected files without copying or exporting' {
     $result = & $script:CheckpointScript -Destination $script:Destination -StorePaths (Join-Path $TestDrive 'missing.pst') -PassThru -Confirm:$false -WarningAction SilentlyContinue
     $result.Status | Should -Be Failed
-    Test-Path -LiteralPath $script:Destination | Should -BeFalse
+    $result.ReportPath | Should -Not -BeNullOrEmpty
+    $result.CheckpointDirectoryCreated | Should -BeTrue
+    $manifest = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $manifest.Status | Should -Be Failed
+    Test-Path -LiteralPath $script:Destination | Should -BeTrue
     Should -Invoke Invoke-SafeProcess -Times 0
   }
 
@@ -138,7 +142,11 @@ Describe 'Outlook user checkpoints' {
     Mock Get-ChildItem { throw 'Synthetic access denied' } -ParameterFilter { $LiteralPath -like '*Signatures' }
     $result = & $script:CheckpointScript -Destination $script:Destination -StorePaths $script:Source -PassThru -Confirm:$false -WarningAction SilentlyContinue
     $result.Status | Should -Be Failed
-    Test-Path -LiteralPath $script:Destination | Should -BeFalse
+    $result.ReportPath | Should -Not -BeNullOrEmpty
+    $result.CheckpointDirectoryCreated | Should -BeTrue
+    $manifest = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $manifest.Status | Should -Be Failed
+    $manifest.Results[-1].Detail | Should -Match 'Synthetic access denied'
   }
 
   It 'distinguishes length-only copies from hash verification' {
@@ -190,7 +198,10 @@ Describe 'Outlook user checkpoints' {
     Mock Get-Process { [PSCustomObject]@{ SessionId = 4; Name = 'WINWORD' } } -ParameterFilter { $Name -contains 'WINWORD' }
     $result = & $script:CheckpointScript -Destination $script:Destination -StorePaths $script:Source -PassThru -Confirm:$false -WarningAction SilentlyContinue
     $result.Status | Should -Be Failed
-    Test-Path -LiteralPath $script:Destination | Should -BeFalse
+    $result.ReportPath | Should -Not -BeNullOrEmpty
+    $result.CheckpointDirectoryCreated | Should -BeTrue
+    $manifest = Get-Content -LiteralPath $result.ReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $manifest.Status | Should -Be Failed
   }
 
   It 'uses distinct runs and distinct names for same-named source files' {

@@ -13,9 +13,9 @@
   AutoComplete cache, and Ribbon/Quick Access Toolbar customization files.
   SHA-256 verifies file copies by default. Missing optional folders are reported;
   inaccessible, missing selected, or locked files fail the checkpoint. A failure
-  after planning still writes manifest.json with the failure; preview runs write
-  nothing. Unreadable Outlook stores are skipped with a warning; use StorePaths
-  when profile discovery cannot enumerate stores.
+  after the run directory is chosen still writes manifest.json with the failure;
+  preview runs write nothing. Unreadable Outlook stores are skipped with a
+  warning; use StorePaths when profile discovery cannot enumerate stores.
   This is a file/settings checkpoint, not a transactional system snapshot or
   automatic restore. OST copies are caches, not portable mailbox backups.
 .PARAMETER Destination
@@ -145,6 +145,57 @@ try {
   $_runDirectory = Join-Path $_destination $_runName
   Write-Log -Message "Planning Outlook checkpoint for $($_user.UserName)..." -Color Cyan
   Write-Progress -Id 61 -Activity 'Outlook checkpoint' -Status 'Discovering data files and user settings'
+
+  if (-not $env:APPDATA -or -not $env:LOCALAPPDATA) {
+    throw 'The current account has no usable APPDATA/LOCALAPPDATA profile.'
+  }
+  $_folders = @(
+    @{
+      Name   = 'Signatures'
+      Path   = (Join-Path $env:APPDATA 'Microsoft\Signatures')
+      Filter = '*'
+    }
+    @{
+      Name   = 'Templates'
+      Path   = (Join-Path $env:APPDATA 'Microsoft\Templates')
+      Filter = '*'
+    }
+    @{
+      Name   = 'UProof'
+      Path   = (Join-Path $env:APPDATA 'Microsoft\UProof')
+      Filter = '*'
+    }
+    @{
+      Name   = 'OutlookAppData'
+      Path   = (Join-Path $env:APPDATA 'Microsoft\Outlook')
+      Filter = '*'
+    }
+    @{
+      Name   = 'RoamCache'
+      Path   = (Join-Path $env:LOCALAPPDATA 'Microsoft\Outlook\RoamCache')
+      Filter = '*'
+    }
+    @{
+      Name   = 'OfficeUI'
+      Path   = (Join-Path $env:LOCALAPPDATA 'Microsoft\Office')
+      Filter = '*.officeUI'
+    }
+  )
+
+  # Refuse an unsafe destination before a failed run can create its report there.
+  foreach ($_folder in $_folders) {
+    if (-not (Test-Path -LiteralPath $_folder.Path -ErrorAction Stop)) {
+      continue
+    }
+    $_root = Resolve-LongPath -LiteralPath $_folder.Path
+    if (-not (Test-Path -LiteralPath $_root -PathType Container -ErrorAction Stop)) {
+      continue
+    }
+    if ($_destination.TrimEnd('\') -eq $_root.TrimEnd('\') -or $_destination.StartsWith($_root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+      throw "Destination must be outside captured settings directories: $_root"
+    }
+  }
+  $_reportAllowed = $true
 
   $_stores = New-Object Collections.ArrayList
   if ($PSCmdlet.ParameterSetName -eq 'File') {
@@ -278,41 +329,6 @@ try {
   }
 
   # Plan settings before creating output. Never follow directory links.
-  if (-not $env:APPDATA -or -not $env:LOCALAPPDATA) {
-    throw 'The current account has no usable APPDATA/LOCALAPPDATA profile.'
-  }
-  $_folders = @(
-    @{
-      Name   = 'Signatures'
-      Path   = (Join-Path $env:APPDATA 'Microsoft\Signatures')
-      Filter = '*'
-    }
-    @{
-      Name   = 'Templates'
-      Path   = (Join-Path $env:APPDATA 'Microsoft\Templates')
-      Filter = '*'
-    }
-    @{
-      Name   = 'UProof'
-      Path   = (Join-Path $env:APPDATA 'Microsoft\UProof')
-      Filter = '*'
-    }
-    @{
-      Name   = 'OutlookAppData'
-      Path   = (Join-Path $env:APPDATA 'Microsoft\Outlook')
-      Filter = '*'
-    }
-    @{
-      Name   = 'RoamCache'
-      Path   = (Join-Path $env:LOCALAPPDATA 'Microsoft\Outlook\RoamCache')
-      Filter = '*'
-    }
-    @{
-      Name   = 'OfficeUI'
-      Path   = (Join-Path $env:LOCALAPPDATA 'Microsoft\Office')
-      Filter = '*.officeUI'
-    }
-  )
   foreach ($_folder in $_folders) {
     if (-not (Test-Path -LiteralPath $_folder.Path -ErrorAction Stop)) {
       Add-OperationResult -Results $_results -Target $_folder.Path -Source Outlook -Action Checkpoint -Status Skipped -Detail 'Optional settings directory is absent.'
@@ -389,8 +405,6 @@ try {
   if (-not $_plan.Count -and -not $_registryPlan.Count) {
     throw 'No data files or Office user settings were found for this checkpoint.'
   }
-
-  $_reportAllowed = $true
 
   Write-Progress -Id 61 -Activity 'Outlook checkpoint' -Status 'Reading Office inventory and activation'
   try {
