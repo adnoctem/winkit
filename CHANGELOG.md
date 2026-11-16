@@ -1,3 +1,19 @@
+## [3.2.0](https://github.com/adnoctem/winkit/compare/v3.1.0...v3.2.0) (2026-11-16)
+
+### Features
+
+* **scripts:** add legacy Office path repair ([3709919](https://github.com/adnoctem/winkit/commit/3709919e4bcdef367256cea599b710ec9c5e9ac4))
+* **scripts:** add managed path provisioning ([6b7bec9](https://github.com/adnoctem/winkit/commit/6b7bec960b528bc82472b5f1eb220859439c5b74))
+* **scripts:** add user data inventory ([d9e03c0](https://github.com/adnoctem/winkit/commit/d9e03c0ffdd53ab90ccfcd5115a69bb10431f4d2))
+* **scripts:** migrate all legacy PSFoundation paths ([1fde374](https://github.com/adnoctem/winkit/commit/1fde3749db77227ff1c31282fbb74fa8b0e76ce5))
+
+### Bug Fixes
+
+* **scripts:** harden profile import paths ([e9b9f4d](https://github.com/adnoctem/winkit/commit/e9b9f4d2ad750efdd0258c195d06c1cbfdc6971a))
+* **scripts:** keep Outlook checkpoints when metadata fails ([e5be851](https://github.com/adnoctem/winkit/commit/e5be851a6ba2129b44f510d39c47199144965b90))
+* **scripts:** report Outlook checkpoint failures consistently ([8202f9d](https://github.com/adnoctem/winkit/commit/8202f9dbfcee6620cb8c07812f31401c2b8bddd1))
+* **scripts:** skip unreadable Outlook stores during checkpoint discovery ([1a38b3e](https://github.com/adnoctem/winkit/commit/1a38b3e6ce807165ba618ab281f6dfff798e38ef))
+
 ## [3.1.0](https://github.com/adnoctem/winkit/compare/v3.0.0...v3.1.0) (2026-11-09)
 
 ### Features
