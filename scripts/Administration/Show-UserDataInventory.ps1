@@ -511,8 +511,14 @@ function Get-DataInventoryOutsideProfile {
     }
   }
 
+  # Get-Volume has no -DriveType parameter; DriveType is an output property.
+  $_volumes = @(
+    Get-Volume -ErrorAction SilentlyContinue |
+      Where-Object { $_.DriveLetter -and [string]$_.DriveType -eq 'Fixed' }
+  )
+
   $_result = New-Object System.Collections.ArrayList
-  foreach ($_volume in @(Get-Volume -DriveType Fixed -ErrorAction SilentlyContinue | Where-Object { $_.DriveLetter })) {
+  foreach ($_volume in $_volumes) {
     $_root = $_volume.DriveLetter + ':\'
     foreach ($_directory in @(Get-ChildItem -LiteralPath $_root -Directory -Force -ErrorAction SilentlyContinue)) {
       if ($_directory.Name -in $_excluded -or ($_directory.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
@@ -822,7 +828,7 @@ function Get-DataInventoryPlan {
       $null = $_manual.Add([PSCustomObject]@{ Path = $Outlook.Signature; Reason = 'Outlook signatures' })
     }
     foreach ($_warning in $Outlook.Warnings) {
-      $_decisions += $warning
+      $_decisions += $_warning
     }
     if ($Outlook.Error) {
       $_decisions += $Outlook.Error

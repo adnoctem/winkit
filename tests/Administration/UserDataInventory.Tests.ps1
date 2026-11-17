@@ -133,6 +133,59 @@ Describe 'Show-UserDataInventory helpers' {
     ($plan.Decisions -join "`n") | Should -Match 'outside the profile'
   }
 
+  It 'carries Outlook report warnings into the plan decisions' {
+    $outlook = [PSCustomObject]@{
+      DataFiles = @()
+      Signature = $null
+      Warnings  = @("The Outlook report is from computer 'OTHERPC', not 'THISPC'.")
+      Error     = $null
+    }
+
+    $plan = Get-DataInventoryPlan -KnownFolder @() -PublicFolder @() -NetworkDrive @() -OutsideProfile @() -LongPath @() -Outlook $outlook
+
+    $plan.Decisions | Should -Contain "The Outlook report is from computer 'OTHERPC', not 'THISPC'."
+    @($plan.Decisions | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count | Should -Be 0
+  }
+
+  It 'scans only fixed lettered volumes outside the profile' {
+    $fixedRoot = Join-Path $TestDrive 'FixedRoot'
+    $removableRoot = Join-Path $TestDrive 'RemovableRoot'
+    $business = Join-Path $fixedRoot 'Business'
+    $null = New-Item -ItemType Directory -Path $business -Force
+    $null = New-Item -ItemType Directory -Path (Join-Path $removableRoot 'Camera') -Force
+    [IO.File]::WriteAllText((Join-Path $business 'ledger.txt'), '12345')
+
+    # Back the mocked volumes with temporary PowerShell drives on unused letters.
+    $usedLetters = @(Get-PSDrive -PSProvider FileSystem | ForEach-Object { $_.Name.ToUpperInvariant() })
+    $freeLetters = @([char[]]'QRSTUVWXYZ' | ForEach-Object { [string]$_ } | Where-Object { $_ -notin $usedLetters })
+    $script:FixedLetter = $freeLetters[0]
+    $script:RemovableLetter = $freeLetters[1]
+    $null = New-PSDrive -Name $script:FixedLetter -PSProvider FileSystem -Root $fixedRoot -Scope Global
+    $null = New-PSDrive -Name $script:RemovableLetter -PSProvider FileSystem -Root $removableRoot -Scope Global
+
+    Mock Get-Volume {
+      @(
+        [PSCustomObject]@{ DriveLetter = $script:FixedLetter; DriveType = 'Fixed' }
+        [PSCustomObject]@{ DriveLetter = $script:RemovableLetter; DriveType = 'Removable' }
+        [PSCustomObject]@{ DriveLetter = $null; DriveType = 'Fixed' }
+      )
+    }
+    Mock Get-ItemProperty { }
+
+    try {
+      $outside = @(Get-DataInventoryOutsideProfile -ProfilePath 'C:\Users\User1')
+
+      Should -Invoke Get-Volume -Times 1 -Exactly
+      $outside.Count | Should -Be 1
+      $outside[0].Path | Should -Be $business
+      $outside[0].Files | Should -Be 1
+    }
+    finally {
+      Remove-PSDrive -Name $script:FixedLetter -Scope Global -Force -ErrorAction SilentlyContinue
+      Remove-PSDrive -Name $script:RemovableLetter -Scope Global -Force -ErrorAction SilentlyContinue
+    }
+  }
+
   It 'detects a destination path over the supported length' {
     $source = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
     $target = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
