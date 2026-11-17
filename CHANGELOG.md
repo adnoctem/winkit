@@ -1,3 +1,14 @@
+## [3.3.0](https://github.com/adnoctem/winkit/compare/v3.2.1...v3.3.0) (2026-11-17)
+
+### Features
+
+* **scripts:** import folder maps with nested mappings ([3b74e2a](https://github.com/adnoctem/winkit/commit/3b74e2ad9e6f796d451070b723e3d8b09524401e))
+* **scripts:** plan user data migration as an import folder map ([f89e91b](https://github.com/adnoctem/winkit/commit/f89e91bf95404b21ce908c6f1747d190a5163040))
+
+### Bug Fixes
+
+* **scripts:** write readable JSON reports on Windows PowerShell ([69eb0ab](https://github.com/adnoctem/winkit/commit/69eb0ab00817e7e614c7e270da19dc7405c95a41))
+
 ## [3.2.1](https://github.com/adnoctem/winkit/compare/v3.2.0...v3.2.1) (2026-11-17)
 
 ### Bug Fixes
