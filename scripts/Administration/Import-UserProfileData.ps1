@@ -26,8 +26,8 @@
   directory path longer than 247 characters or a file path longer than 259
   characters stops the run with a list; shorten the target path or map the data
   elsewhere. The public desktop and folders outside the profile are not included;
-  use Show-UserDataInventory.ps1 to plan those and -FolderMap to import selected
-  extra locations.
+  use Show-UserDataInventory.ps1 to plan those and import its folder-map.json with
+  -FolderMapPath, or map selected extra locations with -FolderMap.
 
   The default folders are Desktop, Documents, Downloads, Pictures, Music, Videos,
   Favorites, Contacts, Links, Saved Games, and Searches. Missing default folders are
@@ -44,10 +44,17 @@
   Replaces the default list. AppData and system/profile directories are not allowed.
 .PARAMETER FolderMap
   Additional source-relative to target-relative directory mappings, for example
-  @{ 'Business Data' = 'Documents\Business Data' }. Mappings may not overlap each
-  other or selected Folder paths. Use -Folder @() for mappings only.
+  @{ 'Business Data' = 'Documents\Business Data' }. Use -Folder @() for mappings only.
+  A source inside another selected source is excluded from the outer copy. A
+  destination inside another destination is allowed when the outer source has no
+  item at that path. Identical sources or destinations are refused.
   Redirected/OneDrive folders are not discovered automatically: specify their actual
   local relative destination explicitly, with sync stopped and files hydrated.
+.PARAMETER FolderMapPath
+  folder-map.json written by Show-UserDataInventory.ps1. Its mapping sources are
+  relative to SourcePath, the staging root holding each extracted download, and its
+  targets are relative to the target profile. Replaces -Folder and -FolderMap. Every
+  mapped source must exist. The file's notes are shown before the plan.
 .PARAMETER Overwrite
   Allow differing files at matching destination paths to be replaced. Without this
   switch, any content conflict fails before copying. Destination-only files remain.
@@ -74,6 +81,9 @@
 .EXAMPLE
   PS> .\Import-UserProfileData.ps1 -SourcePath C:\Migration\User1 -TargetUser 'NEWDOMAIN\User1' -Folder @() -FolderMap @{ 'Business Data' = 'Documents\Business Data' } -RemoveSource -PassThru
   Import an explicitly mapped data directory and clean up only verified staged files.
+.EXAMPLE
+  PS> .\Import-UserProfileData.ps1 -SourcePath C:\Managed\Migration -TargetUser 'NEWDOMAIN\User1' -FolderMapPath C:\Reports\folder-map.json -DryRun
+  Preview an import planned by Show-UserDataInventory.ps1 from several extracted downloads.
 .LINK
   https://github.com/adnoctem/winkit
 .NOTES
@@ -115,6 +125,9 @@ param (
 
   [System.Collections.IDictionary]
   $FolderMap = @{},
+
+  [string]
+  $FolderMapPath,
 
   [switch]
   $Overwrite,
@@ -322,7 +335,10 @@ function Get-ImportInventory {
     $Root,
 
     [switch]
-    $Destination
+    $Destination,
+
+    [string[]]
+    $ExcludeDirectory = @()
   )
 
   $_files = New-Object System.Collections.ArrayList
@@ -367,6 +383,17 @@ function Get-ImportInventory {
       }
 
       if ($_item.PSIsContainer) {
+        # A nested source belongs to its own mapping; the outer mapping neither copies nor cleans it.
+        $_isNested = @($ExcludeDirectory | Where-Object { $_.Equals($_item.FullName, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
+        if ($_isNested) {
+          $null = $_excluded.Add([PSCustomObject]@{
+              Path        = $_item.FullName
+              Reason      = 'NestedMapping'
+              IsDirectory = $true
+            })
+          continue
+        }
+
         if (-not $Destination -and $_item.Name -in @('AppData', 'Application Data', 'Local Settings')) {
           $null = $_excluded.Add([PSCustomObject]@{
               Path        = $_item.FullName
@@ -410,7 +437,10 @@ function Get-ImportLongPath {
     $SourceRoot,
 
     [string]
-    $DestinationRoot
+    $DestinationRoot,
+
+    [string[]]
+    $ExcludeDirectory = @()
   )
 
   $_arguments = @(
@@ -427,6 +457,10 @@ function Get-ImportLongPath {
     '/NP',
     '/XJ'
   )
+  if ($ExcludeDirectory.Count -gt 0) {
+    $_arguments += @('/XD') + $ExcludeDirectory
+  }
+
   $_result = Invoke-SafeProcess -FilePath "$env:SystemRoot\System32\robocopy.exe" -ArgumentList $_arguments -AsResult -ErrorAction Stop
   if ($_result.TimedOut -or $_result.Cancelled -or $null -eq $_result.ExitCode -or $_result.ExitCode -lt 0 -or $_result.ExitCode -ge 8) {
     throw "Destination path preflight failed for $_SourceRoot (robocopy exit $($_result.ExitCode))."
@@ -552,7 +586,7 @@ function Assert-ImportContent {
     $Entry
   )
 
-  $_current = Get-ImportInventory -Root $Entry.Source
+  $_current = Get-ImportInventory -Root $Entry.Source -ExcludeDirectory $Entry.Exclude
   if ($_current.Files.Count -ne $Entry.Inventory.Files.Count -or
     $_current.Directories.Count -ne $Entry.Inventory.Directories.Count -or
     (@($_current.Files.RelativePath | Sort-Object) -join "`n") -cne
@@ -582,6 +616,103 @@ function Assert-ImportContent {
       if ($_item.PSIsContainer -or $_item.Length -ne $_file.Length -or
         (Get-FileHash -LiteralPath $_path -Algorithm SHA256).Hash -ne $_file.SHA256) {
         throw "SHA-256/length verification failed: $_path"
+      }
+    }
+  }
+}
+
+function Read-ImportFolderMap {
+  param (
+    [string]
+    $Path
+  )
+
+  $_resolved = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+  if (-not (Test-Path -LiteralPath $_resolved -PathType Leaf)) {
+    throw "Folder map not found: $_resolved"
+  }
+
+  try {
+    $_document = Get-Content -LiteralPath $_resolved -Raw -Encoding UTF8 | ConvertFrom-Json
+  }
+  catch {
+    throw "Could not read the folder map ${_resolved}: $($_.Exception.Message)"
+  }
+
+  if ([string]$_document.SchemaVersion -ne '1') {
+    throw "Unsupported folder map schema version '$($_document.SchemaVersion)': $_resolved"
+  }
+
+  $_mappings = New-Object System.Collections.ArrayList
+  foreach ($_entry in @($_document.Mappings)) {
+    if ($null -eq $_entry) {
+      continue
+    }
+
+    $_entrySource = [string]$_entry.Source
+    $_entryTarget = [string]$_entry.Target
+    if ([string]::IsNullOrWhiteSpace($_entrySource) -or [string]::IsNullOrWhiteSpace($_entryTarget)) {
+      throw "Every folder map entry needs a Source and a Target: $_resolved"
+    }
+
+    $null = $_mappings.Add([PSCustomObject]@{
+        Source   = $_entrySource
+        Target   = $_entryTarget
+        Required = $true
+      })
+  }
+
+  if ($_mappings.Count -eq 0) {
+    throw "The folder map contains no mappings: $_resolved"
+  }
+
+  return [PSCustomObject]@{
+    Path     = $_resolved
+    Mappings = @($_mappings.ToArray())
+    Notes    = @($_document.Notes | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | ForEach-Object { [string]$_ })
+  }
+}
+
+function Resolve-ImportMappingLayout {
+  param (
+    [object[]]
+    $Mapping
+  )
+
+  # Identical roots would copy or verify the same data twice.
+  for ($_left = 0; $_left -lt $Mapping.Count; $_left++) {
+    for ($_right = $_left + 1; $_right -lt $Mapping.Count; $_right++) {
+      if ($Mapping[$_left].Source.Equals($Mapping[$_right].Source, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Two mappings use the same source directory: $($Mapping[$_left].Source)"
+      }
+
+      if ($Mapping[$_left].Destination.Equals($Mapping[$_right].Destination, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Two mappings use the same destination directory: $($Mapping[$_left].Destination)"
+      }
+    }
+  }
+
+  # A source inside another source is copied by its own mapping only.
+  foreach ($_outer in $Mapping) {
+    $_outer.Exclude = @(
+      $Mapping |
+        Where-Object { $_ -ne $_outer -and (Test-ImportPathWithin -Path $_.Source -Root $_outer.Source) } |
+        ForEach-Object { $_.Source }
+    )
+  }
+
+  # A destination inside another destination must not receive data the outer mapping also copies.
+  foreach ($_outer in $Mapping) {
+    foreach ($_inner in $Mapping) {
+      if ($_inner -eq $_outer -or -not (Test-ImportPathWithin -Path $_inner.Destination -Root $_outer.Destination)) {
+        continue
+      }
+
+      $_relative = $_inner.Destination.Substring($_outer.Destination.Length).TrimStart('\')
+      $_shadow = Join-Path $_outer.Source $_relative
+      $_isExcluded = @($_outer.Exclude | Where-Object { Test-ImportPathWithin -Path $_shadow -Root $_ }).Count -gt 0
+      if (-not $_isExcluded -and (Test-Path -LiteralPath $_shadow)) {
+        throw "Mapping $($_inner.Source) -> $($_inner.Destination) collides with $_shadow, which $($_outer.Source) also copies there."
       }
     }
   }
@@ -665,6 +796,15 @@ try {
     throw 'Run this script in an elevated PowerShell session.'
   }
 
+  $_folderMap = $null
+  if (-not [string]::IsNullOrWhiteSpace($FolderMapPath)) {
+    if ($PSBoundParameters.ContainsKey('Folder') -or $PSBoundParameters.ContainsKey('FolderMap')) {
+      throw 'Use -FolderMapPath on its own; it replaces -Folder and -FolderMap.'
+    }
+
+    $_folderMap = Read-ImportFolderMap -Path $FolderMapPath
+  }
+
   $_source = Resolve-ImportPath -Path $SourcePath
   if (-not (Test-Path -LiteralPath $_source -PathType Container)) {
     throw "Extract the backup first; SourcePath must be a directory: $_source"
@@ -684,24 +824,37 @@ try {
   $null = Get-ImportVolume -Path $_reportRoot
   Assert-ImportPermission -Path $_profile.Path -SID $_profile.SID -RequireInheritance
 
+  # Collect mappings from the inventory's folder map or from -Folder/-FolderMap.
   $_mappings = New-Object System.Collections.ArrayList
-  foreach ($_name in $Folder) {
-    $null = $_mappings.Add([PSCustomObject]@{
-        Source   = $_name
-        Target   = $_name
-        Required = $PSBoundParameters.ContainsKey('Folder')
-      })
+  if ($_folderMap) {
+    foreach ($_note in $_folderMap.Notes) {
+      Write-Log -Message "Folder map note: $_note" -Color Yellow
+    }
+
+    foreach ($_entry in $_folderMap.Mappings) {
+      $null = $_mappings.Add($_entry)
+    }
   }
-  foreach ($_name in @($FolderMap.Keys | Sort-Object)) {
-    $null = $_mappings.Add([PSCustomObject]@{
-        Source   = [string]$_name
-        Target   = [string]$FolderMap[$_name]
-        Required = $true
-      })
+  else {
+    foreach ($_name in $Folder) {
+      $null = $_mappings.Add([PSCustomObject]@{
+          Source   = $_name
+          Target   = $_name
+          Required = $PSBoundParameters.ContainsKey('Folder')
+        })
+    }
+
+    foreach ($_name in @($FolderMap.Keys | Sort-Object)) {
+      $null = $_mappings.Add([PSCustomObject]@{
+          Source   = [string]$_name
+          Target   = [string]$FolderMap[$_name]
+          Required = $true
+        })
+    }
   }
 
-  $_bytes = [long]0
-  $_fileCount = 0
+  # Resolve every mapping first so nested sources can be excluded from their outer mapping.
+  $_resolved = New-Object System.Collections.ArrayList
   foreach ($_mapping in $_mappings) {
     $_from = Join-ImportDataPath -Root $_source -RelativePath $_mapping.Source
     $_to = Join-ImportDataPath -Root $_profile.Path -RelativePath $_mapping.Target
@@ -716,17 +869,24 @@ try {
       continue
     }
 
-    foreach ($_existing in $_plan) {
-      if ((Test-ImportPathWithin -Path $_from -Root $_existing.Source) -or
-        (Test-ImportPathWithin -Path $_existing.Source -Root $_from) -or
-        (Test-ImportPathWithin -Path $_to -Root $_existing.Destination) -or
-        (Test-ImportPathWithin -Path $_existing.Destination -Root $_to)) {
-        throw 'Selected source and destination mappings must be distinct and non-overlapping.'
-      }
-    }
+    $null = $_resolved.Add([PSCustomObject]@{
+        Source      = $_from
+        Destination = $_to
+        Exclude     = @()
+      })
+  }
+
+  Resolve-ImportMappingLayout -Mapping @($_resolved.ToArray())
+
+  $_bytes = [long]0
+  $_fileCount = 0
+  foreach ($_mapping in $_resolved) {
+    $_from = $_mapping.Source
+    $_to = $_mapping.Destination
+    $_exclude = @($_mapping.Exclude)
 
     Write-Log -Message "Checking destination path lengths: $_from -> $_to" -Color Gray
-    $_longPaths = @(Get-ImportLongPath -SourceRoot $_from -DestinationRoot $_to)
+    $_longPaths = @(Get-ImportLongPath -SourceRoot $_from -DestinationRoot $_to -ExcludeDirectory $_exclude)
     if ($_longPaths.Count -gt 0) {
       $_details = @($_longPaths | Select-Object -First 20 | ForEach-Object {
           '{0} ({1}/{2})' -f $_.Destination, $_.Length, $_.Limit
@@ -735,7 +895,7 @@ try {
     }
 
     Write-Log -Message "Inventory and hash: $_from -> $_to" -Color Cyan
-    $_inventory = Get-ImportInventory -Root $_from
+    $_inventory = Get-ImportInventory -Root $_from -ExcludeDirectory $_exclude
     if (Test-Path -LiteralPath $_to) {
       if (-not (Test-Path -LiteralPath $_to -PathType Container)) {
         throw "A file occupies the destination directory: $_to"
@@ -785,6 +945,7 @@ try {
     $null = $_plan.Add([PSCustomObject]@{
         Source      = $_from
         Destination = $_to
+        Exclude     = $_exclude
         Inventory   = $_inventory
         Status      = 'Planned'
         ExitCode    = $null
@@ -803,6 +964,13 @@ try {
     throw "Insufficient target disk space: need at least $($_bytes + $ReserveBytes) free bytes."
   }
 
+  $_folderMapPath = $null
+  $_folderMapNotes = @()
+  if ($_folderMap) {
+    $_folderMapPath = $_folderMap.Path
+    $_folderMapNotes = @($_folderMap.Notes)
+  }
+
   $_manifest = [ordered]@{
     SchemaVersion = 1
     RunId         = $_runId
@@ -811,6 +979,8 @@ try {
     Actor         = $_actor
     Machine       = $env:COMPUTERNAME
     SourcePath    = $_source
+    FolderMapPath = $_folderMapPath
+    FolderMapNote = $_folderMapNotes
     Target        = $_profile
     Files         = $_fileCount
     Bytes         = $_bytes

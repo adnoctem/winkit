@@ -92,13 +92,38 @@ $mappedImport = @{
 .\scripts\Administration\Import-UserProfileData.ps1 @mappedImport -DryRun
 ```
 
-Use `-Folder @()` for mappings only. Source and target mappings must be non-overlapping; do not select both `Documents` and
-`Documents\Business Data`. Relative paths must stay inside their respective roots. Absolute paths, parent traversal, AppData, and system
-directories are refused.
+Use `-Folder @()` for mappings only. Relative paths must stay inside their respective roots. Absolute paths, parent traversal, AppData, and
+system directories are refused. Overlapping mappings follow three rules:
+
+- A source inside another selected source is copied only by its own mapping. With `Music\Desktop = 'Desktop'` and `Music = 'Music'`, the
+  desktop files land in `Desktop` and are left out of the `Music` copy, its verification, and `-RemoveSource`.
+- A destination inside another destination is allowed, for example `Public\Documents = 'Documents\Public Documents'` next to `Documents`,
+  unless the outer source also contains an item at that path.
+- Two mappings with the same source or the same destination are refused.
+
+`-FolderMapPath` imports the `folder-map.json` written by `Show-UserDataInventory.ps1` instead of `-Folder` and `-FolderMap`; see
+[Import a folder map](#import-a-folder-map).
 
 The script does not discover Known Folder redirection or read the old `NTUSER.DAT`. For a fully local redirected folder beneath the new
 profile, supply its actual relative path in `FolderMap`. It refuses reparse-point ancestors and cloud placeholders, so an active or
 unhydrated OneDrive tree is not an import destination. External drive and UNC destinations require a separate migration workflow.
+
+## Import a folder map
+
+A folder map lists source folders relative to `-SourcePath` and their targets relative to the new profile. Point `-SourcePath` at the
+staging root that holds every extracted download, not at one user folder:
+
+```powershell
+$mapImport = @{
+  SourcePath    = 'C:\Managed\Migration'
+  TargetUser    = 'NEWDOMAIN\User1'
+  FolderMapPath = 'C:\ProgramData\winkit\UserDataInventory\<run>\folder-map.json'
+}
+.\scripts\Administration\Import-UserProfileData.ps1 @mapImport -DryRun
+```
+
+Every mapped source must exist; download and extract all of them first, or remove an entry from a copy of the file. The map's notes are
+printed before the plan and recorded in the import manifest with the map's path.
 
 ## Permissions and verification
 

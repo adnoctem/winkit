@@ -53,6 +53,12 @@ BeforeAll {
       PassThru        = $true
     }
     foreach ($key in $Extra.Keys) {
+      # A $null value removes a default parameter, for example Folder when a folder map is used.
+      if ($null -eq $Extra[$key]) {
+        $parameters.Remove($key)
+        continue
+      }
+
       $parameters[$key] = $Extra[$key]
     }
     $global:LASTEXITCODE = 0
@@ -347,6 +353,90 @@ Describe 'Import-UserProfileData workflow' {
     }
     $run.ExitCode | Should -Be 0 -Because $run.Summary.Error
     Test-Path -LiteralPath (Join-Path $global:WinkitProfileTestContext.Target 'Data\Imported Documents\report [1].txt') | Should -BeTrue
+  }
+
+  Context 'folder map from Show-UserDataInventory' {
+    BeforeEach {
+      $source = $global:WinkitProfileTestContext.Source
+      Write-ProfileFixture -Path (Join-Path $source 'Old\Music\Desktop\desk.txt') -Text 'desktop file'
+      Write-ProfileFixture -Path (Join-Path $source 'Old\Music\song.txt') -Text 'music file'
+      Write-ProfileFixture -Path (Join-Path $source 'Old\Documents\letter.txt') -Text 'document'
+      Write-ProfileFixture -Path (Join-Path $source 'Public\Documents\shared.txt') -Text 'shared document'
+      Write-ProfileFixture -Path (Join-Path $source 'Downloads\setup.txt') -Text 'download'
+
+      $script:FolderMapPath = Join-Path $script:Root 'folder-map.json'
+      $script:FolderMap = [ordered]@{
+        SchemaVersion = 1
+        GeneratedBy   = 'Show-UserDataInventory'
+        Mappings      = @(
+          [ordered]@{ Source = 'Old\Music\Desktop'; Target = 'Desktop' }
+          [ordered]@{ Source = 'Old\Music'; Target = 'Music' }
+          [ordered]@{ Source = 'Old\Documents'; Target = 'Documents' }
+          [ordered]@{ Source = 'Public\Documents'; Target = 'Documents\Public Documents' }
+          [ordered]@{ Source = 'Downloads'; Target = 'Downloads' }
+        )
+        Notes         = @('Desktop is stored in Music\Desktop on the old computer.')
+      }
+      [IO.File]::WriteAllText($script:FolderMapPath, ($script:FolderMap | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($false)))
+    }
+
+    It 'imports nested sources once, places nested destinations, and cleans up verified staging' {
+      $run = Invoke-ProfileImport -Extra @{ Folder = $null; FolderMapPath = $script:FolderMapPath; RemoveSource = $true }
+
+      $run.ExitCode | Should -Be 0 -Because $run.Summary.Error
+      $target = $global:WinkitProfileTestContext.Target
+      Get-Content -LiteralPath (Join-Path $target 'Desktop\desk.txt') | Should -Be 'desktop file'
+      Get-Content -LiteralPath (Join-Path $target 'Music\song.txt') | Should -Be 'music file'
+      Test-Path -LiteralPath (Join-Path $target 'Music\Desktop') | Should -BeFalse
+      Get-Content -LiteralPath (Join-Path $target 'Documents\letter.txt') | Should -Be 'document'
+      Get-Content -LiteralPath (Join-Path $target 'Documents\Public Documents\shared.txt') | Should -Be 'shared document'
+      Get-Content -LiteralPath (Join-Path $target 'Downloads\setup.txt') | Should -Be 'download'
+
+      $source = $global:WinkitProfileTestContext.Source
+      Test-Path -LiteralPath (Join-Path $source 'Old\Music\Desktop\desk.txt') | Should -BeFalse
+      Test-Path -LiteralPath (Join-Path $source 'Old\Music\song.txt') | Should -BeFalse
+      Test-Path -LiteralPath (Join-Path $source 'Documents\report [1].txt') | Should -BeTrue
+
+      $manifest = Get-Content -LiteralPath $run.Summary.ManifestPath -Raw | ConvertFrom-Json
+      $manifest.FolderMapPath | Should -Be $script:FolderMapPath
+      $manifest.FolderMapNote | Should -Contain 'Desktop is stored in Music\Desktop on the old computer.'
+      $music = @($manifest.Plan | Where-Object { $_.Destination -like '*\Music' })[0]
+      @($music.Inventory.Excluded | Where-Object Reason -EQ 'NestedMapping').Count | Should -Be 1
+      @($music.Inventory.Files).Count | Should -Be 1
+    }
+
+    It 'refuses a nested destination that collides with data the outer mapping copies' {
+      Write-ProfileFixture -Path (Join-Path $global:WinkitProfileTestContext.Source 'Old\Documents\Public Documents\clash.txt')
+
+      $run = Invoke-ProfileImport -Extra @{ Folder = $null; FolderMapPath = $script:FolderMapPath }
+
+      $run.ExitCode | Should -Be 1
+      $run.Summary.Error | Should -Match 'collides'
+      Should -Invoke Invoke-SafeProcess -Times 0 -Exactly -ParameterFilter { $ArgumentList -contains '/COPY:DAT' }
+    }
+
+    It 'refuses a folder map combined with folder selections' {
+      $run = Invoke-ProfileImport -Extra @{ FolderMapPath = $script:FolderMapPath }
+
+      $run.ExitCode | Should -Be 1
+      $run.Summary.Error | Should -Match 'on its own'
+    }
+
+    It 'refuses an unknown folder map schema or a missing mapped source' {
+      $script:FolderMap.SchemaVersion = 2
+      [IO.File]::WriteAllText($script:FolderMapPath, ($script:FolderMap | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($false)))
+      $schemaRun = Invoke-ProfileImport -Extra @{ Folder = $null; FolderMapPath = $script:FolderMapPath }
+
+      $script:FolderMap.SchemaVersion = 1
+      $script:FolderMap.Mappings += [ordered]@{ Source = 'Old\Missing'; Target = 'Missing' }
+      [IO.File]::WriteAllText($script:FolderMapPath, ($script:FolderMap | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($false)))
+      $missingRun = Invoke-ProfileImport -Extra @{ Folder = $null; FolderMapPath = $script:FolderMapPath }
+
+      $schemaRun.ExitCode | Should -Be 1
+      $schemaRun.Summary.Error | Should -Match 'schema'
+      $missingRun.ExitCode | Should -Be 1
+      $missingRun.Summary.Error | Should -Match 'does not exist'
+    }
   }
 
   It 'rejects traversal, forbidden folders, overlapping mappings and missing explicit folders' {
