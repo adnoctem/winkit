@@ -2,7 +2,8 @@
 
 ### Bug Fixes
 
-* **scripts:** repair fixed-drive scan in user data inventory ([9f99a9a](https://github.com/adnoctem/winkit/commit/9f99a9a6c41821708fcdb78b921d0427ea46ef47))
+- **scripts:** repair fixed-drive scan in user data inventory
+  ([9f99a9a](https://github.com/adnoctem/winkit/commit/9f99a9a6c41821708fcdb78b921d0427ea46ef47))
 
 ## [3.2.0](https://github.com/adnoctem/winkit/compare/v3.1.0...v3.2.0) (2026-11-16)
 
