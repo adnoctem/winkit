@@ -102,6 +102,31 @@ if ([string]::IsNullOrWhiteSpace($User)) {
   $User = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 }
 
+function ConvertTo-DataInventoryJson {
+  param (
+    [object]
+    $InputObject,
+
+    [int]
+    $Depth = 20
+  )
+
+  $_json = ConvertTo-Json -InputObject $InputObject -Depth $Depth -ErrorAction Stop
+
+  # Windows PowerShell 5.1 escapes ' < > & as \u00XX. They are valid JSON literals, so restore them for
+  # readability. An escaped backslash before the sequence (\\u0027) is literal text and stays untouched.
+  $_pattern = '(?<!\\)((?:\\\\)*)\\u00(27|3[cCeE]|26)'
+  $_evaluator = {
+    param (
+      $Match
+    )
+
+    return $Match.Groups[1].Value + [string][char][Convert]::ToInt32($Match.Groups[2].Value, 16)
+  }
+
+  return [regex]::Replace($_json, $_pattern, $_evaluator)
+}
+
 function Test-DataInventoryAdministrator {
   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
   $principal = New-Object Security.Principal.WindowsPrincipal($identity)
@@ -926,7 +951,7 @@ try {
     $null = New-Item -ItemType Directory -Path $_runDirectory -Force -ErrorAction Stop
     $_manifestPath = Join-Path $_runDirectory 'manifest.json'
     $_inventory.ReportPath = $_manifestPath
-    $_json = ConvertTo-Json -InputObject $_inventory -Depth 20 -ErrorAction Stop
+    $_json = ConvertTo-DataInventoryJson -InputObject $_inventory -Depth 20
     [IO.File]::WriteAllText($_manifestPath, $_json, (New-Object Text.UTF8Encoding($true)))
     $null = Write-OperationResultLog -Results @(New-OperationResult -Target $_inventoryUser.ProfilePath -Source 'UserData' -Action 'Inventory' -Status $_status -Detail 'User data inventory completed.' -Property @{ ReportPath = $_manifestPath }) -Path (Join-Path $_runDirectory 'operations.jsonl') -ScriptName 'Show-UserDataInventory' -RunId $_runId
   }

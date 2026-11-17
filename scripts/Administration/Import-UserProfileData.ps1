@@ -587,6 +587,31 @@ function Assert-ImportContent {
   }
 }
 
+function ConvertTo-ImportJson {
+  param (
+    [object]
+    $InputObject,
+
+    [int]
+    $Depth = 12
+  )
+
+  $_json = ConvertTo-Json -InputObject $InputObject -Depth $Depth -ErrorAction Stop
+
+  # Windows PowerShell 5.1 escapes ' < > & as \u00XX. They are valid JSON literals, so restore them for
+  # readability. An escaped backslash before the sequence (\\u0027) is literal text and stays untouched.
+  $_pattern = '(?<!\\)((?:\\\\)*)\\u00(27|3[cCeE]|26)'
+  $_evaluator = {
+    param (
+      $Match
+    )
+
+    return $Match.Groups[1].Value + [string][char][Convert]::ToInt32($Match.Groups[2].Value, 16)
+  }
+
+  return [regex]::Replace($_json, $_pattern, $_evaluator)
+}
+
 function Write-ImportAudit {
   param (
     [object]
@@ -600,7 +625,7 @@ function Write-ImportAudit {
   )
 
   Assert-ImportPath -Path $Directory
-  $_json = ConvertTo-Json -InputObject $Manifest -Depth 12
+  $_json = ConvertTo-ImportJson -InputObject $Manifest -Depth 12
   [IO.File]::WriteAllText((Join-Path $Directory 'manifest.json'), $_json, (New-Object Text.UTF8Encoding($true)))
   $null = Write-OperationResultLog -Results $Results -Path (Join-Path $Directory 'operations.jsonl') `
     -ScriptName 'Import-UserProfileData' -RunId $Manifest.RunId

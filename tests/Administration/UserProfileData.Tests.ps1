@@ -76,6 +76,23 @@ Describe 'Import-UserProfileData conventions' {
   }
 }
 
+Describe 'Import-UserProfileData JSON output' {
+  It 'keeps quotes and angle brackets readable and round-trips literal escape text' {
+    $value = [PSCustomObject]@{
+      Call    = ".\Import.ps1 -SourcePath 'C:\Migration\<user>' -Mode A&B"
+      Literal = 'C:\u0027\data'
+    }
+
+    $json = ConvertTo-ImportJson -InputObject $value -Depth 4
+
+    $json | Should -Not -Match '(?<!\\)\\u00(27|3c|3e|26)'
+    $json | Should -Match "-SourcePath 'C:"
+    $roundTrip = $json | ConvertFrom-Json
+    $roundTrip.Call | Should -BeExactly $value.Call
+    $roundTrip.Literal | Should -BeExactly 'C:\u0027\data'
+  }
+}
+
 Describe 'Import-UserProfileData workflow' {
   BeforeEach {
     $global:WinkitProfileTestContext = @{
