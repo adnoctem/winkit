@@ -10,16 +10,42 @@ applications, or migrate browser and Outlook profiles.
 
 ## Prepare the backup and target
 
-Run the read-only inventory on the **old** machine before downloading anything:
+Run the read-only inventory on the **old** machine before downloading anything. Run it elevated to include the scan of fixed drives outside
+the profile:
 
 ```powershell
-.\scripts\Administration\Show-UserDataInventory.ps1 -OutlookReport C:\Reports -DryRun
+$inventory = @{
+  User          = 'OLDDOMAIN\User1'
+  OutlookReport = 'C:\Reports'
+  StagingRoot   = 'C:\Managed\Migration'
+}
+.\scripts\Administration\Show-UserDataInventory.ps1 @inventory -DryRun
 ```
 
 It records known-folder redirection, public-folder content and shortcuts, network drives, data outside the profile, and destination path
-lengths. The report includes the ABB download list, suggested `Import-UserProfileData.ps1` folders and mappings, manual PST/signature
-copies, and the decisions that need review. Without `-TargetRoot`, path lengths are reported as absolute source lengths; supply the future
-profile root to check the actual destination lengths.
+lengths. Without `-DryRun`, it writes `manifest.json` and `folder-map.json` to a new folder below `%ProgramData%\winkit\UserDataInventory`.
+The plan in the manifest contains:
+
+- `AbbDownload`: each folder to download and the staging path to extract it to, for example `C:\Users\User1` to `C:\Managed\Migration\User1`
+  and a redirected `C:\Downloads` to `C:\Managed\Migration\Downloads`.
+- `Mappings`: the folder map for `Import-UserProfileData.ps1 -FolderMapPath`, also written to `folder-map.json`.
+- `ManualCopy`: PSTs, Outlook signatures, and the public desktop, which belongs on the new computer's public desktop.
+- `Notes`: unusual locations the map accounts for, such as a Desktop stored inside `Music`.
+- `Decisions`: network drives, unmapped data outside the profile, long paths, and Outlook report warnings.
+- `SuggestedImportCall`: a preview command for the import.
+
+Known folders are mapped from where they are stored into their standard location, so a Desktop redirected to `Music\Desktop` becomes
+`Desktop` and is left out of the `Music` import. Public folders with data are mapped below the matching user folder, for example
+`Documents\Public Documents`. Other folders outside the profile are listed as decisions. System, vendor, and winkit-managed folders such as
+`$WinREAgent`, `inetpub`, and `C:\Managed` are not scanned. Name a folder with `-Include` to migrate it into `Documents\<folder name>`; this
+also works for a folder that is skipped by default:
+
+```powershell
+.\scripts\Administration\Show-UserDataInventory.ps1 @inventory -Include 'C:\Business', 'D:\Scans'
+```
+
+Without `-TargetRoot`, path lengths are reported as absolute source lengths; supply the future profile root to check the actual destination
+lengths.
 
 1. Finish the old user's work and take a final successful ABB backup. Record the device, task, and backup timestamp you select.
 2. Export browser passwords/bookmarks and complete the separate mail migration preparation while the old user session is available.
@@ -27,8 +53,10 @@ profile root to check the actual destination lengths.
    Synology documents this in its
    [recovery portal guide](https://kb.synology.com/en-br/DSM/help/ActiveBackup/activebackupforbusinessportal?version=7). Multiple selections
    may arrive in one archive. Download and extraction are manual; this script does not use an undocumented ABB API.
-4. Extract to a local NTFS directory, for example `C:\Migration\User1`, so that `Documents`, `Desktop`, and other chosen folders are
-   directly beneath it. If the archive contains `C\Users\User1`, point `SourcePath` at that extracted inner directory instead.
+4. Extract to a local NTFS directory. With a folder map, extract every download to its `AbbDownload` staging path below one staging root,
+   for example `C:\Managed\Migration\User1` and `C:\Managed\Migration\Public`. For a single folder without a map, use a directory such as
+   `C:\Migration\User1` with `Documents`, `Desktop`, and other chosen folders directly beneath it. If the archive contains `C\Users\User1`,
+   move or point to that extracted inner directory instead.
 5. Create the new local/domain account, sign in once to initialize its profile, and sign out. Run the importer as a separate elevated
    administrator. Keep the user signed out and stop applications or sync services that could modify staging or the destination.
 
@@ -110,8 +138,9 @@ unhydrated OneDrive tree is not an import destination. External drive and UNC de
 
 ## Import a folder map
 
-A folder map lists source folders relative to `-SourcePath` and their targets relative to the new profile. Point `-SourcePath` at the
-staging root that holds every extracted download, not at one user folder:
+`Show-UserDataInventory.ps1` writes `folder-map.json`. Each mapping has a `Source` relative to `-SourcePath`, a `Target` relative to the new
+profile, and, for reference, the original `Origin` path and its `Kind`. Point `-SourcePath` at the staging root that holds every extracted
+download, not at one user folder:
 
 ```powershell
 $mapImport = @{
@@ -122,8 +151,9 @@ $mapImport = @{
 .\scripts\Administration\Import-UserProfileData.ps1 @mapImport -DryRun
 ```
 
-Every mapped source must exist; download and extract all of them first, or remove an entry from a copy of the file. The map's notes are
-printed before the plan and recorded in the import manifest with the map's path.
+Every mapped source must exist; download and extract all of them first, or remove an entry from a copy of the file. To change where data
+lands, edit `Target` in a copy of the file. The map's notes are printed before the plan and recorded in the import manifest with the map's
+path. The public desktop is not part of the map; copy it into `%PUBLIC%\Desktop` on the new computer.
 
 ## Permissions and verification
 

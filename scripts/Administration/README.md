@@ -3,7 +3,7 @@
 | Script                                                   | Purpose                                                                                                                   | Requirements                                                                                               |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | [Import-UserProfileData.ps1](Import-UserProfileData.ps1) | Import staged user data into an existing signed-out profile, verify contents, and apply the target account's permissions. | Elevated x64 Windows PowerShell 5.1 or PowerShell 7; local NTFS paths and the pinned Substrate module.     |
-| [Show-UserDataInventory.ps1](Show-UserDataInventory.ps1) | Inventory known folders, public data, drives, and path lengths; generate the migration plan.                              | Current user without elevation; another local profile and outside-profile scans need administrator rights. |
+| [Show-UserDataInventory.ps1](Show-UserDataInventory.ps1) | Inventory known folders, public data, drives, and path lengths; write the migration plan and an import folder map.        | Current user without elevation; another local profile and outside-profile scans need administrator rights. |
 | [New-HostnameScheme.ps1](New-HostnameScheme.ps1)         | Generate names following the OFC hostname schema.                                                                         | Company, building, device and workload naming inputs.                                                      |
 | [Update-AutoDNSZones.ps1](Update-AutoDNSZones.ps1)       | Apply domain and DNS zone settings to AutoDNS from a JSON configuration.                                                  | AutoDNS credentials and a desired-state JSON file.                                                         |
 
@@ -20,6 +20,17 @@ $import = @{
 }
 .\scripts\Administration\Import-UserProfileData.ps1 @import -DryRun
 Get-Help .\scripts\Administration\Import-UserProfileData.ps1 -Full
+```
+
+With several downloads extracted below `C:\Managed\Migration` and the inventory's folder map:
+
+```powershell
+$mapImport = @{
+  SourcePath    = 'C:\Managed\Migration'
+  TargetUser    = 'NEWDOMAIN\User1'
+  FolderMapPath = 'C:\ProgramData\winkit\UserDataInventory\<run>\folder-map.json'
+}
+.\scripts\Administration\Import-UserProfileData.ps1 @mapImport -DryRun
 ```
 
 The importer changes only selected data folders. It resets custom permissions within those destination trees, including destination-only

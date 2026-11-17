@@ -15,9 +15,18 @@
   the current user. Another local profile requires administrator rights; its
   registry hive is loaded only when the profile is not in use.
 
-  The generated plan lists ABB download locations, suggested
-  Import-UserProfileData calls, manual copies, and decisions. A JSON report is
-  written to a unique run directory unless -DryRun is supplied.
+  The generated plan lists the folders to download from ABB and their staging
+  names, the folder mappings for Import-UserProfileData, manual copies, notes about
+  unusual folder locations, and open decisions. Known folders are mapped from
+  where they actually are, including redirected folders and folders nested in
+  other known folders. Public folders with data are mapped below the matching
+  user folder, except the public desktop, which is listed for a manual copy to
+  the new computer's public desktop. Other data outside the profile is reported
+  but only mapped when named with -Include. System, vendor, and winkit-managed
+  folders are not scanned unless named with -Include.
+
+  Unless -DryRun is supplied, a unique run directory receives manifest.json with
+  the full inventory and folder-map.json for Import-UserProfileData -FolderMapPath.
 
 .PARAMETER User
   User to inventory. Defaults to the current user. Accepts an account name or
@@ -33,6 +42,16 @@
 
 .PARAMETER OutlookReportMaxAge
   Maximum accepted report age in days. Defaults to 7.
+
+.PARAMETER Include
+  Local directories outside the profile to migrate, for example C:\asfibu. Each is
+  scanned even when it is excluded by default, downloaded as its own folder, and
+  mapped to Documents\<folder name>. Edit folder-map.json to change the target.
+
+.PARAMETER StagingRoot
+  Local directory that will hold every extracted download, used for the staging
+  paths in the plan and the suggested import call. Defaults to
+  C:\Managed\Migration on the system drive.
 
 .PARAMETER MeasureNetwork
   Measure size and file counts on mapped network drives. Off by default because
@@ -56,6 +75,10 @@
   PS> .\Show-UserDataInventory.ps1 -User 'CONTOSO\User1' -TargetRoot 'C:\Users\User1' -OutlookReport 'C:\Reports'
   Inventory another local profile and consume the newest matching Outlook report.
 
+.EXAMPLE
+  PS> .\Show-UserDataInventory.ps1 -User 'CONTOSO\User1' -Include 'C:\Business' -StagingRoot 'C:\Managed\Migration'
+  Also migrate C:\Business and write folder-map.json for Import-UserProfileData.
+
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
@@ -77,6 +100,12 @@ param (
   [ValidateRange(1, 365)]
   [int]
   $OutlookReportMaxAge = 7,
+
+  [string[]]
+  $Include = @(),
+
+  [string]
+  $StagingRoot = (Join-Path $env:SystemDrive 'Managed\Migration'),
 
   [switch]
   $MeasureNetwork,
@@ -208,6 +237,28 @@ function Resolve-DataInventoryUser {
   }
 }
 
+function Test-DataInventoryPathWithin {
+  param (
+    [string]
+    $Path,
+
+    [string]
+    $Root
+  )
+
+  # True only for a strict descendant; equal paths are not nested.
+  return $Path.StartsWith($Root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Format-DataInventoryLiteral {
+  param (
+    [string]
+    $Value
+  )
+
+  return "'" + $Value.Replace("'", "''") + "'"
+}
+
 function Expand-DataInventoryPath {
   param (
     [string]
@@ -250,6 +301,11 @@ function Get-DataInventoryTreeSummary {
   $result.Exists = $true
   try {
     foreach ($item in @(Get-ChildItem -LiteralPath $Path -Recurse -Force -ErrorAction Stop)) {
+      # Explorer metadata is never imported, so a folder holding only desktop.ini is empty.
+      if (-not $item.PSIsContainer -and $item.Name -in @('desktop.ini', 'Thumbs.db')) {
+        continue
+      }
+
       if ($item.PSIsContainer) {
         $result.Directories++
       }
@@ -514,14 +570,41 @@ function Get-DataInventoryNetworkDrive {
 function Get-DataInventoryOutsideProfile {
   param (
     [string]
-    $ProfilePath
+    $ProfilePath,
+
+    [string[]]
+    $Include = @(),
+
+    [bool]
+    $ScanVolumes,
+
+    [string]
+    $ManagedRoot = (Join-Path $env:SystemDrive 'Managed')
   )
 
-  $_excluded = @(
-    'Windows', 'Program Files', 'Program Files (x86)', 'ProgramData', 'Users',
-    '$Recycle.Bin', 'System Volume Information', 'Recovery', 'PerfLogs',
-    'Documents and Settings', 'Config.Msi', 'MSOCache'
+  # System, vendor, and winkit-managed folders hold no user data. Names starting with $ are
+  # Windows servicing folders such as $Recycle.Bin and $WinREAgent. -Include overrides both.
+  $_excludedNames = @(
+    'Windows',
+    'Windows.old',
+    'Program Files',
+    'Program Files (x86)',
+    'ProgramData',
+    'Users',
+    'System Volume Information',
+    'Recovery',
+    'PerfLogs',
+    'Documents and Settings',
+    'Config.Msi',
+    'MSOCache',
+    'OneDriveTemp',
+    'inetpub',
+    'Intel',
+    'AMD',
+    'NVIDIA'
   )
+  $_managedRoot = $ManagedRoot.TrimEnd('\')
+
   $_programs = @()
   foreach ($_key in @(
       'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
@@ -536,42 +619,120 @@ function Get-DataInventoryOutsideProfile {
     }
   }
 
-  # Get-Volume has no -DriveType parameter; DriveType is an output property.
-  $_volumes = @(
-    Get-Volume -ErrorAction SilentlyContinue |
-      Where-Object { $_.DriveLetter -and [string]$_.DriveType -eq 'Fixed' }
-  )
+  # Collect top-level folders of fixed volumes, then add included folders that the scan skipped.
+  $_candidates = New-Object System.Collections.ArrayList
+  if ($ScanVolumes) {
+    # Get-Volume has no -DriveType parameter; DriveType is an output property.
+    $_volumes = @(
+      Get-Volume -ErrorAction SilentlyContinue |
+        Where-Object { $_.DriveLetter -and [string]$_.DriveType -eq 'Fixed' }
+    )
 
-  $_result = New-Object System.Collections.ArrayList
-  foreach ($_volume in $_volumes) {
-    $_root = $_volume.DriveLetter + ':\'
-    foreach ($_directory in @(Get-ChildItem -LiteralPath $_root -Directory -Force -ErrorAction SilentlyContinue)) {
-      if ($_directory.Name -in $_excluded -or ($_directory.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-        continue
-      }
-      if ($_directory.FullName.StartsWith($ProfilePath.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
-        continue
-      }
+    foreach ($_volume in $_volumes) {
+      $_root = $_volume.DriveLetter + ':\'
+      foreach ($_directory in @(Get-ChildItem -LiteralPath $_root -Directory -Force -ErrorAction SilentlyContinue)) {
+        $_path = $_directory.FullName.TrimEnd('\')
+        $_isIncluded = @($Include | Where-Object { $_.Equals($_path, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
+        $_isExcluded = $_directory.Name -in $_excludedNames -or
+        $_directory.Name.StartsWith('$') -or
+        $_path.Equals($_managedRoot, [StringComparison]::OrdinalIgnoreCase)
 
-      $_summary = Get-DataInventoryTreeSummary -Path $_directory.FullName
-      $_owners = @($_programs | Where-Object {
-          -not [string]::IsNullOrWhiteSpace([string]$_.InstallLocation) -and (
-            $_.InstallLocation.StartsWith($_directory.FullName, [StringComparison]::OrdinalIgnoreCase) -or
-            $_directory.FullName.StartsWith($_.InstallLocation, [StringComparison]::OrdinalIgnoreCase)
-          )
-        } | Select-Object -ExpandProperty DisplayName -Unique)
-      $null = $_result.Add([PSCustomObject]@{
-          Path     = $_directory.FullName
-          Files    = $_summary.Files
-          Bytes    = $_summary.Bytes
-          Newest   = $_summary.Newest
-          Programs = @($_owners)
-          Error    = $_summary.Error
-        })
+        if ($_isExcluded -and -not $_isIncluded) {
+          continue
+        }
+
+        if ($_directory.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+          continue
+        }
+
+        if (Test-DataInventoryPathWithin -Path $_path -Root $ProfilePath) {
+          continue
+        }
+
+        $null = $_candidates.Add($_path)
+      }
     }
   }
 
+  foreach ($_path in $Include) {
+    if (@($_candidates | Where-Object { $_.Equals($_path, [StringComparison]::OrdinalIgnoreCase) }).Count -eq 0) {
+      $null = $_candidates.Add($_path)
+    }
+  }
+
+  $_result = New-Object System.Collections.ArrayList
+  foreach ($_path in $_candidates) {
+    $_summary = Get-DataInventoryTreeSummary -Path $_path
+    $_isIncluded = @($Include | Where-Object { $_.Equals($_path, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
+    $_owners = @(
+      $_programs |
+        Where-Object {
+          $_location = ([string]$_.InstallLocation).TrimEnd('\')
+          -not [string]::IsNullOrWhiteSpace($_location) -and (
+            $_location.Equals($_path, [StringComparison]::OrdinalIgnoreCase) -or
+            (Test-DataInventoryPathWithin -Path $_location -Root $_path) -or
+            (Test-DataInventoryPathWithin -Path $_path -Root $_location)
+          )
+        } |
+        Select-Object -ExpandProperty DisplayName -Unique
+    )
+
+    $null = $_result.Add([PSCustomObject]@{
+        Path     = $_path
+        Files    = $_summary.Files
+        Bytes    = $_summary.Bytes
+        Newest   = $_summary.Newest
+        Programs = @($_owners)
+        Included = $_isIncluded
+        Error    = $_summary.Error
+      })
+  }
+
   return @($_result.ToArray())
+}
+
+function Resolve-DataInventoryInclude {
+  param (
+    [string[]]
+    $Path,
+
+    [string]
+    $ProfilePath,
+
+    [string]
+    $PublicRoot
+  )
+
+  $_resolved = New-Object System.Collections.ArrayList
+  foreach ($_entry in @($Path | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
+    $_full = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($_entry)
+    if ($_full -notmatch '^[A-Za-z]:\\') {
+      throw "-Include needs a local drive path: $_entry"
+    }
+
+    $_full = [IO.Path]::GetFullPath($_full).TrimEnd('\')
+    if ($_full.Length -le 2) {
+      throw "-Include cannot name a drive root: $_entry"
+    }
+
+    if (-not (Test-Path -LiteralPath $_full -PathType Container)) {
+      throw "-Include directory not found: $_full"
+    }
+
+    foreach ($_covered in @($ProfilePath, $PublicRoot)) {
+      $_coveredRoot = $_covered.TrimEnd('\')
+      if ($_full.Equals($_coveredRoot, [StringComparison]::OrdinalIgnoreCase) -or
+        (Test-DataInventoryPathWithin -Path $_full -Root $_coveredRoot)) {
+        throw "-Include is for folders outside the profile and the public folders: $_full"
+      }
+    }
+
+    if (@($_resolved | Where-Object { $_.Equals($_full, [StringComparison]::OrdinalIgnoreCase) }).Count -eq 0) {
+      $null = $_resolved.Add($_full)
+    }
+  }
+
+  return @($_resolved.ToArray())
 }
 
 function Get-DataInventoryLongPath {
@@ -580,7 +741,10 @@ function Get-DataInventoryLongPath {
     $SourceRoot,
 
     [string]
-    $TargetRoot
+    $TargetRoot,
+
+    [string[]]
+    $ExcludeDirectory = @()
   )
 
   $_destinationRoot = $SourceRoot
@@ -603,6 +767,10 @@ function Get-DataInventoryLongPath {
     '/NP',
     '/XJ'
   )
+  if ($ExcludeDirectory.Count -gt 0) {
+    $_arguments += @('/XD') + $ExcludeDirectory
+  }
+
   $_result = Invoke-SafeProcess -FilePath "$env:SystemRoot\System32\robocopy.exe" -ArgumentList $_arguments -AsResult -ErrorAction Stop
   if ($_result.TimedOut -or $_result.Cancelled -or $null -eq $_result.ExitCode -or $_result.ExitCode -lt 0 -or $_result.ExitCode -ge 8) {
     throw "Path-length scan failed for ${SourceRoot}: $($_result.ExitCode)"
@@ -761,7 +929,49 @@ function Get-DataInventoryOutlookReport {
   return $_result
 }
 
-function Get-DataInventoryPlan {
+function Add-DataInventoryRoot {
+  param (
+    [System.Collections.ArrayList]
+    $Roots,
+
+    [string]
+    $Path,
+
+    [string]
+    $Reason
+  )
+
+  $_existing = @($Roots | Where-Object { $_.Path.Equals($Path, [StringComparison]::OrdinalIgnoreCase) }) | Select-Object -First 1
+  if ($null -ne $_existing) {
+    if ($Reason -notin $_existing.Reasons) {
+      $null = $_existing.Reasons.Add($Reason)
+    }
+
+    return $_existing.StagingName
+  }
+
+  # Each download is extracted as <StagingRoot>\<folder name>; equal names get a numbered suffix.
+  $_leaf = Split-Path -Path $Path -Leaf
+  $_name = $_leaf
+  $_index = 1
+  while (@($Roots | Where-Object { $_.StagingName -ieq $_name }).Count -gt 0) {
+    $_index++
+    $_name = '{0} ({1})' -f $_leaf, $_index
+  }
+
+  $_reasons = New-Object System.Collections.ArrayList
+  $null = $_reasons.Add($Reason)
+  $null = $Roots.Add([PSCustomObject]@{
+      Path        = $Path
+      Leaf        = $_leaf
+      StagingName = $_name
+      Reasons     = $_reasons
+    })
+
+  return $_name
+}
+
+function Get-DataInventoryMapping {
   param (
     [object[]]
     $KnownFolder,
@@ -770,109 +980,307 @@ function Get-DataInventoryPlan {
     $PublicFolder,
 
     [object[]]
-    $NetworkDrive,
+    $OutsideProfile,
+
+    [string]
+    $ProfilePath,
+
+    [string]
+    $PublicRoot
+  )
+
+  $_roots = New-Object System.Collections.ArrayList
+  $_mappings = New-Object System.Collections.ArrayList
+  $_manual = New-Object System.Collections.ArrayList
+  $_notes = New-Object System.Collections.ArrayList
+  $_decisions = New-Object System.Collections.ArrayList
+  $_profileRoot = $ProfilePath.TrimEnd('\')
+  $_mappedOrigins = @{}
+
+  # Known folders are imported from where they actually are, into their standard location.
+  foreach ($_item in $KnownFolder) {
+    if (-not $_item.Exists -or $_item.Files -eq 0) {
+      continue
+    }
+
+    if ($_item.IsUnc -or $_item.IsOneDrive -or $_item.IsReparse) {
+      $null = $_decisions.Add("Known folder $($_item.Name) is redirected to a network, OneDrive, or linked location: $($_item.Path). Stage it separately.")
+      continue
+    }
+
+    $_origin = [IO.Path]::GetFullPath($_item.Path).TrimEnd('\')
+    $_key = $_origin.ToUpperInvariant()
+    if ($_mappedOrigins.ContainsKey($_key)) {
+      $null = $_notes.Add("Known folder $($_item.Name) shares $_origin with $($_mappedOrigins[$_key]); it is imported once, into $($_mappedOrigins[$_key]).")
+      continue
+    }
+
+    if ($_origin.Equals($_profileRoot, [StringComparison]::OrdinalIgnoreCase)) {
+      $null = $_decisions.Add("Known folder $($_item.Name) points at the profile root $_origin. Map its files manually.")
+      continue
+    }
+
+    $_mappedOrigins[$_key] = $_item.Name
+    if ($_item.IsOutsideProfile) {
+      $_rootName = Add-DataInventoryRoot -Roots $_roots -Path $_origin -Reason "Known folder $($_item.Name)"
+      $_source = $_rootName
+      $null = $_notes.Add("Known folder $($_item.Name) is redirected outside the profile to $_origin. Download it separately; it is imported into $($_item.Name).")
+    }
+    else {
+      $_rootName = Add-DataInventoryRoot -Roots $_roots -Path $_profileRoot -Reason 'User profile'
+      $_source = Join-Path $_rootName $_origin.Substring($_profileRoot.Length).TrimStart('\')
+    }
+
+    $null = $_mappings.Add([PSCustomObject]@{
+        Source = $_source
+        Target = $_item.Name
+        Origin = $_origin
+        Kind   = 'KnownFolder'
+      })
+  }
+
+  # Public folders: the desktop belongs on the new computer's public desktop; the rest is imported
+  # below the matching user folder.
+  $_publicRoot = [IO.Path]::GetFullPath($PublicRoot).TrimEnd('\')
+  foreach ($_item in $PublicFolder) {
+    foreach ($_shortcut in @($_item.Shortcuts)) {
+      if ($_shortcut.IsNetwork) {
+        $null = $_decisions.Add("Public shortcut targets a network path: $($_shortcut.Path) -> $($_shortcut.Target).")
+      }
+    }
+
+    if ($_item.Files -eq 0) {
+      continue
+    }
+
+    $_publicName = Add-DataInventoryRoot -Roots $_roots -Path $_publicRoot -Reason "Public $($_item.Name)"
+    if ($_item.Name -eq 'Desktop') {
+      $null = $_manual.Add([PSCustomObject]@{
+          Path   = $_item.Path
+          Reason = 'Public desktop: copy into %PUBLIC%\Desktop on the new computer'
+        })
+      $null = $_notes.Add("The public desktop is shared by all users and is not imported into the profile. Copy $_publicName\Desktop into %PUBLIC%\Desktop on the new computer.")
+      continue
+    }
+
+    $null = $_mappings.Add([PSCustomObject]@{
+        Source = Join-Path $_publicName $_item.Name
+        Target = Join-Path $_item.Name "Public $($_item.Name)"
+        Origin = [IO.Path]::GetFullPath($_item.Path).TrimEnd('\')
+        Kind   = 'Public'
+      })
+  }
+
+  # Other data outside the profile is mapped only when named with -Include.
+  foreach ($_item in $OutsideProfile) {
+    $_origin = [IO.Path]::GetFullPath($_item.Path).TrimEnd('\')
+    if ($_mappedOrigins.ContainsKey($_origin.ToUpperInvariant())) {
+      continue
+    }
+
+    if (-not $_item.Included) {
+      if ($_item.Files -eq 0) {
+        continue
+      }
+
+      $_detail = '{0} files, {1:N1} MB' -f $_item.Files, ($_item.Bytes / 1MB)
+      $_programs = @($_item.Programs | Where-Object { $_ })
+      if ($_programs.Count -gt 0) {
+        $_detail += '; probable programs: ' + ($_programs -join ', ')
+      }
+
+      $null = $_decisions.Add("Data outside the profile: $_origin ($_detail). Use -Include $(Format-DataInventoryLiteral -Value $_origin) to migrate it.")
+      continue
+    }
+
+    $_rootName = Add-DataInventoryRoot -Roots $_roots -Path $_origin -Reason 'Included with -Include'
+    $_target = Join-Path 'Documents' (Split-Path -Path $_origin -Leaf)
+    $null = $_mappings.Add([PSCustomObject]@{
+        Source = $_rootName
+        Target = $_target
+        Origin = $_origin
+        Kind   = 'Included'
+      })
+    $null = $_notes.Add("$_origin is imported into $_target. Edit folder-map.json to choose another target.")
+  }
+
+  # Explain folders stored inside another mapped folder; the import excludes them from the outer copy.
+  foreach ($_inner in $_mappings) {
+    $_containing = @(
+      $_mappings |
+        Where-Object { $_ -ne $_inner -and (Test-DataInventoryPathWithin -Path $_inner.Origin -Root $_.Origin) } |
+        Sort-Object { $_.Origin.Length } -Descending
+    )
+    $_outer = $null
+    if ($_containing.Count -gt 0) {
+      $_outer = $_containing[0]
+    }
+
+    if ($null -ne $_outer) {
+      $null = $_notes.Add("$($_inner.Target) is stored inside $($_outer.Target) at $($_inner.Origin). It is imported into $($_inner.Target) and left out of the $($_outer.Target) import.")
+    }
+    elseif ($_inner.Kind -eq 'KnownFolder' -and -not ($_inner.Source -split '\\', 2)[-1].Equals($_inner.Target, [StringComparison]::OrdinalIgnoreCase) -and
+      (Test-DataInventoryPathWithin -Path $_inner.Origin -Root $_profileRoot)) {
+      $null = $_notes.Add("Known folder $($_inner.Target) is stored at $($_inner.Origin). It is imported into $($_inner.Target).")
+    }
+  }
+
+  foreach ($_root in $_roots) {
+    if ($_root.StagingName -ne $_root.Leaf) {
+      $null = $_notes.Add("Another download is also named '$($_root.Leaf)'. Extract $($_root.Path) as '$($_root.StagingName)'.")
+    }
+  }
+
+  return [PSCustomObject]@{
+    Roots      = @($_roots.ToArray())
+    Mappings   = @($_mappings.ToArray())
+    ManualCopy = @($_manual.ToArray())
+    Notes      = @($_notes.ToArray())
+    Decisions  = @($_decisions.ToArray())
+  }
+}
+
+function Get-DataInventoryPlan {
+  param (
+    [object]
+    $Mapping,
 
     [object[]]
-    $OutsideProfile,
+    $NetworkDrive,
 
     [object[]]
     $LongPath,
 
     [object]
-    $Outlook
+    $Outlook,
+
+    [string]
+    $StagingRoot,
+
+    [string]
+    $FolderMapPath
   )
 
-  $_folder = New-Object System.Collections.ArrayList
-  $_folderMap = [ordered]@{}
-  $_abb = New-Object System.Collections.ArrayList
+  $_downloads = New-Object System.Collections.ArrayList
+  foreach ($_root in $Mapping.Roots) {
+    $null = $_downloads.Add([PSCustomObject]@{
+        Path        = $_root.Path
+        StagingPath = Join-Path $StagingRoot $_root.StagingName
+        Reason      = ($_root.Reasons -join '; ')
+      })
+  }
+
   $_manual = New-Object System.Collections.ArrayList
+  foreach ($_item in $Mapping.ManualCopy) {
+    $null = $_manual.Add($_item)
+  }
+
   $_decisions = New-Object System.Collections.ArrayList
-
-  foreach ($_item in $KnownFolder) {
-    if (-not $_item.Exists -or $_item.Bytes -eq 0) {
-      continue
-    }
-    if ($_item.IsUnc -or $_item.IsOneDrive -or $_item.IsReparse) {
-      $_decisions += "Known folder $($_item.Name) is redirected or linked: $($_item.Path)."
-      continue
-    }
-    if ($_item.IsOutsideProfile) {
-      $_folderMap[$_item.Name] = (Join-Path 'Private' $_item.Name)
-      $_decisions += "Known folder $($_item.Name) is outside the profile: $($_item.Path). Map it explicitly."
-      continue
-    }
-    $null = $_folder.Add($_item.Name)
-    $null = $_abb.Add([PSCustomObject]@{ Path = $_item.Path; Reason = "Known folder $($_item.Name)" })
-  }
-
-  foreach ($_item in $PublicFolder) {
-    if ($_item.Files -eq 0) {
-      continue
-    }
-    $null = $_abb.Add([PSCustomObject]@{ Path = $_item.Path; Reason = "Public $($_item.Name)" })
-    if ($_item.Name -in @('Desktop', 'Documents')) {
-      $_folderMap["Public $($_item.Name)"] = (Join-Path $_item.Name "Public $($_item.Name)")
-      $_decisions += "Public $($_item.Name) contains data; map it into the target profile or copy it manually."
-    }
-    else {
-      $_decisions += "Public $($_item.Name) contains data; decide whether it belongs to this migration."
-    }
-    foreach ($_shortcut in $_item.Shortcuts) {
-      if ($_shortcut.IsNetwork) {
-        $_decisions += "Public shortcut targets a network path: $($_shortcut.Path) -> $($_shortcut.Target)."
-      }
-    }
-  }
-
-  foreach ($_item in $OutsideProfile) {
-    if ($_item.Files -eq 0) {
-      continue
-    }
-    $null = $_abb.Add([PSCustomObject]@{ Path = $_item.Path; Reason = 'Outside profile data' })
-    $_leaf = Split-Path -Path $_item.Path -Leaf
-    $_folderMap[$_leaf] = (Join-Path 'Private' $_leaf)
-    $_decisions += "Data outside the profile: $($_item.Path) (probable programs: $($_item.Programs -join ', '))."
+  foreach ($_decision in $Mapping.Decisions) {
+    $null = $_decisions.Add($_decision)
   }
 
   foreach ($_item in $NetworkDrive) {
-    $_decisions += "Network drive $($_item.Letter): $($_item.Target). Decide whether to stage it; use -MeasureNetwork for sizes."
+    $null = $_decisions.Add("Network drive $($_item.Letter): $($_item.Target). Decide whether to stage it; use -MeasureNetwork for sizes.")
   }
 
   foreach ($_item in $LongPath) {
-    $_decisions += "Path too long for the target: $($_item.Destination) ($($_item.Length)/$($_item.Limit))."
+    $null = $_decisions.Add("Path too long for the target: $($_item.Destination) ($($_item.Length)/$($_item.Limit)).")
     if ($_item.WordWebPair) {
-      $_decisions += "Word web-page pair needs manual renaming: $($_item.Source)."
+      $null = $_decisions.Add("Word web-page pair needs manual renaming: $($_item.Source).")
     }
   }
 
   if ($null -ne $Outlook) {
     foreach ($_item in $Outlook.DataFiles) {
-      $null = $_manual.Add([PSCustomObject]@{ Path = $_item.Path; Reason = "Outlook $($_item.Format) data file" })
+      $null = $_manual.Add([PSCustomObject]@{
+          Path   = $_item.Path
+          Reason = "Outlook $($_item.Format) data file"
+        })
     }
+
     if (-not [string]::IsNullOrWhiteSpace($Outlook.Signature)) {
-      $null = $_manual.Add([PSCustomObject]@{ Path = $Outlook.Signature; Reason = 'Outlook signatures' })
+      $null = $_manual.Add([PSCustomObject]@{
+          Path   = $Outlook.Signature
+          Reason = 'Outlook signatures'
+        })
     }
+
     foreach ($_warning in $Outlook.Warnings) {
-      $_decisions += $_warning
+      $null = $_decisions.Add($_warning)
     }
+
     if ($Outlook.Error) {
-      $_decisions += $Outlook.Error
+      $null = $_decisions.Add($Outlook.Error)
     }
   }
   else {
-    $_decisions += 'Outlook not inventoried: run Show-OutlookAccount.ps1 first and pass -OutlookReport.'
+    $null = $_decisions.Add('Outlook not inventoried: run Show-OutlookAccount.ps1 first and pass -OutlookReport.')
+  }
+
+  $_notes = New-Object System.Collections.ArrayList
+  foreach ($_note in $Mapping.Notes) {
+    $null = $_notes.Add($_note)
+  }
+
+  $_suggestedCall = $null
+  if ($Mapping.Mappings.Count -gt 0) {
+    $null = $_notes.Add("Extract each download so that its folder is the staging path listed in AbbDownload below $StagingRoot.")
+    $_mapPath = $FolderMapPath
+    if ([string]::IsNullOrWhiteSpace($_mapPath)) {
+      $_mapPath = '<folder-map.json>'
+    }
+
+    $_sourceLiteral = Format-DataInventoryLiteral -Value $StagingRoot
+    $_targetLiteral = Format-DataInventoryLiteral -Value '<target>'
+    $_mapLiteral = Format-DataInventoryLiteral -Value $_mapPath
+    $_suggestedCall = ".\scripts\Administration\Import-UserProfileData.ps1 -SourcePath $_sourceLiteral -TargetUser $_targetLiteral -FolderMapPath $_mapLiteral -DryRun"
   }
 
   return [PSCustomObject]@{
-    AbbDownload         = @($_abb.ToArray())
-    Folder              = @($_folder.ToArray())
-    FolderMap           = $_folderMap
+    AbbDownload         = @($_downloads.ToArray())
+    Mappings            = @($Mapping.Mappings)
     ManualCopy          = @($_manual.ToArray())
-    Decisions           = @($_decisions)
-    SuggestedImportCall = if ($_folder.Count -gt 0) {
-      ".\scripts\Administration\Import-UserProfileData.ps1 -SourcePath 'C:\Migration\<user>' -TargetUser '<target>' -Folder $($_folder -join ',')"
-    }
-    else { $null }
+    Notes               = @($_notes.ToArray())
+    Decisions           = @($_decisions.ToArray())
+    SuggestedImportCall = $_suggestedCall
+  }
+}
+
+function ConvertTo-DataInventoryFolderMap {
+  param (
+    [object]
+    $Plan,
+
+    [string]
+    $RunId,
+
+    [string]
+    $Computer,
+
+    [string]
+    $UserName
+  )
+
+  $_mappings = New-Object System.Collections.ArrayList
+  foreach ($_item in $Plan.Mappings) {
+    $null = $_mappings.Add([ordered]@{
+        Source = $_item.Source
+        Target = $_item.Target
+        Origin = $_item.Origin
+        Kind   = $_item.Kind
+      })
+  }
+
+  return [ordered]@{
+    SchemaVersion  = 1
+    GeneratedBy    = 'Show-UserDataInventory'
+    RunId          = $RunId
+    GeneratedAtUtc = [DateTime]::UtcNow.ToString('o')
+    Computer       = $Computer
+    User           = $UserName
+    Mappings       = @($_mappings.ToArray())
+    Notes          = @($Plan.Notes)
   }
 }
 
@@ -880,48 +1288,81 @@ $_inventoryUser = Resolve-DataInventoryUser -Account $User
 $_startedAt = [DateTime]::UtcNow.ToString('o')
 $_runId = '{0}-{1}' -f (Get-Date -Format 'yyyyMMdd-HHmmss'), [guid]::NewGuid().ToString('N')
 $_reportRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ReportDirectory)
+$_runDirectory = Join-Path $_reportRoot $_runId
+$_stagingRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($StagingRoot).TrimEnd('\')
 $_manifestPath = $null
+$_folderMapPath = $null
 $_inventory = $null
 
 try {
+  $_include = @(Resolve-DataInventoryInclude -Path $Include -ProfilePath $_inventoryUser.ProfilePath -PublicRoot $env:PUBLIC)
+
   Write-Progress -Id 71 -Activity 'User data inventory' -Status 'Reading known folders'
   $_known = @(Get-DataInventoryKnownFolder -RegistryRoot $_inventoryUser.Registry -ProfilePath $_inventoryUser.ProfilePath)
   $_public = @(Get-DataInventoryPublicFolder -PublicRoot $env:PUBLIC -IncludePermissions $_inventoryUser.IsAdmin)
   $_network = @(Get-DataInventoryNetworkDrive -RegistryRoot $_inventoryUser.Registry -Measure $MeasureNetwork.IsPresent)
-  $_outside = @()
-  if ($_inventoryUser.IsAdmin) {
-    Write-Progress -Id 71 -Activity 'User data inventory' -Status 'Scanning fixed drives'
-    $_outside = @(Get-DataInventoryOutsideProfile -ProfilePath $_inventoryUser.ProfilePath)
-  }
-  else {
+
+  if (-not $_inventoryUser.IsAdmin) {
     Write-Warning 'Run elevated to inspect fixed drives outside the profile.'
   }
 
+  Write-Progress -Id 71 -Activity 'User data inventory' -Status 'Scanning folders outside the profile'
+  $_outside = @(Get-DataInventoryOutsideProfile -ProfilePath $_inventoryUser.ProfilePath -Include $_include -ScanVolumes $_inventoryUser.IsAdmin)
+
+  $_mapping = Get-DataInventoryMapping `
+    -KnownFolder $_known `
+    -PublicFolder $_public `
+    -OutsideProfile $_outside `
+    -ProfilePath $_inventoryUser.ProfilePath `
+    -PublicRoot $env:PUBLIC
+
+  # Check each mapped folder against its real destination; nested mapped folders are checked on their own.
   Write-Progress -Id 71 -Activity 'User data inventory' -Status 'Checking destination path lengths'
   $_long = New-Object System.Collections.ArrayList
-  foreach ($_item in $_known) {
-    if ($_item.Exists) {
-      foreach ($_entry in @(Get-DataInventoryLongPath -SourceRoot $_item.Path -TargetRoot $TargetRoot)) {
-        $null = $_long.Add($_entry)
-      }
+  foreach ($_item in $_mapping.Mappings) {
+    $_nested = @(
+      $_mapping.Mappings |
+        Where-Object { $_ -ne $_item -and (Test-DataInventoryPathWithin -Path $_.Origin -Root $_item.Origin) } |
+        ForEach-Object { $_.Origin }
+    )
+    $_target = $null
+    if (-not [string]::IsNullOrWhiteSpace($TargetRoot)) {
+      $_target = Join-Path $TargetRoot $_item.Target
     }
-  }
-  foreach ($_item in $_outside) {
-    foreach ($_entry in @(Get-DataInventoryLongPath -SourceRoot $_item.Path -TargetRoot $TargetRoot)) {
+
+    foreach ($_entry in @(Get-DataInventoryLongPath -SourceRoot $_item.Origin -TargetRoot $_target -ExcludeDirectory $_nested)) {
       $null = $_long.Add($_entry)
     }
   }
 
   Write-Progress -Id 71 -Activity 'User data inventory' -Status 'Reading Outlook evidence'
-  $_signaturePath = $null
   $_signaturePath = Join-Path $_inventoryUser.ProfilePath 'AppData\Roaming\Microsoft\Signatures'
-  $_outlook = Get-DataInventoryOutlookReport -Path $OutlookReport -Computer $env:COMPUTERNAME -UserName $_inventoryUser.Name -MaxAgeDays $OutlookReportMaxAge -SignaturePath $_signaturePath
+  $_outlookReport = @{
+    Path          = $OutlookReport
+    Computer      = $env:COMPUTERNAME
+    UserName      = $_inventoryUser.Name
+    MaxAgeDays    = $OutlookReportMaxAge
+    SignaturePath = $_signaturePath
+  }
+  $_outlook = Get-DataInventoryOutlookReport @_outlookReport
 
-  $_plan = Get-DataInventoryPlan -KnownFolder $_known -PublicFolder $_public -NetworkDrive $_network -OutsideProfile $_outside -LongPath @($_long.ToArray()) -Outlook $_outlook
+  if (-not $DryRun) {
+    $_folderMapPath = Join-Path $_runDirectory 'folder-map.json'
+  }
+
+  $_planParameters = @{
+    Mapping       = $_mapping
+    NetworkDrive  = $_network
+    LongPath      = @($_long.ToArray())
+    Outlook       = $_outlook
+    StagingRoot   = $_stagingRoot
+    FolderMapPath = $_folderMapPath
+  }
+  $_plan = Get-DataInventoryPlan @_planParameters
 
   $_inventory = [PSCustomObject]@{
     PSTypeName     = 'Winkit.DataInventory'
-    SchemaVersion  = 1
+    SchemaVersion  = 2
     RunId          = $_runId
     StartedAtUtc   = $_startedAt
     FinishedAtUtc  = [DateTime]::UtcNow.ToString('o')
@@ -930,6 +1371,8 @@ try {
     UserSID        = $_inventoryUser.SID
     ProfilePath    = $_inventoryUser.ProfilePath
     TargetRoot     = $TargetRoot
+    StagingRoot    = $_stagingRoot
+    Include        = $_include
     OutlookReport  = $_outlook
     KnownFolders   = $_known
     PublicFolders  = $_public
@@ -938,6 +1381,7 @@ try {
     LongPaths      = @($_long.ToArray())
     Plan           = $_plan
     ReportPath     = $null
+    FolderMapPath  = $_folderMapPath
   }
 
   $_hasError = @($_known | Where-Object Error).Count -gt 0 -or @($_outside | Where-Object Error).Count -gt 0
@@ -946,18 +1390,44 @@ try {
     $_status = 'CompletedWithWarnings'
   }
 
+  # Write the inventory manifest and the folder map consumed by Import-UserProfileData -FolderMapPath.
   if (-not $DryRun) {
-    $_runDirectory = Join-Path $_reportRoot $_runId
     $null = New-Item -ItemType Directory -Path $_runDirectory -Force -ErrorAction Stop
     $_manifestPath = Join-Path $_runDirectory 'manifest.json'
     $_inventory.ReportPath = $_manifestPath
+    $_encoding = New-Object Text.UTF8Encoding($true)
+
     $_json = ConvertTo-DataInventoryJson -InputObject $_inventory -Depth 20
-    [IO.File]::WriteAllText($_manifestPath, $_json, (New-Object Text.UTF8Encoding($true)))
-    $null = Write-OperationResultLog -Results @(New-OperationResult -Target $_inventoryUser.ProfilePath -Source 'UserData' -Action 'Inventory' -Status $_status -Detail 'User data inventory completed.' -Property @{ ReportPath = $_manifestPath }) -Path (Join-Path $_runDirectory 'operations.jsonl') -ScriptName 'Show-UserDataInventory' -RunId $_runId
+    [IO.File]::WriteAllText($_manifestPath, $_json, $_encoding)
+
+    $_folderMap = ConvertTo-DataInventoryFolderMap -Plan $_plan -RunId $_runId -Computer $env:COMPUTERNAME -UserName $_inventoryUser.Name
+    $_folderMapJson = ConvertTo-DataInventoryJson -InputObject $_folderMap -Depth 6
+    [IO.File]::WriteAllText($_folderMapPath, $_folderMapJson, $_encoding)
+
+    $_operationParameters = @{
+      Target   = $_inventoryUser.ProfilePath
+      Source   = 'UserData'
+      Action   = 'Inventory'
+      Status   = $_status
+      Detail   = 'User data inventory completed.'
+      Property = @{
+        ReportPath    = $_manifestPath
+        FolderMapPath = $_folderMapPath
+      }
+    }
+    $_operation = New-OperationResult @_operationParameters
+
+    $_logParameters = @{
+      Results    = @($_operation)
+      Path       = Join-Path $_runDirectory 'operations.jsonl'
+      ScriptName = 'Show-UserDataInventory'
+      RunId      = $_runId
+    }
+    $null = Write-OperationResultLog @_logParameters
   }
 
   Write-Log -Message "User data inventory: $_status | Known folders: $($_known.Count) | Public: $($_public.Count) | Network: $($_network.Count) | Outside: $($_outside.Count) | Long paths: $($_long.Count) | Report: $_manifestPath" -Color Green
-  Write-Log -Message "Plan: ABB download $($_plan.AbbDownload.Count), manual copy $($_plan.ManualCopy.Count), decisions $($_plan.Decisions.Count)." -Color Cyan
+  Write-Log -Message "Plan: download $($_plan.AbbDownload.Count) folder(s), $($_plan.Mappings.Count) mapping(s), manual copy $($_plan.ManualCopy.Count), notes $($_plan.Notes.Count), decisions $($_plan.Decisions.Count). Folder map: $_folderMapPath" -Color Cyan
   if ($PassThru -or $DryRun) {
     $_inventory
   }
