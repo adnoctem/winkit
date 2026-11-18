@@ -320,7 +320,6 @@ Describe 'Show-UserDataInventory mapping' {
 
     $plan = Get-DataInventoryPlan `
       -Mapping $script:Mapping `
-      -NetworkDrive @() `
       -LongPath $long `
       -Outlook $outlook `
       -StagingRoot "C:\Managed\O'Brien Migration" `
@@ -337,7 +336,7 @@ Describe 'Show-UserDataInventory mapping' {
   }
 
   It 'writes a folder map the importer can read' {
-    $plan = Get-DataInventoryPlan -Mapping $script:Mapping -NetworkDrive @() -LongPath @() -Outlook $null -StagingRoot 'C:\Managed\Migration' -FolderMapPath $null
+    $plan = Get-DataInventoryPlan -Mapping $script:Mapping -LongPath @() -Outlook $null -StagingRoot 'C:\Managed\Migration' -FolderMapPath $null
 
     $document = ConvertTo-DataInventoryFolderMap -Plan $plan -RunId 'run' -Computer 'OLDPC' -UserName 'EXAMPLE\User1'
     $parsed = ConvertTo-DataInventoryJson -InputObject $document -Depth 6 | ConvertFrom-Json
@@ -361,6 +360,119 @@ Describe 'Show-UserDataInventory mapping' {
     { Resolve-DataInventoryInclude -Path @((Join-Path $TestDrive 'Missing')) -ProfilePath 'C:\Users\User1' -PublicRoot 'C:\Users\Public' } | Should -Throw '*not found*'
   }
 
+}
+
+Describe 'Show-UserDataInventory drives' {
+  BeforeEach {
+    $script:RegistryRoot = 'Registry::HKEY_USERS\S-1-5-21-1-2-3-1001'
+    $script:OtherUser = [PSCustomObject]@{
+      Name      = 'EXAMPLE\User1'
+      SID       = 'S-1-5-21-1-2-3-1001'
+      IsCurrent = $false
+    }
+    $script:Volatile = [PSCustomObject]@{
+      HOMEDRIVE = 'X:'
+      HOMESHARE = '\\server\home\User1'
+    }
+    $script:Directory = [PSCustomObject]@{
+      HomeDrive     = 'X:'
+      HomeDirectory = '\\server\home\User1\'
+      ScriptPath    = 'logon.cmd'
+      Error         = $null
+    }
+
+    Mock Get-ItemProperty { $script:Volatile } -ParameterFilter { $LiteralPath -like '*\Volatile Environment' }
+    Mock Get-ItemProperty { $null } -ParameterFilter { $LiteralPath -like 'HKLM:*' }
+    Mock Test-Path { $false } -ParameterFilter { $LiteralPath -like '*\Network' }
+    Mock Get-DataInventoryDirectoryAccount { $script:Directory }
+    Mock Test-DataInventoryAdministrator { $true }
+    Mock Get-PSDrive {
+      [PSCustomObject]@{ Name = 'Z'; DisplayRoot = '\\server\admin-session' }
+    }
+  }
+
+  It 'reads the home drive and logon script of another user without session drives' {
+    $result = Get-DataInventoryNetworkDrive -RegistryRoot $script:RegistryRoot -InventoryUser $script:OtherUser -Measure $false
+
+    $homeDrive = @($result.Drives | Where-Object Source -EQ 'HomeDrive')
+    $homeDrive.Count | Should -Be 1
+    $homeDrive[0].Letter | Should -Be 'X'
+    $homeDrive[0].Target | Should -Be '\\server\home\User1'
+    $homeDrive[0].Origin | Should -Be 'Volatile Environment'
+    @($result.Drives | Where-Object Source -EQ 'LogonScript')[0].Target | Should -Be 'logon.cmd'
+    @($result.Drives | Where-Object Source -EQ 'Connected').Count | Should -Be 0
+    ($result.Notes -join "`n") | Should -Match 'Connected drives were not read'
+    Should -Invoke Get-PSDrive -Times 0 -Exactly
+  }
+
+  It 'falls back to Active Directory when the user is not signed in' {
+    $script:Volatile = $null
+
+    $result = Get-DataInventoryNetworkDrive -RegistryRoot $script:RegistryRoot -InventoryUser $script:OtherUser -Measure $false
+
+    $homeDrive = @($result.Drives | Where-Object Source -EQ 'HomeDrive')
+    $homeDrive.Count | Should -Be 1
+    $homeDrive[0].Target | Should -Be '\\server\home\User1'
+    $homeDrive[0].Origin | Should -Be 'Active Directory'
+  }
+
+  It 'skips Active Directory for local accounts' {
+    $local = [PSCustomObject]@{
+      Name      = "$env:COMPUTERNAME\User1"
+      SID       = 'S-1-5-21-1-2-3-1001'
+      IsCurrent = $false
+    }
+
+    $null = Get-DataInventoryNetworkDrive -RegistryRoot $script:RegistryRoot -InventoryUser $local -Measure $false
+
+    Should -Invoke Get-DataInventoryDirectoryAccount -Times 0 -Exactly
+  }
+
+  It 'reads connected drives only for the current user in a non-elevated session' {
+    $current = [PSCustomObject]@{
+      Name      = 'EXAMPLE\User1'
+      SID       = 'S-1-5-21-1-2-3-1001'
+      IsCurrent = $true
+    }
+
+    $elevated = Get-DataInventoryNetworkDrive -RegistryRoot 'HKCU:' -InventoryUser $current -Measure $false
+    Mock Test-DataInventoryAdministrator { $false }
+    $plain = Get-DataInventoryNetworkDrive -RegistryRoot 'HKCU:' -InventoryUser $current -Measure $false
+
+    ($elevated.Notes -join "`n") | Should -Match 'EnableLinkedConnections'
+    @($elevated.Drives | Where-Object Source -EQ 'Connected').Count | Should -Be 0
+    @($plain.Drives | Where-Object Source -EQ 'Connected')[0].Target | Should -Be '\\server\admin-session'
+  }
+
+  It 'maps the home drive and lists other drives and the logon script as decisions' {
+    $drives = @(
+      [PSCustomObject]@{ Letter = 'X'; Target = '\\server\home\User1'; Source = 'HomeDrive'; Measured = $false; Error = $null }
+      [PSCustomObject]@{ Letter = 'G'; Target = '\\server\production'; Source = 'Persistent'; Measured = $false; Error = $null }
+      [PSCustomObject]@{ Letter = $null; Target = 'logon.cmd'; Source = 'LogonScript'; Measured = $false; Error = $null }
+    )
+    $mappingParameters = @{
+      KnownFolder    = @()
+      PublicFolder   = @()
+      OutsideProfile = @()
+      ProfilePath    = 'C:\Users\User1'
+      PublicRoot     = 'C:\Users\Public'
+      NetworkDrive   = $drives
+      DriveNote      = @('Connected drives were not read.')
+    }
+
+    $default = Get-DataInventoryMapping @mappingParameters
+    $custom = Get-DataInventoryMapping @mappingParameters -HomeDriveTarget 'Documents\Home'
+
+    $default.Mappings[0].Source | Should -Be 'HomeDrive'
+    $default.Mappings[0].Target | Should -Be 'Private'
+    $default.Mappings[0].Kind | Should -Be 'HomeDrive'
+    $default.Roots[0].StagingName | Should -Be 'HomeDrive'
+    $custom.Mappings[0].Target | Should -Be 'Documents\Home'
+    ($default.Notes -join "`n") | Should -Match "Home drive X: .*'HomeDrive' staging folder"
+    $default.Notes | Should -Contain 'Connected drives were not read.'
+    ($default.Decisions -join "`n") | Should -Match 'Network drive G: .* from Persistent'
+    ($default.Decisions -join "`n") | Should -Match 'Logon script logon.cmd'
+  }
 }
 
 Describe 'Show-UserDataInventory scans' {
