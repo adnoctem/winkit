@@ -63,8 +63,18 @@ current session are read only when the user runs the inventory without elevation
 logon script from Active Directory is listed as a decision because it may connect further drives. `-MeasureNetwork` measures the home drive
 and other drives through their UNC paths.
 
-Without `-TargetRoot`, path lengths are reported as absolute source lengths; supply the future profile root to check the actual destination
-lengths.
+Pass the new profile folder as `-TargetRoot`. Every mapped folder, the home drive included, is checked at its mapped target, so a Desktop
+moved from `Music\Desktop` gets shorter and `Documents\Public Documents` gets longer. Drives measured with `-MeasureNetwork` are checked as
+if imported into `Documents\<share name>`. Paths longer than 247 (folders) or 259 (files) characters are listed as decisions, the same
+limits the import enforces. A folder that cannot be scanned is reported as a decision and does not stop the inventory.
+
+```powershell
+.\scripts\Administration\Show-UserDataInventory.ps1 @inventory -TargetRoot 'C:\Users\User2'
+```
+
+When `-TargetRoot` is below the same profiles folder as the old profile, its folder name and the old user's domain fill in `-TargetUser` in
+the suggested import call, with a note to check it. Without `-TargetRoot`, the old profile folder stands in, the inventory warns, and the
+import call keeps a `<target>` placeholder.
 
 1. Finish the old user's work and take a final successful ABB backup. Record the device, task, and backup timestamp you select.
 2. Export browser passwords/bookmarks and complete the separate mail migration preparation while the old user session is available.

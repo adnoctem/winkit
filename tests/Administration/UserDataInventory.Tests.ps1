@@ -323,7 +323,8 @@ Describe 'Show-UserDataInventory mapping' {
       -LongPath $long `
       -Outlook $outlook `
       -StagingRoot "C:\Managed\O'Brien Migration" `
-      -FolderMapPath 'C:\Reports\run\folder-map.json'
+      -FolderMapPath 'C:\Reports\run\folder-map.json' `
+      -TargetUser 'EXAMPLE\NewUser'
 
     @($plan.AbbDownload | Where-Object Path -EQ 'C:\Downloads')[0].StagingPath | Should -Be "C:\Managed\O'Brien Migration\Downloads"
     @($plan.ManualCopy | Where-Object Path -EQ 'C:\Data\mail.pst').Count | Should -Be 1
@@ -333,6 +334,7 @@ Describe 'Show-UserDataInventory mapping' {
     @($plan.Decisions | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count | Should -Be 0
     $plan.SuggestedImportCall | Should -Match "-SourcePath 'C:\\Managed\\O''Brien Migration'"
     $plan.SuggestedImportCall | Should -Match "-FolderMapPath 'C:\\Reports\\run\\folder-map.json'"
+    $plan.SuggestedImportCall | Should -Match "-TargetUser 'EXAMPLE\\NewUser'"
   }
 
   It 'writes a folder map the importer can read' {
@@ -544,7 +546,7 @@ Describe 'Show-UserDataInventory scans' {
     $null = [IO.Directory]::CreateDirectory($longFull)
     [IO.File]::WriteAllText(($longFull + '\payload.txt'), 'x')
     try {
-      $paths = @(Get-DataInventoryLongPath -SourceRoot $source -TargetRoot $target)
+      $paths = @(Get-DataInventoryLongPath -SourceRoot $source -DestinationRoot $target)
 
       $paths.Count | Should -BeGreaterThan 0
       $paths[0].Length | Should -BeGreaterThan $paths[0].Limit
@@ -553,5 +555,60 @@ Describe 'Show-UserDataInventory scans' {
       [IO.Directory]::Delete($longFull, $true)
       Remove-Item -LiteralPath $source -Recurse -Force -ErrorAction SilentlyContinue
     }
+  }
+
+  It 'flags a relocated folder whose mapped target is too long although its source is not' {
+    $source = Join-Path $TestDrive ([guid]::NewGuid().ToString('N').Substring(0, 8))
+    $file = Join-Path $source ('a' * 120)
+    $null = New-Item -ItemType Directory -Path $file -Force
+    [IO.File]::WriteAllText((Join-Path $file 'b.txt'), 'x')
+    $target = 'C:\Users\User1\Documents\Public Documents\' + ('t' * 100)
+
+    $sourceOnly = @(Get-DataInventoryLongPath -SourceRoot $source)
+    $mapped = @(Get-DataInventoryLongPath -SourceRoot $source -DestinationRoot $target)
+
+    $sourceOnly.Count | Should -Be 0
+    @($mapped | Where-Object { -not $_.IsDirectory }).Count | Should -Be 1
+    @($mapped | Where-Object { -not $_.IsDirectory })[0].Destination | Should -BeLike "$target\*\b.txt"
+  }
+
+  It 'reads UNC listings from robocopy and applies the import limits exactly' {
+    $share = '\\server\home\User1'
+    $deep = $share + '\' + ('d' * 200)
+    $text = @(
+      ("`t`t" + $deep + '\'),
+      ("`t`t`t" + $deep + '\' + ('f' * 30) + '.txt'),
+      ("`t`t`t" + $deep + '\' + ('g' * 100) + '.txt')
+    ) -join "`r`n"
+    $destination = 'C:\Users\User1\Private'
+
+    $paths = @(ConvertFrom-DataInventoryRobocopyList -Text $text -SourceRoot $share -DestinationRoot $destination)
+
+    # 'Private\' + 200 = 223 chars for the directory; the 30-char file reaches 258 (allowed), the 100-char file 328.
+    $paths.Count | Should -Be 1
+    $paths[0].Source | Should -Be ($deep + '\' + ('g' * 100) + '.txt')
+    $paths[0].Destination | Should -Be ($destination + '\' + ('d' * 200) + '\' + ('g' * 100) + '.txt')
+    $paths[0].Limit | Should -Be 259
+  }
+
+  It 'derives the new user from -TargetRoot or warns that it was assumed' {
+    $user = [PSCustomObject]@{
+      Name        = 'EXAMPLE\OldUser'
+      ProfilePath = 'C:\Users\OldUser'
+    }
+
+    $assumed = Resolve-DataInventoryTarget -TargetRoot $null -InventoryUser $user
+    $derived = Resolve-DataInventoryTarget -TargetRoot 'C:\Users\NewUser' -InventoryUser $user
+    $elsewhere = Resolve-DataInventoryTarget -TargetRoot 'D:\Profiles\NewUser' -InventoryUser $user
+
+    $assumed.Assumed | Should -BeTrue
+    $assumed.Root | Should -Be 'C:\Users\OldUser'
+    $assumed.User | Should -BeNullOrEmpty
+    ($assumed.Notes -join "`n") | Should -Match '-TargetRoot was not given'
+    $derived.Assumed | Should -BeFalse
+    $derived.User | Should -Be 'EXAMPLE\NewUser'
+    ($derived.Notes -join "`n") | Should -Match 'derived from -TargetRoot'
+    $elsewhere.User | Should -BeNullOrEmpty
+    ($elsewhere.Notes -join "`n") | Should -Match 'cannot be determined'
   }
 }
