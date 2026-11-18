@@ -129,6 +129,66 @@ Describe 'Show-UserDataInventory helpers' {
     $summary.Files | Should -Be 0
     $summary.Bytes | Should -Be 0
   }
+
+  It 'writes the newest change as ISO 8601 text' {
+    $root = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $root -Force
+    [IO.File]::WriteAllText((Join-Path $root 'one.txt'), 'x')
+
+    $summary = Get-DataInventoryTreeSummary -Path $root
+    $json = ConvertTo-DataInventoryJson -InputObject $summary -Depth 4
+
+    $summary.Newest | Should -BeOfType [string]
+    [DateTime]::Parse($summary.Newest, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind) |
+      Should -BeOfType [DateTime]
+    $json | Should -Not -Match '/Date\('
+  }
+
+  It 'lists reparse points with their targets without following them' {
+    $root = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+    $outside = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $root, $outside -Force
+    [IO.File]::WriteAllText((Join-Path $outside 'elsewhere.txt'), 'not counted')
+    [IO.File]::WriteAllText((Join-Path $root 'own.txt'), 'counted')
+    $link = Join-Path $root 'linked'
+    $null = New-Item -ItemType Junction -Path $link -Target $outside
+    try {
+      $summary = Get-DataInventoryTreeSummary -Path $root
+
+      $summary.Files | Should -Be 1
+      $summary.ReparsePoints | Should -Be 1
+      $summary.ReparseItems[0].Path | Should -Be $link
+      $summary.ReparseItems[0].LinkType | Should -Be 'Junction'
+      $summary.ReparseItems[0].Target | Should -Match ([regex]::Escape((Split-Path $outside -Leaf)))
+    }
+    finally {
+      [IO.Directory]::Delete($link)
+    }
+  }
+
+  It 'counts a known folder stored inside another known folder only once' {
+    $profileRoot = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+    $music = Join-Path $profileRoot 'Music'
+    $desktop = Join-Path $music 'Desktop'
+    $null = New-Item -ItemType Directory -Path $desktop -Force
+    [IO.File]::WriteAllText((Join-Path $music 'song.txt'), 'music')
+    [IO.File]::WriteAllText((Join-Path $desktop 'one.txt'), 'desk')
+    [IO.File]::WriteAllText((Join-Path $desktop 'two.txt'), 'desk')
+    $script:ShellFolders = [PSCustomObject]@{
+      'My Music' = $music
+      Desktop    = $desktop
+    }
+    Mock Get-ItemProperty { $script:ShellFolders } -ParameterFilter { $LiteralPath -like '*User Shell Folders' }
+
+    $known = @(Get-DataInventoryKnownFolder -RegistryRoot 'HKCU:' -ProfilePath $profileRoot)
+
+    $musicEntry = @($known | Where-Object Name -EQ 'Music')[0]
+    $desktopEntry = @($known | Where-Object Name -EQ 'Desktop')[0]
+    $musicEntry.Files | Should -Be 1
+    $musicEntry.NestedFolders | Should -Be @('Desktop')
+    $desktopEntry.Files | Should -Be 2
+    @($desktopEntry.NestedFolders).Count | Should -Be 0
+  }
 }
 
 Describe 'Show-UserDataInventory mapping' {

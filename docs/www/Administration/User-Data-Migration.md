@@ -34,6 +34,10 @@ The plan in the manifest contains:
 - `Decisions`: network drives, unmapped data outside the profile, long paths, and Outlook report warnings.
 - `SuggestedImportCall`: a preview command for the import.
 
+Folder figures count each file once: a known folder stored inside another, such as a Desktop in `Music\Desktop`, is counted in its own
+entry, and the outer entry names it under `NestedFolders`. Junctions and symbolic links are not followed; `ReparseItems` lists each one with
+its target, because the import skips them too. Dates are ISO 8601 text.
+
 Known folders are mapped from where they are stored into their standard location, so a Desktop redirected to `Music\Desktop` becomes
 `Desktop` and is left out of the `Music` import. Public folders with data are mapped below the matching user folder, for example
 `Documents\Public Documents`. Other folders outside the profile are listed as decisions. System, vendor, and winkit-managed folders such as
