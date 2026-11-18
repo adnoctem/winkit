@@ -41,8 +41,11 @@
   SID. Another local profile requires administrator rights.
 
 .PARAMETER TargetRoot
-  Future profile root used for destination path-length checks, for example
-  C:\Users\newuser. Without it, absolute source lengths are reported.
+  New profile folder, for example C:\Users\newuser. Every mapped folder, the home
+  drive included, is checked for destination paths that are too long at its
+  mapped target below this folder. A folder below the same profiles folder also
+  names the new user for the suggested import call, in the old user's domain.
+  Without it, the old profile folder stands in, with a warning.
 
 .PARAMETER OutlookReport
   Show-OutlookAccount JSON report or a directory containing reports. Without it,
@@ -950,52 +953,25 @@ function Resolve-DataInventoryInclude {
   return @($_resolved.ToArray())
 }
 
-function Get-DataInventoryLongPath {
+function ConvertFrom-DataInventoryRobocopyList {
   param (
     [string]
+    $Text,
+
+    [string]
     $SourceRoot,
 
     [string]
-    $TargetRoot,
-
-    [string[]]
-    $ExcludeDirectory = @()
+    $DestinationRoot
   )
 
-  $_destinationRoot = $SourceRoot
-  if (-not [string]::IsNullOrWhiteSpace($TargetRoot)) {
-    $_destinationRoot = $TargetRoot
-  }
-  $_destinationRoot = [IO.Path]::GetFullPath($_destinationRoot).TrimEnd('\')
-
-  $_arguments = @(
-    $SourceRoot,
-    $_destinationRoot,
-    '/L',
-    '/E',
-    '/NJH',
-    '/NJS',
-    '/FP',
-    '/BYTES',
-    '/NC',
-    '/NS',
-    '/NP',
-    '/XJ'
-  )
-  if ($ExcludeDirectory.Count -gt 0) {
-    $_arguments += @('/XD') + $ExcludeDirectory
-  }
-
-  $_result = Invoke-SafeProcess -FilePath "$env:SystemRoot\System32\robocopy.exe" -ArgumentList $_arguments -AsResult -ErrorAction Stop
-  if ($_result.TimedOut -or $_result.Cancelled -or $null -eq $_result.ExitCode -or $_result.ExitCode -lt 0 -or $_result.ExitCode -ge 8) {
-    throw "Path-length scan failed for ${SourceRoot}: $($_result.ExitCode)"
-  }
-
-  $_sourceRoot = [IO.Path]::GetFullPath($SourceRoot).TrimEnd('\')
+  # robocopy /L /FP prints one full source path per line: a drive path or a UNC path, directories with a trailing \.
+  $_sourceRoot = $SourceRoot.TrimEnd('\')
+  $_destinationRoot = $DestinationRoot.TrimEnd('\')
   $_seen = @{}
   $_longPaths = New-Object System.Collections.ArrayList
-  foreach ($_line in ($_result.StdOut -split "`r?`n")) {
-    if ($_line -notmatch '([A-Za-z]:\\[^\r\n]+?)\s*$') {
+  foreach ($_line in ($Text -split "`r?`n")) {
+    if ($_line -notmatch '((?:[A-Za-z]:|\\\\[^\\\s]+\\[^\\]+)\\[^\r\n]*?)\s*$') {
       continue
     }
 
@@ -1005,7 +981,10 @@ function Get-DataInventoryLongPath {
       $_isDirectory = $true
       $_sourcePath = $_sourcePath.TrimEnd('\')
     }
-    if (-not $_sourcePath.StartsWith($_sourceRoot, [StringComparison]::OrdinalIgnoreCase)) {
+
+    $_isBelowRoot = $_sourcePath.Equals($_sourceRoot, [StringComparison]::OrdinalIgnoreCase) -or
+    (Test-DataInventoryPathWithin -Path $_sourcePath -Root $_sourceRoot)
+    if (-not $_isBelowRoot) {
       continue
     }
 
@@ -1014,11 +993,14 @@ function Get-DataInventoryLongPath {
     if ($_relative) {
       $_destinationPath = Join-Path $_destinationRoot $_relative
     }
+
+    # Same limits as Import-UserProfileData: longer than 247 (directory) or 259 (file) characters fails.
     $_limit = 259
     if ($_isDirectory) {
       $_limit = 247
     }
-    if ($_destinationPath.Length -lt $_limit -or $_seen.ContainsKey($_destinationPath)) {
+
+    if ($_destinationPath.Length -le $_limit -or $_seen.ContainsKey($_destinationPath)) {
       continue
     }
 
@@ -1046,6 +1028,101 @@ function Get-DataInventoryLongPath {
   }
 
   return @($_longPaths.ToArray())
+}
+
+function Get-DataInventoryLongPath {
+  param (
+    [string]
+    $SourceRoot,
+
+    [string]
+    $DestinationRoot,
+
+    [string[]]
+    $ExcludeDirectory = @()
+  )
+
+  $_sourceRoot = $SourceRoot.TrimEnd('\')
+  $_destinationRoot = $_sourceRoot
+  if (-not [string]::IsNullOrWhiteSpace($DestinationRoot)) {
+    $_destinationRoot = $DestinationRoot
+  }
+
+  $_destinationRoot = [IO.Path]::GetFullPath($_destinationRoot).TrimEnd('\')
+
+  $_arguments = @(
+    $_sourceRoot,
+    $_destinationRoot,
+    '/L',
+    '/E',
+    '/NJH',
+    '/NJS',
+    '/FP',
+    '/BYTES',
+    '/NC',
+    '/NS',
+    '/NP',
+    '/XJ',
+    '/R:0',
+    '/W:0'
+  )
+  if ($ExcludeDirectory.Count -gt 0) {
+    $_arguments += @('/XD') + $ExcludeDirectory
+  }
+
+  $_result = Invoke-SafeProcess -FilePath "$env:SystemRoot\System32\robocopy.exe" -ArgumentList $_arguments -AsResult -ErrorAction Stop
+  if ($_result.TimedOut -or $_result.Cancelled -or $null -eq $_result.ExitCode -or $_result.ExitCode -lt 0 -or $_result.ExitCode -ge 8) {
+    throw "Path-length scan failed for ${_sourceRoot}: robocopy exit $($_result.ExitCode)"
+  }
+
+  return @(ConvertFrom-DataInventoryRobocopyList -Text $_result.StdOut -SourceRoot $_sourceRoot -DestinationRoot $_destinationRoot)
+}
+
+function Resolve-DataInventoryTarget {
+  param (
+    [string]
+    $TargetRoot,
+
+    [object]
+    $InventoryUser
+  )
+
+  $_profileRoot = ([string]$InventoryUser.ProfilePath).TrimEnd('\')
+  $_result = [PSCustomObject]@{
+    Root    = $_profileRoot
+    Assumed = $true
+    User    = $null
+    Notes   = @()
+  }
+
+  if ([string]::IsNullOrWhiteSpace($TargetRoot)) {
+    $_result.Notes = @("-TargetRoot was not given: destination path lengths assume the new profile is $_profileRoot, the old user's folder, and the new user is unknown. Replace <target> in the import call.")
+    return $_result
+  }
+
+  # The target names a folder on the new computer; its drive need not exist here, so avoid provider resolution.
+  $_root = $TargetRoot
+  if (-not [IO.Path]::IsPathRooted($_root)) {
+    $_root = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($_root)
+  }
+
+  $_root = [IO.Path]::GetFullPath($_root).TrimEnd('\')
+  $_result.Root = $_root
+  $_result.Assumed = $false
+
+  # A target below the same profiles folder names the new user; the domain is assumed to be the old user's.
+  $_profilesFolder = Split-Path -Path $_profileRoot -Parent
+  $_targetParent = Split-Path -Path $_root -Parent
+  $_accountParts = ([string]$InventoryUser.Name).Split('\')
+  if ($_targetParent -and $_targetParent.Equals($_profilesFolder, [StringComparison]::OrdinalIgnoreCase) -and $_accountParts.Count -eq 2) {
+    $_result.User = '{0}\{1}' -f $_accountParts[0], (Split-Path -Path $_root -Leaf)
+    $_result.Notes = @("The new user $($_result.User) in the import call is derived from -TargetRoot $_root and the old user's domain. Check it before the import.")
+  }
+  else {
+    $_result.Notes = @("The new user cannot be determined from -TargetRoot $_root because it is not a profile folder below $_profilesFolder. Replace <target> in the import call.")
+  }
+
+  return $_result
 }
 
 function Get-DataInventoryOutlookReport {
@@ -1425,7 +1502,10 @@ function Get-DataInventoryPlan {
     $StagingRoot,
 
     [string]
-    $FolderMapPath
+    $FolderMapPath,
+
+    [string]
+    $TargetUser
   )
 
   $_downloads = New-Object System.Collections.ArrayList
@@ -1495,7 +1575,12 @@ function Get-DataInventoryPlan {
     }
 
     $_sourceLiteral = Format-DataInventoryLiteral -Value $StagingRoot
-    $_targetLiteral = Format-DataInventoryLiteral -Value '<target>'
+    $_targetUser = $TargetUser
+    if ([string]::IsNullOrWhiteSpace($_targetUser)) {
+      $_targetUser = '<target>'
+    }
+
+    $_targetLiteral = Format-DataInventoryLiteral -Value $_targetUser
     $_mapLiteral = Format-DataInventoryLiteral -Value $_mapPath
     $_suggestedCall = ".\scripts\Administration\Import-UserProfileData.ps1 -SourcePath $_sourceLiteral -TargetUser $_targetLiteral -FolderMapPath $_mapLiteral -DryRun"
   }
@@ -1585,22 +1670,49 @@ try {
     -DriveNote $_driveInventory.Notes `
     -HomeDriveTarget $HomeDriveTarget
 
-  # Check each mapped folder against its real destination; nested mapped folders are checked on their own.
+  # Destination lengths are checked against the new profile; without -TargetRoot the old profile path stands in.
+  $_target = Resolve-DataInventoryTarget -TargetRoot $TargetRoot -InventoryUser $_inventoryUser
+  $_mapping.Notes = @($_mapping.Notes) + @($_target.Notes)
+  if ($_target.Assumed) {
+    Write-Warning $_target.Notes[0]
+    $_mapping.Decisions = @($_mapping.Decisions) + "Pass -TargetRoot with the new profile folder, for example -TargetRoot 'C:\Users\<new user>', for exact destination path lengths."
+  }
+
+  # Every mapped tree, the home drive included, is checked at its mapped target; measured drives as if imported
+  # into Documents\<share name>. Nested mapped folders are checked on their own.
   Write-Progress -Id 71 -Activity 'User data inventory' -Status 'Checking destination path lengths'
-  $_long = New-Object System.Collections.ArrayList
-  foreach ($_item in @($_mapping.Mappings | Where-Object { $_.Kind -ne 'HomeDrive' })) {
+  $_checks = New-Object System.Collections.ArrayList
+  foreach ($_item in $_mapping.Mappings) {
     $_nested = @(
       $_mapping.Mappings |
         Where-Object { $_ -ne $_item -and (Test-DataInventoryPathWithin -Path $_.Origin -Root $_item.Origin) } |
         ForEach-Object { $_.Origin }
     )
-    $_target = $null
-    if (-not [string]::IsNullOrWhiteSpace($TargetRoot)) {
-      $_target = Join-Path $TargetRoot $_item.Target
-    }
+    $null = $_checks.Add([PSCustomObject]@{
+        Origin      = $_item.Origin
+        Destination = Join-Path $_target.Root $_item.Target
+        Exclude     = $_nested
+      })
+  }
 
-    foreach ($_entry in @(Get-DataInventoryLongPath -SourceRoot $_item.Origin -TargetRoot $_target -ExcludeDirectory $_nested)) {
-      $null = $_long.Add($_entry)
+  foreach ($_drive in @($_network | Where-Object { $_.Measured -and -not $_.Error -and $_.Source -ne 'HomeDrive' })) {
+    $null = $_checks.Add([PSCustomObject]@{
+        Origin      = $_drive.Target
+        Destination = Join-Path $_target.Root (Join-Path 'Documents' (Split-Path -Path $_drive.Target -Leaf))
+        Exclude     = @()
+      })
+  }
+
+  $_long = New-Object System.Collections.ArrayList
+  foreach ($_check in $_checks) {
+    try {
+      foreach ($_entry in @(Get-DataInventoryLongPath -SourceRoot $_check.Origin -DestinationRoot $_check.Destination -ExcludeDirectory $_check.Exclude)) {
+        $null = $_long.Add($_entry)
+      }
+    }
+    catch {
+      Write-Warning "Path lengths were not checked for $($_check.Origin): $($_.Exception.Message)"
+      $_mapping.Decisions = @($_mapping.Decisions) + "Path lengths were not checked for $($_check.Origin): $($_.Exception.Message)"
     }
   }
 
@@ -1625,31 +1737,34 @@ try {
     Outlook       = $_outlook
     StagingRoot   = $_stagingRoot
     FolderMapPath = $_folderMapPath
+    TargetUser    = $_target.User
   }
   $_plan = Get-DataInventoryPlan @_planParameters
 
   $_inventory = [PSCustomObject]@{
-    PSTypeName     = 'Winkit.DataInventory'
-    SchemaVersion  = 2
-    RunId          = $_runId
-    StartedAtUtc   = $_startedAt
-    FinishedAtUtc  = [DateTime]::UtcNow.ToString('o')
-    Computer       = $env:COMPUTERNAME
-    User           = $_inventoryUser.Name
-    UserSID        = $_inventoryUser.SID
-    ProfilePath    = $_inventoryUser.ProfilePath
-    TargetRoot     = $TargetRoot
-    StagingRoot    = $_stagingRoot
-    Include        = $_include
-    OutlookReport  = $_outlook
-    KnownFolders   = $_known
-    PublicFolders  = $_public
-    NetworkDrives  = $_network
-    OutsideProfile = $_outside
-    LongPaths      = @($_long.ToArray())
-    Plan           = $_plan
-    ReportPath     = $null
-    FolderMapPath  = $_folderMapPath
+    PSTypeName        = 'Winkit.DataInventory'
+    SchemaVersion     = 2
+    RunId             = $_runId
+    StartedAtUtc      = $_startedAt
+    FinishedAtUtc     = [DateTime]::UtcNow.ToString('o')
+    Computer          = $env:COMPUTERNAME
+    User              = $_inventoryUser.Name
+    UserSID           = $_inventoryUser.SID
+    ProfilePath       = $_inventoryUser.ProfilePath
+    TargetRoot        = $_target.Root
+    TargetRootAssumed = $_target.Assumed
+    TargetUser        = $_target.User
+    StagingRoot       = $_stagingRoot
+    Include           = $_include
+    OutlookReport     = $_outlook
+    KnownFolders      = $_known
+    PublicFolders     = $_public
+    NetworkDrives     = $_network
+    OutsideProfile    = $_outside
+    LongPaths         = @($_long.ToArray())
+    Plan              = $_plan
+    ReportPath        = $null
+    FolderMapPath     = $_folderMapPath
   }
 
   $_hasError = @($_known | Where-Object Error).Count -gt 0 -or @($_outside | Where-Object Error).Count -gt 0
