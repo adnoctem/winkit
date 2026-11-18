@@ -25,13 +25,15 @@
 
   The generated plan lists the folders to download from ABB and their staging
   names, the folder mappings for Import-UserProfileData, manual copies, notes about
-  unusual folder locations, and open decisions. Known folders are mapped from
-  where they actually are, including redirected folders and folders nested in
-  other known folders. Public folders with data are mapped below the matching
-  user folder, except the public desktop, which is listed for a manual copy to
-  the new computer's public desktop. Other data outside the profile is reported
-  but only mapped when named with -Include. System, vendor, and winkit-managed
-  folders are not scanned unless named with -Include.
+  unusual folder locations, and open decisions. Known folders with data are
+  mapped from where they actually are, including redirected folders and folders
+  nested in other known folders; empty ones are noted and -Folder selects a
+  subset. Public folders are listed as decisions unless named with
+  -IncludePublic. Program shortcuts on the public desktop are noted as recreated
+  by the new computer's installers; its other files are listed for a manual
+  copy. Other data outside the profile is reported but only mapped when named
+  with -Include. System, vendor, and winkit-managed folders are not scanned
+  unless named with -Include.
 
   Unless -DryRun is supplied, a unique run directory receives manifest.json with
   the full inventory and folder-map.json for Import-UserProfileData -FolderMapPath.
@@ -58,6 +60,16 @@
   Local directories outside the profile to migrate, for example C:\asfibu. Each is
   scanned even when it is excluded by default, downloaded as its own folder, and
   mapped to Documents\<folder name>. Edit folder-map.json to change the target.
+
+.PARAMETER Folder
+  Known folders to map, for example Desktop, Documents. Defaults to every known
+  folder that holds data. Same names as Import-UserProfileData -Folder.
+
+.PARAMETER IncludePublic
+  Public folders to import below the matching user folder, for example
+  Documents, Downloads. Public folders are shared by every user of the old
+  computer, so by default they are listed as decisions only. The public desktop
+  is never imported.
 
 .PARAMETER StagingRoot
   Local directory that will hold every extracted download, used for the staging
@@ -91,6 +103,10 @@
   Inventory another local profile and consume the newest matching Outlook report.
 
 .EXAMPLE
+  PS> .\Show-UserDataInventory.ps1 -User 'CONTOSO\User1' -Folder Desktop, Documents, Downloads -IncludePublic Documents
+  Map only three known folders and the public documents.
+
+.EXAMPLE
   PS> .\Show-UserDataInventory.ps1 -User 'CONTOSO\User1' -Include 'C:\Business' -StagingRoot 'C:\Managed\Migration'
   Also migrate C:\Business and write folder-map.json for Import-UserProfileData.
 
@@ -118,6 +134,32 @@ param (
 
   [string[]]
   $Include = @(),
+
+  [ValidateSet(
+    'Desktop',
+    'Documents',
+    'Downloads',
+    'Pictures',
+    'Music',
+    'Videos',
+    'Favorites',
+    'Contacts',
+    'Links',
+    'Saved Games',
+    'Searches'
+  )]
+  [string[]]
+  $Folder = @(),
+
+  [ValidateSet(
+    'Documents',
+    'Downloads',
+    'Pictures',
+    'Music',
+    'Videos'
+  )]
+  [string[]]
+  $IncludePublic = @(),
 
   [string]
   $StagingRoot = (Join-Path $env:SystemDrive 'Managed\Migration'),
@@ -1294,7 +1336,16 @@ function Get-DataInventoryMapping {
     $DriveNote = @(),
 
     [string]
-    $HomeDriveTarget = 'Private'
+    $HomeDriveTarget = 'Private',
+
+    [string[]]
+    $Folder = @(),
+
+    [string[]]
+    $IncludePublic = @(),
+
+    [int]
+    $NearlyEmptyFileCount = 5
   )
 
   $_roots = New-Object System.Collections.ArrayList
@@ -1344,10 +1395,35 @@ function Get-DataInventoryMapping {
     $null = $_notes.Add("Home drive $_label holds the user's own data ($_size). ABB does not back up the file server: copy the share into the '$_rootName' staging folder before the import. It is imported into $HomeDriveTarget.")
   }
 
-  # Known folders are imported from where they actually are, into their standard location.
+  # Known folders are imported from where they actually are, into their standard location. Empty folders are
+  # only noted: a download may leave them out, and the import refuses a missing mapped source.
+  $_unselected = New-Object System.Collections.ArrayList
   foreach ($_item in $KnownFolder) {
-    if (-not $_item.Exists -or $_item.Files -eq 0) {
+    if (-not $_item.Exists) {
       continue
+    }
+
+    if ($Folder.Count -gt 0 -and $_item.Name -notin $Folder) {
+      if ($_item.Files -gt 0) {
+        $null = $_unselected.Add($_item.Name)
+      }
+
+      continue
+    }
+
+    if ($_item.Files -eq 0) {
+      $_nestedText = ''
+      $_nestedNames = @($_item.NestedFolders | Where-Object { $_ })
+      if ($_nestedNames.Count -gt 0) {
+        $_nestedText = ' apart from ' + ($_nestedNames -join ', ')
+      }
+
+      $null = $_notes.Add("Known folder $($_item.Name) is empty$_nestedText and is not mapped.")
+      continue
+    }
+
+    if ($_item.Files -le $NearlyEmptyFileCount) {
+      $null = $_notes.Add("Known folder $($_item.Name) holds only $($_item.Files) file(s). It is mapped; check whether it is worth migrating.")
     }
 
     if ($_item.IsUnc -or $_item.IsOneDrive -or $_item.IsReparse) {
@@ -1386,8 +1462,12 @@ function Get-DataInventoryMapping {
       })
   }
 
-  # Public folders: the desktop belongs on the new computer's public desktop; the rest is imported
-  # below the matching user folder.
+  if ($_unselected.Count -gt 0) {
+    $null = $_notes.Add("Known folders with data that -Folder did not select and are not mapped: $($_unselected -join ', ').")
+  }
+
+  # Public folders are shared by every user of the old computer, so they are imported only when named with
+  # -IncludePublic. The desktop belongs on the new computer's public desktop and is never imported.
   $_publicRoot = [IO.Path]::GetFullPath($PublicRoot).TrimEnd('\')
   foreach ($_item in $PublicFolder) {
     foreach ($_shortcut in @($_item.Shortcuts)) {
@@ -1400,20 +1480,52 @@ function Get-DataInventoryMapping {
       continue
     }
 
-    $_publicName = Add-DataInventoryRoot -Roots $_roots -Path $_publicRoot -Reason "Public $($_item.Name)"
     if ($_item.Name -eq 'Desktop') {
-      $null = $_manual.Add([PSCustomObject]@{
-          Path   = $_item.Path
-          Reason = 'Public desktop: copy into %PUBLIC%\Desktop on the new computer'
-        })
-      $null = $_notes.Add("The public desktop is shared by all users and is not imported into the profile. Copy $_publicName\Desktop into %PUBLIC%\Desktop on the new computer.")
+      # Shortcuts to local programs come back with the new computer's installers; real files need a copy.
+      $_programShortcuts = @(
+        $_item.Shortcuts |
+          Where-Object {
+            -not $_.IsNetwork -and [IO.Path]::GetExtension($_.Path) -eq '.lnk' -and
+            ([string]::IsNullOrWhiteSpace($_.Target) -or $_.Target -match '^[A-Za-z]:\\')
+          }
+      )
+      $_networkShortcuts = @($_item.Shortcuts | Where-Object { $_.IsNetwork })
+      $_otherFiles = $_item.Files - $_programShortcuts.Count - $_networkShortcuts.Count
+
+      if ($_programShortcuts.Count -gt 0) {
+        $_names = @($_programShortcuts | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_.Path) }) -join ', '
+        $null = $_notes.Add("The public desktop holds $($_programShortcuts.Count) shortcut(s) to local programs ($_names). They are recreated by the installers on the new computer and are not copied.")
+      }
+
+      if ($_otherFiles -gt 0) {
+        $_publicName = Add-DataInventoryRoot -Roots $_roots -Path $_publicRoot -Reason 'Public Desktop'
+        $null = $_manual.Add([PSCustomObject]@{
+            Path   = $_item.Path
+            Reason = "Public desktop: copy its $_otherFiles file(s) that are not program shortcuts into %PUBLIC%\Desktop on the new computer"
+          })
+        $null = $_notes.Add("The public desktop is shared by all users and is not imported into the profile. Copy the files from $_publicName\Desktop that are not program shortcuts into %PUBLIC%\Desktop on the new computer.")
+      }
+
       continue
     }
 
+    $_origin = [IO.Path]::GetFullPath($_item.Path).TrimEnd('\')
+    $_target = Join-Path $_item.Name "Public $($_item.Name)"
+    if ($_item.Name -notin $IncludePublic) {
+      $_newest = ''
+      if ($_item.Newest) {
+        $_newest = ", newest change $($_item.Newest)"
+      }
+
+      $null = $_decisions.Add(("Public {0} holds {1} files ({2:N1} MB{3}) shared by all users of the old computer. Use -IncludePublic {0} to import it into {4}." -f $_item.Name, $_item.Files, ($_item.Bytes / 1MB), $_newest, $_target))
+      continue
+    }
+
+    $_publicName = Add-DataInventoryRoot -Roots $_roots -Path $_publicRoot -Reason "Public $($_item.Name)"
     $null = $_mappings.Add([PSCustomObject]@{
         Source = Join-Path $_publicName $_item.Name
-        Target = Join-Path $_item.Name "Public $($_item.Name)"
-        Origin = [IO.Path]::GetFullPath($_item.Path).TrimEnd('\')
+        Target = $_target
+        Origin = $_origin
         Kind   = 'Public'
       })
   }
@@ -1668,7 +1780,9 @@ try {
     -PublicRoot $env:PUBLIC `
     -NetworkDrive $_network `
     -DriveNote $_driveInventory.Notes `
-    -HomeDriveTarget $HomeDriveTarget
+    -HomeDriveTarget $HomeDriveTarget `
+    -Folder $Folder `
+    -IncludePublic $IncludePublic
 
   # Destination lengths are checked against the new profile; without -TargetRoot the old profile path stands in.
   $_target = Resolve-DataInventoryTarget -TargetRoot $TargetRoot -InventoryUser $_inventoryUser

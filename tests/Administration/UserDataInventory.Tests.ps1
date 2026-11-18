@@ -277,11 +277,92 @@ Describe 'Show-UserDataInventory mapping' {
     $notes | Should -Match 'Downloads is redirected outside the profile to C:\\Downloads'
   }
 
-  It 'maps public data below the user folders and lists the public desktop for a manual copy' {
-    Get-MappingTarget -Source 'Public\Documents' | Should -Be 'Documents\Public Documents'
-    @($script:Mapping.Mappings | Where-Object Source -Like 'Public\Desktop*').Count | Should -Be 0
-    @($script:Mapping.Mappings | Where-Object Source -Like 'Public\Pictures*').Count | Should -Be 0
+  It 'lists public folders as decisions by default and lists the public desktop files for a manual copy' {
+    @($script:Mapping.Mappings | Where-Object Kind -EQ 'Public').Count | Should -Be 0
+    ($script:Mapping.Decisions -join "`n") | Should -Match 'Public Documents holds 5 files .* Use -IncludePublic Documents'
+    ($script:Mapping.Decisions -join "`n") | Should -Not -Match 'Public Pictures'
     @($script:Mapping.ManualCopy | Where-Object Path -EQ 'C:\Users\Public\Desktop').Count | Should -Be 1
+  }
+
+  It 'maps public folders named with -IncludePublic below the user folders' {
+    $included = Get-DataInventoryMapping `
+      -KnownFolder @() `
+      -PublicFolder $script:Public `
+      -OutsideProfile @() `
+      -ProfilePath 'C:\Users\User1' `
+      -PublicRoot 'C:\Users\Public' `
+      -IncludePublic Documents
+
+    @($included.Mappings | Where-Object Source -EQ 'Public\Documents')[0].Target | Should -Be 'Documents\Public Documents'
+    ($included.Decisions -join "`n") | Should -Not -Match 'Public Documents holds'
+  }
+
+  It 'maps only known folders named with -Folder and notes the others' {
+    $selected = Get-DataInventoryMapping `
+      -KnownFolder $script:Known `
+      -PublicFolder @() `
+      -OutsideProfile @() `
+      -ProfilePath 'C:\Users\User1' `
+      -PublicRoot 'C:\Users\Public' `
+      -Folder Desktop, Documents
+
+    @($selected.Mappings | ForEach-Object Target) | Should -Be @('Desktop', 'Documents')
+    ($selected.Notes -join "`n") | Should -Match 'did not select and are not mapped: Downloads, Music, Favorites, Searches'
+  }
+
+  It 'notes empty known folders instead of mapping them and flags nearly empty ones' {
+    $empty = Get-KnownFolderFixture -Name 'Music' -Path 'C:\Users\User1\Music'
+    $empty.Files = 0
+    $empty | Add-Member -NotePropertyName NestedFolders -NotePropertyValue @('Desktop')
+    $videos = Get-KnownFolderFixture -Name 'Videos' -Path 'C:\Users\User1\Videos'
+    $videos.Files = 0
+    $few = Get-KnownFolderFixture -Name 'Pictures' -Path 'C:\Users\User1\Pictures'
+    $few.Files = 1
+    $many = Get-KnownFolderFixture -Name 'Documents' -Path 'C:\Users\User1\Documents'
+    $many.Files = 30
+
+    $result = Get-DataInventoryMapping -KnownFolder @($empty, $videos, $few, $many) -PublicFolder @() -OutsideProfile @() -ProfilePath 'C:\Users\User1' -PublicRoot 'C:\Users\Public'
+
+    @($result.Mappings | ForEach-Object Target) | Should -Be @('Pictures', 'Documents')
+    $result.Notes | Should -Contain 'Known folder Music is empty apart from Desktop and is not mapped.'
+    $result.Notes | Should -Contain 'Known folder Videos is empty and is not mapped.'
+    ($result.Notes -join "`n") | Should -Match 'Pictures holds only 1 file'
+    ($result.Notes -join "`n") | Should -Not -Match 'Documents holds only'
+  }
+
+  It 'notes program shortcuts on the public desktop instead of copying them' {
+    $desktop = [PSCustomObject]@{
+      Name      = 'Desktop'
+      Path      = 'C:\Users\Public\Desktop'
+      Files     = 4
+      Shortcuts = @(
+        [PSCustomObject]@{ Path = 'C:\Users\Public\Desktop\Accounting.lnk'; Target = 'C:\as5win\as5.exe'; IsNetwork = $false }
+        [PSCustomObject]@{ Path = 'C:\Users\Public\Desktop\Word.lnk'; Target = ''; IsNetwork = $false }
+        [PSCustomObject]@{ Path = 'C:\Users\Public\Desktop\Share.lnk'; Target = '\\server\share'; IsNetwork = $true }
+        [PSCustomObject]@{ Path = 'C:\Users\Public\Desktop\Portal.url'; Target = 'https://example.com'; IsNetwork = $false }
+      )
+    }
+    $onlyPrograms = [PSCustomObject]@{
+      Name      = 'Desktop'
+      Path      = 'C:\Users\Public\Desktop'
+      Files     = 2
+      Shortcuts = @($desktop.Shortcuts[0], $desktop.Shortcuts[1])
+    }
+    $base = @{
+      KnownFolder    = @()
+      OutsideProfile = @()
+      ProfilePath    = 'C:\Users\User1'
+      PublicRoot     = 'C:\Users\Public'
+    }
+
+    $mixed = Get-DataInventoryMapping @base -PublicFolder @($desktop)
+    $programs = Get-DataInventoryMapping @base -PublicFolder @($onlyPrograms)
+
+    ($programs.Notes -join "`n") | Should -Match '2 shortcut\(s\) to local programs \(Accounting, Word\)'
+    @($programs.ManualCopy).Count | Should -Be 0
+    @($programs.Roots).Count | Should -Be 0
+    @($mixed.ManualCopy)[0].Reason | Should -Match 'its 1 file\(s\) that are not program shortcuts'
+    ($mixed.Decisions -join "`n") | Should -Match 'Share.lnk -> \\\\server\\share'
   }
 
   It 'maps only included outside folders and lists the rest as decisions' {
