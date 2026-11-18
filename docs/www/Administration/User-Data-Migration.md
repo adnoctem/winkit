@@ -50,9 +50,10 @@ and newest change. `-IncludePublic` imports the named ones below the matching us
 public desktop is never imported: shortcuts to local programs are noted as recreated by the new computer's installers, shortcuts to network
 paths are decisions, and any other files are listed under `ManualCopy`.
 
-Other folders outside the profile are listed as decisions. System, vendor, and winkit-managed folders such as `$WinREAgent`, `inetpub`, and
-`C:\Managed` are not scanned. Name a folder with `-Include` to migrate it into `Documents\<folder name>`; this also works for a folder that
-is skipped by default:
+Other folders outside the profile are listed as decisions, with the programs that probably own them. A program counts when its install
+location, install source, icon, or uninstaller, or a Start-menu or desktop shortcut, points into the folder; `ProgramMatches` and the
+decision text say which. System, vendor, and winkit-managed folders such as `$WinREAgent`, `inetpub`, and `C:\Managed` are not scanned. Name
+a folder with `-Include` to migrate it into `Documents\<folder name>`; this also works for a folder that is skipped by default:
 
 ```powershell
 .\scripts\Administration\Show-UserDataInventory.ps1 @inventory -Folder Desktop, Documents, Downloads -IncludePublic Documents

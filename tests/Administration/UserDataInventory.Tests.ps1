@@ -558,6 +558,63 @@ Describe 'Show-UserDataInventory drives' {
   }
 }
 
+Describe 'Show-UserDataInventory program owners' {
+  It 'reads directories from uninstall values and ignores commands without a path' {
+    ConvertTo-DataInventoryProgramDirectory -Value '"C:\asfibu\bin\fibu.exe",0' -IsFile | Should -Be 'C:\asfibu\bin'
+    ConvertTo-DataInventoryProgramDirectory -Value 'C:\as5win\as5.exe,1' -IsFile | Should -Be 'C:\as5win'
+    ConvertTo-DataInventoryProgramDirectory -Value '"C:\VR-NetWorld\unins000.exe" /SILENT' -IsFile | Should -Be 'C:\VR-NetWorld'
+    ConvertTo-DataInventoryProgramDirectory -Value 'MsiExec.exe /X{2A360EF1-FFA5-4BF4-8709-EF9D2FB3669E}' -IsFile | Should -BeNullOrEmpty
+    ConvertTo-DataInventoryProgramDirectory -Value 'C:\Install\Accounting 2.0\' | Should -Be 'C:\Install\Accounting 2.0'
+    ConvertTo-DataInventoryProgramDirectory -Value '' | Should -BeNullOrEmpty
+  }
+
+  It 'collects evidence from uninstall entries without InstallLocation and from shortcuts' {
+    $script:Uninstall = [PSCustomObject]@{
+      DisplayName     = 'Example Accounting'
+      InstallLocation = ''
+      DisplayIcon     = '"C:\asfibu\bin\fibu.exe",0'
+      UninstallString = 'MsiExec.exe /X{2A360EF1-FFA5-4BF4-8709-EF9D2FB3669E}'
+    }
+    Mock Get-ItemProperty { $script:Uninstall } -ParameterFilter { $Path -like '*Uninstall*' }
+    $menu = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $menu -Force
+    $shell = New-Object -ComObject WScript.Shell
+    try {
+      $link = $shell.CreateShortcut((Join-Path $menu 'Banking.lnk'))
+      $link.TargetPath = 'C:\VR-NetWorld\vrnw.exe'
+      $link.Save()
+    }
+    finally {
+      [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
+    }
+
+    $evidence = @(Get-DataInventoryProgramEvidence -RegistryRoot 'HKCU:' -ShortcutRoot @($menu))
+
+    @($evidence | Where-Object { $_.MatchedBy -eq 'DisplayIcon' -and $_.Path -eq 'C:\asfibu\bin' })[0].Name | Should -Be 'Example Accounting'
+    @($evidence | Where-Object MatchedBy -EQ 'UninstallString').Count | Should -Be 0
+    @($evidence | Where-Object MatchedBy -EQ 'Shortcut')[0].Path | Should -Be 'C:\VR-NetWorld'
+  }
+
+  It 'names owners whose evidence points into the folder and reports how they matched' {
+    $folder = Join-Path $TestDrive 'asfibu'
+    $null = New-Item -ItemType Directory -Path $folder -Force
+    [IO.File]::WriteAllText((Join-Path $folder 'ledger.dat'), 'x')
+    $evidence = @(
+      [PSCustomObject]@{ Name = 'Example Accounting'; MatchedBy = 'DisplayIcon'; Path = "$folder\bin"; Evidence = 'icon' }
+      [PSCustomObject]@{ Name = 'Example Accounting'; MatchedBy = 'Shortcut'; Path = $folder; Evidence = 'link' }
+      [PSCustomObject]@{ Name = 'Example Accounting'; MatchedBy = 'Shortcut'; Path = "$folder\tools"; Evidence = 'second link' }
+      [PSCustomObject]@{ Name = 'Broad Tool'; MatchedBy = 'InstallLocation'; Path = $TestDrive; Evidence = 'parent' }
+    )
+
+    $outside = @(Get-DataInventoryOutsideProfile -ProfilePath 'C:\Users\User1' -Include @($folder) -ScanVolumes $false -ProgramEvidence $evidence)
+    $mapping = Get-DataInventoryMapping -KnownFolder @() -PublicFolder @() -OutsideProfile @($outside[0] | Select-Object * -ExcludeProperty Included) -ProfilePath 'C:\Users\User1' -PublicRoot 'C:\Users\Public'
+
+    $outside[0].Programs | Should -Be @('Example Accounting')
+    @($outside[0].ProgramMatches | ForEach-Object MatchedBy) | Should -Be @('DisplayIcon', 'Shortcut')
+    ($mapping.Decisions -join "`n") | Should -Match 'probable programs: Example Accounting \(DisplayIcon, Shortcut\)'
+  }
+}
+
 Describe 'Show-UserDataInventory scans' {
   It 'scans fixed lettered volumes, skips system and managed folders, and honors -Include' {
     $fixedRoot = Join-Path $TestDrive 'FixedRoot'
