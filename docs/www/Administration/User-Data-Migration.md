@@ -29,7 +29,8 @@ The plan in the manifest contains:
 - `AbbDownload`: each folder to download and the staging path to extract it to, for example `C:\Users\User1` to `C:\Managed\Migration\User1`
   and a redirected `C:\Downloads` to `C:\Managed\Migration\Downloads`.
 - `Mappings`: the folder map for `Import-UserProfileData.ps1 -FolderMapPath`, also written to `folder-map.json`.
-- `ManualCopy`: PSTs, Outlook signatures, and the public desktop, which belongs on the new computer's public desktop.
+- `ManualCopy`: PSTs, Outlook signatures, and public desktop files that are not program shortcuts, which belong on the new computer's public
+  desktop.
 - `Notes`: unusual locations the map accounts for, such as a Desktop stored inside `Music`.
 - `Decisions`: network drives other than the home drive, the logon script, unmapped data outside the profile, long paths, and Outlook report
   warnings.
@@ -40,12 +41,21 @@ entry, and the outer entry names it under `NestedFolders`. Junctions and symboli
 its target, because the import skips them too. Dates are ISO 8601 text.
 
 Known folders are mapped from where they are stored into their standard location, so a Desktop redirected to `Music\Desktop` becomes
-`Desktop` and is left out of the `Music` import. Public folders with data are mapped below the matching user folder, for example
-`Documents\Public Documents`. Other folders outside the profile are listed as decisions. System, vendor, and winkit-managed folders such as
-`$WinREAgent`, `inetpub`, and `C:\Managed` are not scanned. Name a folder with `-Include` to migrate it into `Documents\<folder name>`; this
-also works for a folder that is skipped by default:
+`Desktop` and is left out of the `Music` import. Empty known folders are noted instead of mapped, because a download may leave them out and
+the import refuses a missing source; folders with only a few files are mapped and noted. `-Folder` limits the map to the named known
+folders, with the same names as `Import-UserProfileData.ps1 -Folder`.
+
+Public folders are shared by every user of the old computer and may hold application data, so they are listed as decisions with their size
+and newest change. `-IncludePublic` imports the named ones below the matching user folder, for example `Documents\Public Documents`. The
+public desktop is never imported: shortcuts to local programs are noted as recreated by the new computer's installers, shortcuts to network
+paths are decisions, and any other files are listed under `ManualCopy`.
+
+Other folders outside the profile are listed as decisions. System, vendor, and winkit-managed folders such as `$WinREAgent`, `inetpub`, and
+`C:\Managed` are not scanned. Name a folder with `-Include` to migrate it into `Documents\<folder name>`; this also works for a folder that
+is skipped by default:
 
 ```powershell
+.\scripts\Administration\Show-UserDataInventory.ps1 @inventory -Folder Desktop, Documents, Downloads -IncludePublic Documents
 .\scripts\Administration\Show-UserDataInventory.ps1 @inventory -Include 'C:\Business', 'D:\Scans'
 ```
 
@@ -182,7 +192,7 @@ $mapImport = @{
 
 Every mapped source must exist; download and extract all of them first, or remove an entry from a copy of the file. To change where data
 lands, edit `Target` in a copy of the file. The map's notes are printed before the plan and recorded in the import manifest with the map's
-path. The public desktop is not part of the map; copy it into `%PUBLIC%\Desktop` on the new computer.
+path. The public desktop is not part of the map; copy its `ManualCopy` files into `%PUBLIC%\Desktop` on the new computer.
 
 ## Permissions and verification
 
