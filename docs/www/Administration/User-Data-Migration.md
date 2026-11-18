@@ -31,7 +31,8 @@ The plan in the manifest contains:
 - `Mappings`: the folder map for `Import-UserProfileData.ps1 -FolderMapPath`, also written to `folder-map.json`.
 - `ManualCopy`: PSTs, Outlook signatures, and the public desktop, which belongs on the new computer's public desktop.
 - `Notes`: unusual locations the map accounts for, such as a Desktop stored inside `Music`.
-- `Decisions`: network drives, unmapped data outside the profile, long paths, and Outlook report warnings.
+- `Decisions`: network drives other than the home drive, the logon script, unmapped data outside the profile, long paths, and Outlook report
+  warnings.
 - `SuggestedImportCall`: a preview command for the import.
 
 Folder figures count each file once: a known folder stored inside another, such as a Desktop in `Music\Desktop`, is counted in its own
@@ -47,6 +48,20 @@ also works for a folder that is skipped by default:
 ```powershell
 .\scripts\Administration\Show-UserDataInventory.ps1 @inventory -Include 'C:\Business', 'D:\Scans'
 ```
+
+The user's **home drive** is read from their signed-in session and, for domain accounts, from Active Directory (`homeDrive`,
+`homeDirectory`), so it is found even when an administrator runs the inventory. It is mapped to `Private` in the new profile and staged as
+`HomeDrive`; choose another target with `-HomeDriveTarget`. ABB does not back up the file server, so copy the share into the staging folder
+yourself before the import, for example:
+
+```powershell
+robocopy '\\server\home\User1' 'C:\Managed\Migration\HomeDrive' /E /COPY:DAT /DCOPY:DAT /XJ /R:1 /W:1
+```
+
+Each drive in `NetworkDrives` records its `Source`: `HomeDrive`, `Persistent`, `Connected`, or `LogonScript`. Drives connected in the
+current session are read only when the user runs the inventory without elevation; other sessions cannot see them, and a note says so. A
+logon script from Active Directory is listed as a decision because it may connect further drives. `-MeasureNetwork` measures the home drive
+and other drives through their UNC paths.
 
 Without `-TargetRoot`, path lengths are reported as absolute source lengths; supply the future profile root to check the actual destination
 lengths.

@@ -6,10 +6,18 @@
   Inventories a user's data locations and generates a migration plan.
 
 .DESCRIPTION
-  Reads the selected user's known folders, public folders and shortcuts,
-  persistent network drives, outside-profile data, and path lengths. It can
-  consume a Show-OutlookAccount report to add PST/OST files and signatures to
-  the manual-copy plan.
+  Reads the selected user's known folders, public folders and shortcuts, home
+  drive, network drives, outside-profile data, and path lengths. It can consume a
+  Show-OutlookAccount report to add PST/OST files and signatures to the
+  manual-copy plan.
+
+  The home drive is read from the user's signed-in session (Volatile
+  Environment) and, for domain accounts, from Active Directory (homeDrive,
+  homeDirectory), which also names the logon script. Persistent mappings come
+  from the user's registry. Drives connected in the current session are read only
+  when the user runs the inventory without elevation, because other sessions
+  cannot see them. A home drive is mapped to -HomeDriveTarget and staged as
+  HomeDrive; other drives are listed as decisions.
 
   The script is read-only. It runs in the user's session without elevation for
   the current user. Another local profile requires administrator rights; its
@@ -53,9 +61,13 @@
   paths in the plan and the suggested import call. Defaults to
   C:\Managed\Migration on the system drive.
 
+.PARAMETER HomeDriveTarget
+  Target folder, relative to the new profile, for the user's home drive. Defaults
+  to Private.
+
 .PARAMETER MeasureNetwork
-  Measure size and file counts on mapped network drives. Off by default because
-  it can be slow.
+  Measure size and file counts on the home drive and other network drives through
+  their UNC paths. Off by default because it can be slow.
 
 .PARAMETER ReportDirectory
   Parent for unique inventory reports. Defaults to
@@ -106,6 +118,10 @@ param (
 
   [string]
   $StagingRoot = (Join-Path $env:SystemDrive 'Managed\Migration'),
+
+  [ValidateNotNullOrEmpty()]
+  [string]
+  $HomeDriveTarget = 'Private',
 
   [switch]
   $MeasureNetwork,
@@ -573,16 +589,103 @@ function Get-DataInventoryPublicFolder {
   return @($_result.ToArray())
 }
 
+function Get-DataInventoryDirectoryAccount {
+  param (
+    [string]
+    $Sid
+  )
+
+  # ADSI needs no RSAT module. The client timeout keeps an unreachable domain from stalling the run.
+  $_result = [PSCustomObject]@{
+    HomeDrive     = $null
+    HomeDirectory = $null
+    ScriptPath    = $null
+    Error         = $null
+  }
+
+  try {
+    $_searcher = New-Object DirectoryServices.DirectorySearcher
+    $_searcher.Filter = "(&(objectCategory=person)(objectClass=user)(objectSid=$Sid))"
+    $_searcher.ClientTimeout = [TimeSpan]::FromSeconds(15)
+    $_searcher.ServerTimeLimit = [TimeSpan]::FromSeconds(15)
+    foreach ($_property in @('homeDrive', 'homeDirectory', 'scriptPath')) {
+      $null = $_searcher.PropertiesToLoad.Add($_property)
+    }
+
+    $_found = $_searcher.FindOne()
+    if ($null -eq $_found) {
+      $_result.Error = "No directory account was found for $Sid."
+      return $_result
+    }
+
+    $_result.HomeDrive = [string](@($_found.Properties['homedrive']) | Select-Object -First 1)
+    $_result.HomeDirectory = [string](@($_found.Properties['homedirectory']) | Select-Object -First 1)
+    $_result.ScriptPath = [string](@($_found.Properties['scriptpath']) | Select-Object -First 1)
+  }
+  catch {
+    $_result.Error = $_.Exception.Message
+  }
+
+  return $_result
+}
+
 function Get-DataInventoryNetworkDrive {
   param (
     [string]
     $RegistryRoot,
 
+    [object]
+    $InventoryUser,
+
     [bool]
     $Measure
   )
 
-  $_drives = @{}
+  $_drives = New-Object System.Collections.ArrayList
+  $_notes = New-Object System.Collections.ArrayList
+
+  # 1. Home drive from the user's signed-in session; present only while the user is signed in.
+  $_volatile = Get-ItemProperty -LiteralPath (Join-Path $RegistryRoot 'Volatile Environment') -ErrorAction SilentlyContinue
+  if ($null -ne $_volatile -and -not [string]::IsNullOrWhiteSpace([string]$_volatile.HOMESHARE)) {
+    $null = $_drives.Add([PSCustomObject]@{
+        Letter = ([string]$_volatile.HOMEDRIVE).TrimEnd(':')
+        Target = ([string]$_volatile.HOMESHARE).TrimEnd('\')
+        Source = 'HomeDrive'
+        Origin = 'Volatile Environment'
+      })
+  }
+
+  # 2. Home drive and logon script from Active Directory, for domain accounts only.
+  $_isDomainAccount = $InventoryUser.SID -like 'S-1-5-21-*' -and
+  -not ([string]$InventoryUser.Name).StartsWith("$env:COMPUTERNAME\", [StringComparison]::OrdinalIgnoreCase)
+  if ($_isDomainAccount) {
+    $_account = Get-DataInventoryDirectoryAccount -Sid $InventoryUser.SID
+    if ($_account.Error) {
+      $null = $_notes.Add("Active Directory was not read for the home drive and logon script: $($_account.Error)")
+    }
+
+    $_homeDirectory = ([string]$_account.HomeDirectory).TrimEnd('\')
+    $_known = @($_drives | Where-Object { $_.Target.Equals($_homeDirectory, [StringComparison]::OrdinalIgnoreCase) })
+    if ($_homeDirectory.StartsWith('\\') -and $_known.Count -eq 0) {
+      $null = $_drives.Add([PSCustomObject]@{
+          Letter = ([string]$_account.HomeDrive).TrimEnd(':')
+          Target = $_homeDirectory
+          Source = 'HomeDrive'
+          Origin = 'Active Directory'
+        })
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($_account.ScriptPath)) {
+      $null = $_drives.Add([PSCustomObject]@{
+          Letter = $null
+          Target = [string]$_account.ScriptPath
+          Source = 'LogonScript'
+          Origin = 'Active Directory'
+        })
+    }
+  }
+
+  # 3. Persistent mappings stored in the user's hive.
   $_key = Join-Path $RegistryRoot 'Network'
   if (Test-Path -LiteralPath $_key -ErrorAction SilentlyContinue) {
     foreach ($_child in @(Get-ChildItem -LiteralPath $_key -ErrorAction SilentlyContinue)) {
@@ -590,46 +693,92 @@ function Get-DataInventoryNetworkDrive {
       if ($null -eq $_properties -or [string]::IsNullOrWhiteSpace([string]$_properties.RemotePath)) {
         continue
       }
-      $_drives[$_child.PSChildName.ToUpperInvariant()] = [PSCustomObject]@{
-        Letter     = $_child.PSChildName
-        Target     = [string]$_properties.RemotePath
-        Persistent = $true
-        Source     = 'Persistent'
-      }
+
+      $null = $_drives.Add([PSCustomObject]@{
+          Letter = $_child.PSChildName
+          Target = ([string]$_properties.RemotePath).TrimEnd('\')
+          Source = 'Persistent'
+          Origin = 'Registry'
+        })
     }
   }
 
-  foreach ($_drive in @(Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | Where-Object { $_.DisplayRoot -like '\\*' })) {
-    $_letter = $_drive.Name.ToUpperInvariant()
-    if (-not $_drives.ContainsKey($_letter)) {
-      $_drives[$_letter] = [PSCustomObject]@{
-        Letter     = $_drive.Name
-        Target     = [string]$_drive.DisplayRoot
-        Persistent = $false
-        Source     = 'Connected'
-      }
+  # 4. Connected drives belong to this process's logon session; they are the user's only when the user
+  # runs the inventory without elevation, or when linked connections share them with the elevated token.
+  $_isElevated = Test-DataInventoryAdministrator
+  $_linked = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -ErrorAction SilentlyContinue
+  $_hasLinkedConnections = $null -ne $_linked -and [int]$_linked.EnableLinkedConnections -eq 1
+  if (-not $InventoryUser.IsCurrent) {
+    $null = $_notes.Add("Connected drives were not read: they belong to the session running the inventory, not to $($InventoryUser.Name). Home drives, persistent mappings, and the logon script were read instead.")
+  }
+  elseif ($_isElevated -and -not $_hasLinkedConnections) {
+    $null = $_notes.Add('Connected drives were not read: an elevated session cannot see the drives mapped by the non-elevated session unless EnableLinkedConnections is set. Home drives, persistent mappings, and the logon script were read instead.')
+  }
+  else {
+    foreach ($_psDrive in @(Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | Where-Object { $_.DisplayRoot -like '\\*' })) {
+      $null = $_drives.Add([PSCustomObject]@{
+          Letter = $_psDrive.Name
+          Target = ([string]$_psDrive.DisplayRoot).TrimEnd('\')
+          Source = 'Connected'
+          Origin = 'Session'
+        })
     }
   }
 
+  # One entry per letter (or per target for letterless entries); earlier sources win.
   $_result = New-Object System.Collections.ArrayList
-  foreach ($_drive in $_drives.Values) {
-    $_summary = $null
-    if ($Measure) {
-      $_summary = Get-DataInventoryTreeSummary -Path ($_drive.Letter + ':\')
+  $_seen = @{}
+  foreach ($_drive in $_drives) {
+    $_identity = 'target:' + $_drive.Target.ToUpperInvariant()
+    if (-not [string]::IsNullOrWhiteSpace($_drive.Letter)) {
+      $_identity = 'letter:' + $_drive.Letter.ToUpperInvariant()
     }
+
+    if ($_seen.ContainsKey($_identity)) {
+      continue
+    }
+
+    $_seen[$_identity] = $true
+
+    # Measure through the UNC target; the letter may not be mapped in this session.
+    $_summary = $null
+    $_canMeasure = $_drive.Source -ne 'LogonScript' -and $_drive.Target.StartsWith('\\')
+    if ($Measure -and $_canMeasure) {
+      $_summary = Get-DataInventoryTreeSummary -Path $_drive.Target
+    }
+
+    $_files = $null
+    $_bytes = $null
+    $_newest = $null
+    $_error = $null
+    if ($null -ne $_summary) {
+      $_files = $_summary.Files
+      $_bytes = $_summary.Bytes
+      $_newest = $_summary.Newest
+      $_error = $_summary.Error
+      if (-not $_summary.Exists) {
+        $_error = "Not reachable from this session: $($_drive.Target)"
+      }
+    }
+
     $null = $_result.Add([PSCustomObject]@{
         Letter     = $_drive.Letter
         Target     = $_drive.Target
-        Persistent = $_drive.Persistent
+        Persistent = $_drive.Source -eq 'Persistent'
         Source     = $_drive.Source
-        Files      = if ($_summary) { $_summary.Files } else { $null }
-        Bytes      = if ($_summary) { $_summary.Bytes } else { $null }
-        Newest     = if ($_summary) { $_summary.Newest } else { $null }
-        Measured   = [bool]$Measure
+        Origin     = $_drive.Origin
+        Files      = $_files
+        Bytes      = $_bytes
+        Newest     = $_newest
+        Measured   = $null -ne $_summary
+        Error      = $_error
       })
   }
 
-  return @($_result.ToArray())
+  return [PSCustomObject]@{
+    Drives = @($_result.ToArray())
+    Notes  = @($_notes.ToArray())
+  }
 }
 
 function Get-DataInventoryOutsideProfile {
@@ -1004,7 +1153,10 @@ function Add-DataInventoryRoot {
     $Path,
 
     [string]
-    $Reason
+    $Reason,
+
+    [string]
+    $StagingName
   )
 
   $_existing = @($Roots | Where-Object { $_.Path.Equals($Path, [StringComparison]::OrdinalIgnoreCase) }) | Select-Object -First 1
@@ -1018,6 +1170,10 @@ function Add-DataInventoryRoot {
 
   # Each download is extracted as <StagingRoot>\<folder name>; equal names get a numbered suffix.
   $_leaf = Split-Path -Path $Path -Leaf
+  if (-not [string]::IsNullOrWhiteSpace($StagingName)) {
+    $_leaf = $StagingName
+  }
+
   $_name = $_leaf
   $_index = 1
   while (@($Roots | Where-Object { $_.StagingName -ieq $_name }).Count -gt 0) {
@@ -1052,7 +1208,16 @@ function Get-DataInventoryMapping {
     $ProfilePath,
 
     [string]
-    $PublicRoot
+    $PublicRoot,
+
+    [object[]]
+    $NetworkDrive = @(),
+
+    [string[]]
+    $DriveNote = @(),
+
+    [string]
+    $HomeDriveTarget = 'Private'
   )
 
   $_roots = New-Object System.Collections.ArrayList
@@ -1062,6 +1227,45 @@ function Get-DataInventoryMapping {
   $_decisions = New-Object System.Collections.ArrayList
   $_profileRoot = $ProfilePath.TrimEnd('\')
   $_mappedOrigins = @{}
+
+  # A home drive holds the user's own data, so it is mapped; other drives and logon scripts need a decision.
+  foreach ($_note in $DriveNote) {
+    $null = $_notes.Add($_note)
+  }
+
+  foreach ($_drive in $NetworkDrive) {
+    $_label = $_drive.Target
+    if (-not [string]::IsNullOrWhiteSpace($_drive.Letter)) {
+      $_label = "$($_drive.Letter): ($($_drive.Target))"
+    }
+
+    $_size = 'use -MeasureNetwork for its size'
+    if ($_drive.Measured -and -not $_drive.Error) {
+      $_size = '{0} files, {1:N1} MB' -f $_drive.Files, ($_drive.Bytes / 1MB)
+    }
+    elseif ($_drive.Error) {
+      $_size = "not measured: $($_drive.Error)"
+    }
+
+    if ($_drive.Source -eq 'LogonScript') {
+      $null = $_decisions.Add("Logon script $($_drive.Target) may connect further drives at sign-in. Review it.")
+      continue
+    }
+
+    if ($_drive.Source -ne 'HomeDrive') {
+      $null = $_decisions.Add("Network drive $_label from $($_drive.Source). Decide whether to stage it; $_size.")
+      continue
+    }
+
+    $_rootName = Add-DataInventoryRoot -Roots $_roots -Path $_drive.Target -Reason "Home drive $_label" -StagingName 'HomeDrive'
+    $null = $_mappings.Add([PSCustomObject]@{
+        Source = $_rootName
+        Target = $HomeDriveTarget
+        Origin = $_drive.Target
+        Kind   = 'HomeDrive'
+      })
+    $null = $_notes.Add("Home drive $_label holds the user's own data ($_size). ABB does not back up the file server: copy the share into the '$_rootName' staging folder before the import. It is imported into $HomeDriveTarget.")
+  }
 
   # Known folders are imported from where they actually are, into their standard location.
   foreach ($_item in $KnownFolder) {
@@ -1212,9 +1416,6 @@ function Get-DataInventoryPlan {
     $Mapping,
 
     [object[]]
-    $NetworkDrive,
-
-    [object[]]
     $LongPath,
 
     [object]
@@ -1244,10 +1445,6 @@ function Get-DataInventoryPlan {
   $_decisions = New-Object System.Collections.ArrayList
   foreach ($_decision in $Mapping.Decisions) {
     $null = $_decisions.Add($_decision)
-  }
-
-  foreach ($_item in $NetworkDrive) {
-    $null = $_decisions.Add("Network drive $($_item.Letter): $($_item.Target). Decide whether to stage it; use -MeasureNetwork for sizes.")
   }
 
   foreach ($_item in $LongPath) {
@@ -1366,7 +1563,10 @@ try {
   Write-Progress -Id 71 -Activity 'User data inventory' -Status 'Reading known folders'
   $_known = @(Get-DataInventoryKnownFolder -RegistryRoot $_inventoryUser.Registry -ProfilePath $_inventoryUser.ProfilePath)
   $_public = @(Get-DataInventoryPublicFolder -PublicRoot $env:PUBLIC -IncludePermissions $_inventoryUser.IsAdmin)
-  $_network = @(Get-DataInventoryNetworkDrive -RegistryRoot $_inventoryUser.Registry -Measure $MeasureNetwork.IsPresent)
+
+  Write-Progress -Id 71 -Activity 'User data inventory' -Status 'Reading home and network drives'
+  $_driveInventory = Get-DataInventoryNetworkDrive -RegistryRoot $_inventoryUser.Registry -InventoryUser $_inventoryUser -Measure $MeasureNetwork.IsPresent
+  $_network = @($_driveInventory.Drives)
 
   if (-not $_inventoryUser.IsAdmin) {
     Write-Warning 'Run elevated to inspect fixed drives outside the profile.'
@@ -1380,12 +1580,15 @@ try {
     -PublicFolder $_public `
     -OutsideProfile $_outside `
     -ProfilePath $_inventoryUser.ProfilePath `
-    -PublicRoot $env:PUBLIC
+    -PublicRoot $env:PUBLIC `
+    -NetworkDrive $_network `
+    -DriveNote $_driveInventory.Notes `
+    -HomeDriveTarget $HomeDriveTarget
 
   # Check each mapped folder against its real destination; nested mapped folders are checked on their own.
   Write-Progress -Id 71 -Activity 'User data inventory' -Status 'Checking destination path lengths'
   $_long = New-Object System.Collections.ArrayList
-  foreach ($_item in $_mapping.Mappings) {
+  foreach ($_item in @($_mapping.Mappings | Where-Object { $_.Kind -ne 'HomeDrive' })) {
     $_nested = @(
       $_mapping.Mappings |
         Where-Object { $_ -ne $_item -and (Test-DataInventoryPathWithin -Path $_.Origin -Root $_item.Origin) } |
@@ -1418,7 +1621,6 @@ try {
 
   $_planParameters = @{
     Mapping       = $_mapping
-    NetworkDrive  = $_network
     LongPath      = @($_long.ToArray())
     Outlook       = $_outlook
     StagingRoot   = $_stagingRoot
