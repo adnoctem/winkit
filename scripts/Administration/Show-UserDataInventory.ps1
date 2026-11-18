@@ -278,7 +278,13 @@ function Expand-DataInventoryPath {
 function Get-DataInventoryTreeSummary {
   param (
     [string]
-    $Path
+    $Path,
+
+    [string[]]
+    $ExcludeDirectory = @(),
+
+    [int]
+    $ReparseItemLimit = 50
   )
 
   $result = [PSCustomObject]@{
@@ -289,6 +295,7 @@ function Get-DataInventoryTreeSummary {
     Bytes         = [long]0
     Newest        = $null
     ReparsePoints = 0
+    ReparseItems  = @()
     Offline       = 0
     Encrypted     = 0
     Error         = $null
@@ -299,38 +306,80 @@ function Get-DataInventoryTreeSummary {
   }
 
   $result.Exists = $true
-  try {
-    foreach ($item in @(Get-ChildItem -LiteralPath $Path -Recurse -Force -ErrorAction Stop)) {
+  $_newest = $null
+  $_reparseItems = New-Object System.Collections.ArrayList
+  $_pending = New-Object 'System.Collections.Generic.Queue[string]'
+  $_pending.Enqueue($Path)
+
+  # Walk the tree without following links; excluded (nested, separately counted) folders are skipped.
+  while ($_pending.Count -gt 0) {
+    $_directory = $_pending.Dequeue()
+    try {
+      $_items = @(Get-ChildItem -LiteralPath $_directory -Force -ErrorAction Stop)
+    }
+    catch {
+      if ($null -eq $result.Error) {
+        $result.Error = $_.Exception.Message
+      }
+
+      continue
+    }
+
+    foreach ($_item in $_items) {
       # Explorer metadata is never imported, so a folder holding only desktop.ini is empty.
-      if (-not $item.PSIsContainer -and $item.Name -in @('desktop.ini', 'Thumbs.db')) {
+      if (-not $_item.PSIsContainer -and $_item.Name -in @('desktop.ini', 'Thumbs.db')) {
         continue
       }
 
-      if ($item.PSIsContainer) {
+      if ($_item.PSIsContainer) {
+        $_isExcluded = @($ExcludeDirectory | Where-Object { $_.TrimEnd('\').Equals($_item.FullName, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
+        if ($_isExcluded) {
+          continue
+        }
+      }
+
+      if ($_item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        $result.ReparsePoints++
+        if ($_reparseItems.Count -lt $ReparseItemLimit) {
+          $null = $_reparseItems.Add([PSCustomObject]@{
+              Path     = $_item.FullName
+              LinkType = [string]$_item.LinkType
+              Target   = (@($_item.Target) | Where-Object { $_ }) -join '; '
+            })
+        }
+
+        continue
+      }
+
+      if ($_item.PSIsContainer) {
         $result.Directories++
+        $_pending.Enqueue($_item.FullName)
       }
       else {
         $result.Files++
-        $result.Bytes += [long]$item.Length
+        $result.Bytes += [long]$_item.Length
       }
-      if ($null -eq $result.Newest -or $item.LastWriteTimeUtc -gt $result.Newest) {
-        $result.Newest = $item.LastWriteTimeUtc
+
+      if ($null -eq $_newest -or $_item.LastWriteTimeUtc -gt $_newest) {
+        $_newest = $_item.LastWriteTimeUtc
       }
-      if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-        $result.ReparsePoints++
-      }
-      if ($item.Attributes -band [IO.FileAttributes]::Offline) {
+
+      if ($_item.Attributes -band [IO.FileAttributes]::Offline) {
         $result.Offline++
       }
-      if ($item.Attributes -band [IO.FileAttributes]::Encrypted) {
+
+      if ($_item.Attributes -band [IO.FileAttributes]::Encrypted) {
         $result.Encrypted++
       }
     }
   }
-  catch {
-    $result.Error = $_.Exception.Message
+
+  # ISO 8601 text; Windows PowerShell 5.1 would otherwise serialize dates as /Date(...)/.
+  if ($null -ne $_newest) {
+    $result.Newest = $_newest.ToString('o')
   }
 
+  $result.ReparseItems = @($_reparseItems.ToArray())
   return $result
 }
 
@@ -359,7 +408,9 @@ function Get-DataInventoryKnownFolder {
 
   $_key = Join-Path $RegistryRoot 'Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'
   $_values = Get-ItemProperty -LiteralPath $_key -ErrorAction SilentlyContinue
-  $_result = New-Object System.Collections.ArrayList
+
+  # Resolve every location first so a known folder stored inside another is counted only once.
+  $_located = New-Object System.Collections.ArrayList
   foreach ($_definition in $_definitions) {
     $_raw = $null
     if ($null -ne $_values) {
@@ -372,8 +423,19 @@ function Get-DataInventoryKnownFolder {
       continue
     }
 
-    $_path = Expand-DataInventoryPath -Path $_raw -ProfilePath $ProfilePath
-    $_summary = Get-DataInventoryTreeSummary -Path $_path
+    $null = $_located.Add([PSCustomObject]@{
+        Name = $_definition.Name
+        Raw  = $_raw
+        Path = (Expand-DataInventoryPath -Path $_raw -ProfilePath $ProfilePath).TrimEnd('\')
+      })
+  }
+
+  $_result = New-Object System.Collections.ArrayList
+  foreach ($_location in $_located) {
+    $_path = $_location.Path
+    $_raw = $_location.Raw
+    $_nested = @($_located | Where-Object { Test-DataInventoryPathWithin -Path $_.Path -Root $_path })
+    $_summary = Get-DataInventoryTreeSummary -Path $_path -ExcludeDirectory @($_nested | ForEach-Object { $_.Path })
     $_isUnc = $_path.StartsWith('\\')
     $_isOutsideProfile = -not $_path.StartsWith($ProfilePath.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)
     $_isOneDrive = $_path -match '(^|\\)OneDrive( - |\\)'
@@ -383,7 +445,7 @@ function Get-DataInventoryKnownFolder {
     }
 
     $null = $_result.Add([PSCustomObject]@{
-        Name             = $_definition.Name
+        Name             = $_location.Name
         Path             = $_path
         Raw              = $_raw
         Exists           = $_summary.Exists
@@ -391,7 +453,9 @@ function Get-DataInventoryKnownFolder {
         Directories      = $_summary.Directories
         Bytes            = $_summary.Bytes
         Newest           = $_summary.Newest
+        NestedFolders    = @($_nested | ForEach-Object { $_.Name })
         ReparsePoints    = $_summary.ReparsePoints
+        ReparseItems     = $_summary.ReparseItems
         Offline          = $_summary.Offline
         Encrypted        = $_summary.Encrypted
         IsUnc            = $_isUnc
@@ -493,15 +557,16 @@ function Get-DataInventoryPublicFolder {
     }
 
     $null = $_result.Add([PSCustomObject]@{
-        Name        = $_name
-        Path        = $_path
-        Files       = $_summary.Files
-        Directories = $_summary.Directories
-        Bytes       = $_summary.Bytes
-        Newest      = $_summary.Newest
-        Shortcuts   = @($_shortcuts)
-        Permissions = $_permissions
-        Error       = $_summary.Error
+        Name         = $_name
+        Path         = $_path
+        Files        = $_summary.Files
+        Directories  = $_summary.Directories
+        Bytes        = $_summary.Bytes
+        Newest       = $_summary.Newest
+        ReparseItems = $_summary.ReparseItems
+        Shortcuts    = @($_shortcuts)
+        Permissions  = $_permissions
+        Error        = $_summary.Error
       })
   }
 
@@ -678,13 +743,14 @@ function Get-DataInventoryOutsideProfile {
     )
 
     $null = $_result.Add([PSCustomObject]@{
-        Path     = $_path
-        Files    = $_summary.Files
-        Bytes    = $_summary.Bytes
-        Newest   = $_summary.Newest
-        Programs = @($_owners)
-        Included = $_isIncluded
-        Error    = $_summary.Error
+        Path         = $_path
+        Files        = $_summary.Files
+        Bytes        = $_summary.Bytes
+        Newest       = $_summary.Newest
+        ReparseItems = $_summary.ReparseItems
+        Programs     = @($_owners)
+        Included     = $_isIncluded
+        Error        = $_summary.Error
       })
   }
 
@@ -1225,7 +1291,7 @@ function Get-DataInventoryPlan {
 
   $_suggestedCall = $null
   if ($Mapping.Mappings.Count -gt 0) {
-    $null = $_notes.Add("Extract each download so that its folder is the staging path listed in AbbDownload below $StagingRoot.")
+    $null = $_notes.Add("Mapping sources are relative to the staging root, not to $StagingRoot itself. Extract each download to its AbbDownload staging path, or keep the same folder names below any other root and pass that root to Import-UserProfileData -SourcePath.")
     $_mapPath = $FolderMapPath
     if ([string]::IsNullOrWhiteSpace($_mapPath)) {
       $_mapPath = '<folder-map.json>'
