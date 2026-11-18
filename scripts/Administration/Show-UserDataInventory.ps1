@@ -838,7 +838,10 @@ function Get-DataInventoryOutsideProfile {
     $ScanVolumes,
 
     [string]
-    $ManagedRoot = (Join-Path $env:SystemDrive 'Managed')
+    $ManagedRoot = (Join-Path $env:SystemDrive 'Managed'),
+
+    [object[]]
+    $ProgramEvidence = @()
   )
 
   # System, vendor, and winkit-managed folders hold no user data. Names starting with $ are
@@ -863,20 +866,6 @@ function Get-DataInventoryOutsideProfile {
     'NVIDIA'
   )
   $_managedRoot = $ManagedRoot.TrimEnd('\')
-
-  $_programs = @()
-  foreach ($_key in @(
-      'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-      'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
-      'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
-    )) {
-    try {
-      $_programs += @(Get-ItemProperty -Path $_key -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName })
-    }
-    catch {
-      Write-Verbose "Could not read uninstall entries from $_key."
-    }
-  }
 
   # Collect top-level folders of fixed volumes, then add included folders that the scan skipped.
   $_candidates = New-Object System.Collections.ArrayList
@@ -923,32 +912,140 @@ function Get-DataInventoryOutsideProfile {
   foreach ($_path in $_candidates) {
     $_summary = Get-DataInventoryTreeSummary -Path $_path
     $_isIncluded = @($Include | Where-Object { $_.Equals($_path, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
-    $_owners = @(
-      $_programs |
-        Where-Object {
-          $_location = ([string]$_.InstallLocation).TrimEnd('\')
-          -not [string]::IsNullOrWhiteSpace($_location) -and (
-            $_location.Equals($_path, [StringComparison]::OrdinalIgnoreCase) -or
-            (Test-DataInventoryPathWithin -Path $_location -Root $_path) -or
-            (Test-DataInventoryPathWithin -Path $_path -Root $_location)
-          )
-        } |
-        Select-Object -ExpandProperty DisplayName -Unique
-    )
+
+    # A program owns the folder when any of its evidence points at the folder or into it.
+    $_matches = New-Object System.Collections.ArrayList
+    $_seen = @{}
+    foreach ($_evidence in $ProgramEvidence) {
+      $_evidencePath = ([string]$_evidence.Path).TrimEnd('\')
+      $_pointsHere = $_evidencePath.Equals($_path, [StringComparison]::OrdinalIgnoreCase) -or
+      (Test-DataInventoryPathWithin -Path $_evidencePath -Root $_path)
+      $_key = ('{0}|{1}' -f $_evidence.Name, $_evidence.MatchedBy).ToUpperInvariant()
+      if (-not $_pointsHere -or $_seen.ContainsKey($_key)) {
+        continue
+      }
+
+      $_seen[$_key] = $true
+      $null = $_matches.Add([PSCustomObject]@{
+          Name      = $_evidence.Name
+          MatchedBy = $_evidence.MatchedBy
+          Evidence  = $_evidence.Evidence
+        })
+    }
 
     $null = $_result.Add([PSCustomObject]@{
-        Path         = $_path
-        Files        = $_summary.Files
-        Bytes        = $_summary.Bytes
-        Newest       = $_summary.Newest
-        ReparseItems = $_summary.ReparseItems
-        Programs     = @($_owners)
-        Included     = $_isIncluded
-        Error        = $_summary.Error
+        Path           = $_path
+        Files          = $_summary.Files
+        Bytes          = $_summary.Bytes
+        Newest         = $_summary.Newest
+        ReparseItems   = $_summary.ReparseItems
+        Programs       = @($_matches | ForEach-Object { $_.Name } | Select-Object -Unique)
+        ProgramMatches = @($_matches.ToArray())
+        Included       = $_isIncluded
+        Error          = $_summary.Error
       })
   }
 
   return @($_result.ToArray())
+}
+
+function ConvertTo-DataInventoryProgramDirectory {
+  param (
+    [string]
+    $Value,
+
+    [switch]
+    $IsFile
+  )
+
+  # Accepts registry values such as "C:\App\app.exe",0 or "C:\App\unins000.exe" /x; MsiExec commands carry no path.
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    return $null
+  }
+
+  $_text = [Environment]::ExpandEnvironmentVariables($Value.Trim())
+  $_candidate = $null
+  if ($_text -match '^"([^"]+)"') {
+    $_candidate = $Matches[1]
+  }
+  elseif ($IsFile -and $_text -match '^([A-Za-z]:\\.+?\.(?:exe|dll|ico|cmd|bat|com))(?=[\s,]|$)') {
+    $_candidate = $Matches[1]
+  }
+  elseif (-not $IsFile -and $_text -match '^[A-Za-z]:\\') {
+    $_candidate = $_text
+  }
+
+  if ($null -eq $_candidate -or $_candidate -notmatch '^[A-Za-z]:\\') {
+    return $null
+  }
+
+  $_candidate = ($_candidate -replace ',\s*-?\d+$', '').TrimEnd('\')
+  if ($IsFile) {
+    return Split-Path -Path $_candidate -Parent
+  }
+
+  return $_candidate
+}
+
+function Get-DataInventoryProgramEvidence {
+  param (
+    [string]
+    $RegistryRoot,
+
+    [string[]]
+    $ShortcutRoot = @()
+  )
+
+  $_evidence = New-Object System.Collections.ArrayList
+
+  # Uninstall entries: InstallLocation is often empty, so icon, uninstaller, and install source count too.
+  $_keys = @(
+    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+    (Join-Path $RegistryRoot 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*')
+  )
+  $_sources = @(
+    @{ Property = 'InstallLocation'; IsFile = $false },
+    @{ Property = 'InstallSource'; IsFile = $false },
+    @{ Property = 'DisplayIcon'; IsFile = $true },
+    @{ Property = 'UninstallString'; IsFile = $true }
+  )
+  foreach ($_key in $_keys) {
+    $_entries = @(Get-ItemProperty -Path $_key -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName })
+    foreach ($_entry in $_entries) {
+      foreach ($_source in $_sources) {
+        $_value = [string]$_entry.($_source.Property)
+        $_directory = ConvertTo-DataInventoryProgramDirectory -Value $_value -IsFile:$_source.IsFile
+        if ($_directory) {
+          $null = $_evidence.Add([PSCustomObject]@{
+              Name      = [string]$_entry.DisplayName
+              MatchedBy = $_source.Property
+              Path      = $_directory
+              Evidence  = $_value
+            })
+        }
+      }
+    }
+  }
+
+  # Start-menu and desktop shortcuts that launch a program from a local folder.
+  foreach ($_root in @($ShortcutRoot | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Container) })) {
+    foreach ($_file in @(Get-ChildItem -LiteralPath $_root -Filter '*.lnk' -Recurse -File -Force -ErrorAction SilentlyContinue)) {
+      $_shortcut = Get-DataInventoryShortcut -Path $_file.FullName
+      if ($_shortcut.IsNetwork -or [string]$_shortcut.Target -notmatch '^[A-Za-z]:\\') {
+        continue
+      }
+
+      $null = $_evidence.Add([PSCustomObject]@{
+          Name      = [IO.Path]::GetFileNameWithoutExtension($_file.Name)
+          MatchedBy = 'Shortcut'
+          Path      = Split-Path -Path $_shortcut.Target -Parent
+          Evidence  = $_file.FullName
+        })
+    }
+  }
+
+  return @($_evidence.ToArray())
 }
 
 function Resolve-DataInventoryInclude {
@@ -1543,9 +1640,18 @@ function Get-DataInventoryMapping {
       }
 
       $_detail = '{0} files, {1:N1} MB' -f $_item.Files, ($_item.Bytes / 1MB)
-      $_programs = @($_item.Programs | Where-Object { $_ })
-      if ($_programs.Count -gt 0) {
-        $_detail += '; probable programs: ' + ($_programs -join ', ')
+      # Name each probable owner with how it was matched, for example "VR-NetWorld (DisplayIcon, Shortcut)".
+      $_owners = @(
+        @($_item.ProgramMatches | Where-Object { $_ }) |
+          Group-Object -Property Name |
+          ForEach-Object { '{0} ({1})' -f $_.Name, (@($_.Group | ForEach-Object { $_.MatchedBy }) -join ', ') }
+      )
+      if ($_owners.Count -eq 0) {
+        $_owners = @($_item.Programs | Where-Object { $_ })
+      }
+
+      if ($_owners.Count -gt 0) {
+        $_detail += '; probable programs: ' + ($_owners -join ', ')
       }
 
       $null = $_decisions.Add("Data outside the profile: $_origin ($_detail). Use -Include $(Format-DataInventoryLiteral -Value $_origin) to migrate it.")
@@ -1770,7 +1876,19 @@ try {
   }
 
   Write-Progress -Id 71 -Activity 'User data inventory' -Status 'Scanning folders outside the profile'
-  $_outside = @(Get-DataInventoryOutsideProfile -ProfilePath $_inventoryUser.ProfilePath -Include $_include -ScanVolumes $_inventoryUser.IsAdmin)
+  $_shortcutRoots = @(
+    (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'),
+    (Join-Path $_inventoryUser.ProfilePath 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs'),
+    (Join-Path $env:PUBLIC 'Desktop')
+  ) + @($_known | Where-Object { $_.Name -eq 'Desktop' } | ForEach-Object { $_.Path })
+  $_programEvidence = @(Get-DataInventoryProgramEvidence -RegistryRoot $_inventoryUser.Registry -ShortcutRoot $_shortcutRoots)
+  $_outsideParameters = @{
+    ProfilePath     = $_inventoryUser.ProfilePath
+    Include         = $_include
+    ScanVolumes     = $_inventoryUser.IsAdmin
+    ProgramEvidence = $_programEvidence
+  }
+  $_outside = @(Get-DataInventoryOutsideProfile @_outsideParameters)
 
   $_mapping = Get-DataInventoryMapping `
     -KnownFolder $_known `
