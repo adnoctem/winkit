@@ -1,3 +1,17 @@
+## [3.4.0](https://github.com/adnoctem/winkit/compare/v3.3.0...v3.4.0) (2026-11-18)
+
+### Features
+
+* **scripts:** detect and map the user's home drive ([8b44fb4](https://github.com/adnoctem/winkit/commit/8b44fb4406d8eea199ea88ea6f731c8b0ee10401))
+* **scripts:** find owning programs beyond install locations ([53be709](https://github.com/adnoctem/winkit/commit/53be709d2da41a8df21865549aa91e7619e76560))
+* **scripts:** map only selected and non-empty folders by default ([4b35d1b](https://github.com/adnoctem/winkit/commit/4b35d1b3e3273fc7591f42180145df4fb0f03f6d))
+* **scripts:** plan a final pass from the live old computer ([1da77e7](https://github.com/adnoctem/winkit/commit/1da77e7f6adbedec39277609e5f22afc77cda27e))
+
+### Bug Fixes
+
+* **scripts:** check path lengths at each mapped target ([d6df13d](https://github.com/adnoctem/winkit/commit/d6df13d702de88ae54f68d5f3cdabd25f8d837e9))
+* **scripts:** report nested folders, links and dates readably ([55e9f1b](https://github.com/adnoctem/winkit/commit/55e9f1b13d541d6742d09160dade74e0c0c9b687))
+
 ## [3.3.0](https://github.com/adnoctem/winkit/compare/v3.2.1...v3.3.0) (2026-11-17)
 
 ### Features
