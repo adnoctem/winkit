@@ -35,8 +35,14 @@
   with -Include. System, vendor, and winkit-managed folders are not scanned
   unless named with -Include.
 
+  The plan also holds a final pass: robocopy /MIR lines, one per mapping, that
+  refresh the staging from the live old computer through hidden read-only shares,
+  with the share commands to create and remove them.
+
   Unless -DryRun is supplied, a unique run directory receives manifest.json with
-  the full inventory and folder-map.json for Import-UserProfileData -FolderMapPath.
+  the full inventory, folder-map.json for Import-UserProfileData -FolderMapPath,
+  and final-pass.ps1, which previews the final pass with robocopy /L unless run
+  with -Apply.
 
 .PARAMETER User
   User to inventory. Defaults to the current user. Accepts an account name or
@@ -1723,7 +1729,13 @@ function Get-DataInventoryPlan {
     $FolderMapPath,
 
     [string]
-    $TargetUser
+    $TargetUser,
+
+    [string]
+    $Computer = $env:COMPUTERNAME,
+
+    [string]
+    $Account
   )
 
   $_downloads = New-Object System.Collections.ArrayList
@@ -1803,6 +1815,12 @@ function Get-DataInventoryPlan {
     $_suggestedCall = ".\scripts\Administration\Import-UserProfileData.ps1 -SourcePath $_sourceLiteral -TargetUser $_targetLiteral -FolderMapPath $_mapLiteral -DryRun"
   }
 
+  # A download goes stale while the user keeps working; the final pass refreshes staging from the live computer.
+  $_finalPass = $null
+  if ($Mapping.Mappings.Count -gt 0) {
+    $_finalPass = ConvertTo-DataInventoryFinalPass -Mapping $Mapping.Mappings -Computer $Computer -StagingRoot $StagingRoot -Account $Account
+  }
+
   return [PSCustomObject]@{
     AbbDownload         = @($_downloads.ToArray())
     Mappings            = @($Mapping.Mappings)
@@ -1810,7 +1828,263 @@ function Get-DataInventoryPlan {
     Notes               = @($_notes.ToArray())
     Decisions           = @($_decisions.ToArray())
     SuggestedImportCall = $_suggestedCall
+    FinalPass           = $_finalPass
   }
+}
+
+function ConvertTo-DataInventoryFinalPassPath {
+  param (
+    [string]
+    $Path,
+
+    [string]
+    $Computer
+  )
+
+  # Local paths are read through a hidden read-only share per drive (MIGRO$ for C:); UNC paths are read directly.
+  if ($Path.StartsWith('\\')) {
+    return [PSCustomObject]@{
+      Path  = $Path
+      Share = $null
+      Drive = $null
+    }
+  }
+
+  $_drive = $Path.Substring(0, 1).ToUpperInvariant()
+  $_share = 'MIGRO-{0}$' -f $_drive
+  if ($_drive -eq 'C') {
+    $_share = 'MIGRO$'
+  }
+
+  $_relative = $Path.Substring(2).TrimStart('\')
+  $_unc = '\\{0}\{1}' -f $Computer, $_share
+  if ($_relative) {
+    $_unc = Join-Path $_unc $_relative
+  }
+
+  return [PSCustomObject]@{
+    Path  = $_unc
+    Share = $_share
+    Drive = $_drive
+  }
+}
+
+function ConvertTo-DataInventoryFinalPass {
+  param (
+    [object[]]
+    $Mapping,
+
+    [string]
+    $Computer,
+
+    [string]
+    $StagingRoot,
+
+    [string]
+    $Account
+  )
+
+  # Mirrors the live old computer into existing staging. Shortcuts stay included: they record how programs are launched.
+  $_options = @(
+    '/MIR',
+    '/COPY:DAT',
+    '/DCOPY:DAT',
+    '/XJ',
+    '/R:1',
+    '/W:1',
+    '/NP',
+    '/XF',
+    'desktop.ini',
+    'Thumbs.db'
+  )
+
+  $_grant = $Account
+  if ([string]::IsNullOrWhiteSpace($_grant)) {
+    $_grant = '<account running the final pass>'
+  }
+
+  $_passes = New-Object System.Collections.ArrayList
+  $_shares = @{}
+  foreach ($_item in $Mapping) {
+    $_source = ConvertTo-DataInventoryFinalPassPath -Path $_item.Origin -Computer $Computer
+    if ($_source.Share) {
+      $_shares[$_source.Share] = $_source.Drive
+    }
+
+    $_nested = @(
+      $Mapping |
+        Where-Object { $_ -ne $_item -and (Test-DataInventoryPathWithin -Path $_.Origin -Root $_item.Origin) } |
+        ForEach-Object { (ConvertTo-DataInventoryFinalPassPath -Path $_.Origin -Computer $Computer).Path }
+    )
+    $_destination = Join-Path $StagingRoot $_item.Source
+    $_arguments = @($_source.Path, $_destination) + $_options
+    if ($_nested.Count -gt 0) {
+      $_arguments += @('/XD') + $_nested
+    }
+
+    $_quoted = @($_arguments | ForEach-Object { if ($_ -match '\s') { '"{0}"' -f $_ } else { $_ } }) -join ' '
+    $null = $_passes.Add([PSCustomObject]@{
+        Source         = $_source.Path
+        Destination    = $_destination
+        Exclude        = $_nested
+        PreviewCommand = "robocopy $_quoted /L"
+        Command        = "robocopy $_quoted"
+      })
+  }
+
+  $_create = New-Object System.Collections.ArrayList
+  $_remove = New-Object System.Collections.ArrayList
+  foreach ($_share in @($_shares.Keys | Sort-Object { $_shares[$_] })) {
+    $null = $_create.Add(('net share {0}={1}:\ /GRANT:"{2}",READ' -f $_share, $_shares[$_share], $_grant))
+    $null = $_remove.Add(('net share {0} /DELETE' -f $_share))
+  }
+
+  $_notes = @(
+    "On the old computer, as an administrator: create the read-only share(s) with ShareCommands. The account also needs NTFS read access to the mapped folders.",
+    'On the new computer: run each PreviewCommand (robocopy /L lists changes without copying), review it, then run each Command, or use final-pass.ps1 beside folder-map.json.',
+    'robocopy only reads the old computer. /MIR changes only the staging destination: it copies new and changed files and deletes staging files that no longer exist on the old computer. Folders mapped separately are excluded with /XD and left to their own line.',
+    'Afterwards, remove the share(s) on the old computer with RemoveCommands. Keep the user signed out and Outlook closed during the final pass.'
+  )
+
+  return [PSCustomObject]@{
+    ShareCommands  = @($_create.ToArray())
+    RemoveCommands = @($_remove.ToArray())
+    Passes         = @($_passes.ToArray())
+    Notes          = $_notes
+  }
+}
+
+function ConvertTo-DataInventoryFinalPassScript {
+  param (
+    [object]
+    $FinalPass,
+
+    [string]
+    $Computer,
+
+    [string]
+    $StagingRoot,
+
+    [string]
+    $RunId,
+
+    [string]
+    $UserName
+  )
+
+  # Passes are stored relative to the old computer and the staging root, so both can be overridden at run time.
+  $_entries = New-Object System.Collections.ArrayList
+  foreach ($_pass in $FinalPass.Passes) {
+    $_exclude = @($_pass.Exclude | ForEach-Object { Format-DataInventoryLiteral -Value $_ }) -join ', '
+    $null = $_entries.Add(@(
+        '  @{',
+        ('    Source      = {0}' -f (Format-DataInventoryLiteral -Value $_pass.Source)),
+        ('    Destination = {0}' -f (Format-DataInventoryLiteral -Value $_pass.Destination.Substring($StagingRoot.Length).TrimStart('\'))),
+        ('    Exclude     = @({0})' -f $_exclude),
+        '  }'
+      ) -join "`r`n")
+  }
+
+  $_shareLines = @($FinalPass.ShareCommands | ForEach-Object { "  $_" }) -join "`r`n"
+  $_removeLines = @($FinalPass.RemoveCommands | ForEach-Object { "  $_" }) -join "`r`n"
+  $_lines = @(
+    '#Requires -Version 5.1',
+    '',
+    '<#',
+    '.SYNOPSIS',
+    "  Final pass from the live old computer $Computer into the migration staging.",
+    '',
+    '.DESCRIPTION',
+    "  Generated by Show-UserDataInventory.ps1, run $RunId, for $UserName. Mirrors every",
+    '  mapped folder from the old computer into the staging root with robocopy /MIR.',
+    '  robocopy only reads the old computer; /MIR changes only the staging destination.',
+    '  Without -Apply, robocopy runs with /L and only lists what it would change.',
+    '',
+    '  On the old computer, as an administrator, first create the read-only share(s):',
+    $_shareLines,
+    '  and remove them afterwards:',
+    $_removeLines,
+    '',
+    '.PARAMETER SourceComputer',
+    '  Old computer whose shares are read. Defaults to the inventoried computer.',
+    '',
+    '.PARAMETER StagingRoot',
+    '  Staging root holding the extracted downloads. Defaults to the inventory value.',
+    '',
+    '.PARAMETER Apply',
+    '  Copy for real. Without it, every pass is a /L preview.',
+    '',
+    '.EXAMPLE',
+    '  PS> .\final-pass.ps1',
+    '  Preview every pass.',
+    '',
+    '.EXAMPLE',
+    '  PS> .\final-pass.ps1 -Apply',
+    '  Mirror every pass into the staging root.',
+    '#>',
+    '',
+    '[CmdletBinding()]',
+    'param (',
+    '  [string]',
+    ('  $SourceComputer = {0},' -f (Format-DataInventoryLiteral -Value $Computer)),
+    '',
+    '  [string]',
+    ('  $StagingRoot = {0},' -f (Format-DataInventoryLiteral -Value $StagingRoot)),
+    '',
+    '  [switch]',
+    '  $Apply',
+    ')',
+    '',
+    'Import-Module AdNoctem.Substrate.PowerShell -Force',
+    '',
+    "`$ErrorActionPreference = 'Stop'",
+    ('$_computer = {0}' -f (Format-DataInventoryLiteral -Value $Computer)),
+    "`$_options = @('/MIR', '/COPY:DAT', '/DCOPY:DAT', '/XJ', '/R:1', '/W:1', '/NP', '/XF', 'desktop.ini', 'Thumbs.db')",
+    '$_passes = @(',
+    ($_entries -join "`r`n"),
+    ')',
+    '',
+    '$_failed = 0',
+    '$_index = 0',
+    'foreach ($_pass in $_passes) {',
+    '  $_index++',
+    "  `$_source = `$_pass.Source.Replace(""\\`$_computer\"", ""\\`$SourceComputer\"")",
+    '  $_destination = Join-Path $StagingRoot $_pass.Destination',
+    "  `$_exclude = @(`$_pass.Exclude | ForEach-Object { `$_.Replace(""\\`$_computer\"", ""\\`$SourceComputer\"") })",
+    "  `$_log = Join-Path `$PSScriptRoot ('final-pass-{0}.log' -f `$_index)",
+    '  $_arguments = @($_source, $_destination) + $_options + @("/UNILOG:$_log")',
+    '  if ($_exclude.Count -gt 0) {',
+    "    `$_arguments += @('/XD') + `$_exclude",
+    '  }',
+    '',
+    '  if (-not $Apply) {',
+    "    `$_arguments += '/L'",
+    '  }',
+    '',
+    '  Write-Log -Message "Final pass $_index of $($_passes.Count): $_source -> $_destination" -Color Cyan',
+    '  $_result = Invoke-SafeProcess -FilePath "$env:SystemRoot\System32\robocopy.exe" -ArgumentList $_arguments -AsResult',
+    '  $_meaning = Convert-RobocopyExitCode -ExitCode $_result.ExitCode',
+    '  if ($_result.TimedOut -or $_result.Cancelled -or $_result.ExitCode -lt 0 -or $_result.ExitCode -ge 8) {',
+    '    $_failed++',
+    '    Write-Log -Message "Failed: $_meaning (exit $($_result.ExitCode)); see $_log" -Color Red',
+    '  }',
+    '  else {',
+    '    Write-Log -Message "$_meaning (exit $($_result.ExitCode)); log: $_log" -Color Green',
+    '  }',
+    '}',
+    '',
+    'if (-not $Apply) {',
+    "  Write-Log -Message 'Preview only (/L): nothing was copied. Run again with -Apply to mirror.' -Color Yellow",
+    '}',
+    '',
+    'if ($_failed -gt 0) {',
+    '  exit 1',
+    '}',
+    '',
+    'exit 0'
+  )
+
+  return ($_lines -join "`r`n") + "`r`n"
 }
 
 function ConvertTo-DataInventoryFolderMap {
@@ -1959,8 +2233,17 @@ try {
   }
   $_outlook = Get-DataInventoryOutlookReport @_outlookReport
 
+  $_finalPassPath = $null
   if (-not $DryRun) {
     $_folderMapPath = Join-Path $_runDirectory 'folder-map.json'
+    $_finalPassPath = Join-Path $_runDirectory 'final-pass.ps1'
+  }
+
+  # The share is granted to the operator's domain account; a local account does not exist on the new computer.
+  $_operator = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+  $_shareAccount = $null
+  if (-not $_operator.StartsWith("$env:COMPUTERNAME\", [StringComparison]::OrdinalIgnoreCase)) {
+    $_shareAccount = $_operator
   }
 
   $_planParameters = @{
@@ -1970,6 +2253,8 @@ try {
     StagingRoot   = $_stagingRoot
     FolderMapPath = $_folderMapPath
     TargetUser    = $_target.User
+    Computer      = $env:COMPUTERNAME
+    Account       = $_shareAccount
   }
   $_plan = Get-DataInventoryPlan @_planParameters
 
@@ -1997,6 +2282,7 @@ try {
     Plan              = $_plan
     ReportPath        = $null
     FolderMapPath     = $_folderMapPath
+    FinalPassPath     = $null
   }
 
   $_hasError = @($_known | Where-Object Error).Count -gt 0 -or @($_outside | Where-Object Error).Count -gt 0
@@ -2011,6 +2297,9 @@ try {
     $_manifestPath = Join-Path $_runDirectory 'manifest.json'
     $_inventory.ReportPath = $_manifestPath
     $_encoding = New-Object Text.UTF8Encoding($true)
+    if ($null -ne $_plan.FinalPass) {
+      $_inventory.FinalPassPath = $_finalPassPath
+    }
 
     $_json = ConvertTo-DataInventoryJson -InputObject $_inventory -Depth 20
     [IO.File]::WriteAllText($_manifestPath, $_json, $_encoding)
@@ -2018,6 +2307,18 @@ try {
     $_folderMap = ConvertTo-DataInventoryFolderMap -Plan $_plan -RunId $_runId -Computer $env:COMPUTERNAME -UserName $_inventoryUser.Name
     $_folderMapJson = ConvertTo-DataInventoryJson -InputObject $_folderMap -Depth 6
     [IO.File]::WriteAllText($_folderMapPath, $_folderMapJson, $_encoding)
+
+    if ($null -ne $_plan.FinalPass) {
+      $_finalPassParameters = @{
+        FinalPass   = $_plan.FinalPass
+        Computer    = $env:COMPUTERNAME
+        StagingRoot = $_stagingRoot
+        RunId       = $_runId
+        UserName    = $_inventoryUser.Name
+      }
+      $_finalPassScript = ConvertTo-DataInventoryFinalPassScript @_finalPassParameters
+      [IO.File]::WriteAllText($_finalPassPath, $_finalPassScript, $_encoding)
+    }
 
     $_operationParameters = @{
       Target   = $_inventoryUser.ProfilePath
@@ -2028,6 +2329,7 @@ try {
       Property = @{
         ReportPath    = $_manifestPath
         FolderMapPath = $_folderMapPath
+        FinalPassPath = $_inventory.FinalPassPath
       }
     }
     $_operation = New-OperationResult @_operationParameters

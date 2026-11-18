@@ -1,6 +1,7 @@
 ﻿#Requires -Version 5.1
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidGlobalVars', '', Justification = 'The final-pass mock runs inside a generated script; its capture variable is removed after the test.')]
 param ()
 
 BeforeAll {
@@ -555,6 +556,84 @@ Describe 'Show-UserDataInventory drives' {
     $default.Notes | Should -Contain 'Connected drives were not read.'
     ($default.Decisions -join "`n") | Should -Match 'Network drive G: .* from Persistent'
     ($default.Decisions -join "`n") | Should -Match 'Logon script logon.cmd'
+  }
+}
+
+Describe 'Show-UserDataInventory final pass' {
+  BeforeAll {
+    $script:FinalMappings = @(
+      [PSCustomObject]@{ Source = 'User1\Music\Desktop'; Target = 'Desktop'; Origin = 'C:\Users\User1\Music\Desktop'; Kind = 'KnownFolder' }
+      [PSCustomObject]@{ Source = 'User1\Music'; Target = 'Music'; Origin = 'C:\Users\User1\Music'; Kind = 'KnownFolder' }
+      [PSCustomObject]@{ Source = 'Business'; Target = 'Documents\Business'; Origin = 'D:\Business Data'; Kind = 'Included' }
+      [PSCustomObject]@{ Source = 'HomeDrive'; Target = 'Private'; Origin = '\\server\home\User1'; Kind = 'HomeDrive' }
+    )
+  }
+
+  It 'reads local folders through a hidden share per drive and UNC folders directly' {
+    (ConvertTo-DataInventoryFinalPassPath -Path 'C:\Users\User1\Desktop' -Computer 'OLDPC').Path | Should -Be '\\OLDPC\MIGRO$\Users\User1\Desktop'
+    (ConvertTo-DataInventoryFinalPassPath -Path 'D:\Business Data' -Computer 'OLDPC').Path | Should -Be '\\OLDPC\MIGRO-D$\Business Data'
+    (ConvertTo-DataInventoryFinalPassPath -Path '\\server\home\User1' -Computer 'OLDPC').Share | Should -BeNullOrEmpty
+  }
+
+  It 'builds one mirror line per mapping with share commands, nested exclusions, and shortcuts kept' {
+    $pass = ConvertTo-DataInventoryFinalPass -Mapping $script:FinalMappings -Computer 'OLDPC' -StagingRoot 'C:\Managed\Migration' -Account 'EXAMPLE\Operator'
+
+    $pass.ShareCommands | Should -Be @('net share MIGRO$=C:\ /GRANT:"EXAMPLE\Operator",READ', 'net share MIGRO-D$=D:\ /GRANT:"EXAMPLE\Operator",READ')
+    $pass.RemoveCommands | Should -Be @('net share MIGRO$ /DELETE', 'net share MIGRO-D$ /DELETE')
+    $pass.Passes.Count | Should -Be 4
+
+    $music = @($pass.Passes | Where-Object Destination -EQ 'C:\Managed\Migration\User1\Music')[0]
+    $music.Source | Should -Be '\\OLDPC\MIGRO$\Users\User1\Music'
+    $music.Exclude | Should -Be @('\\OLDPC\MIGRO$\Users\User1\Music\Desktop')
+    $music.Command | Should -Match '/MIR /COPY:DAT /DCOPY:DAT /XJ'
+    $music.Command | Should -Match '/XD \\\\OLDPC\\MIGRO\$\\Users\\User1\\Music\\Desktop$'
+    $music.PreviewCommand | Should -Match ' /L$'
+    $music.Command | Should -Not -Match '\.lnk|\.url'
+
+    $business = @($pass.Passes | Where-Object Destination -EQ 'C:\Managed\Migration\Business')[0]
+    $business.Command | Should -Match '"\\\\OLDPC\\MIGRO-D\$\\Business Data"'
+    @($pass.Passes | Where-Object Destination -EQ 'C:\Managed\Migration\HomeDrive')[0].Source | Should -Be '\\server\home\User1'
+    ($pass.Notes -join "`n") | Should -Match 'only reads the old computer'
+
+    $placeholder = ConvertTo-DataInventoryFinalPass -Mapping $script:FinalMappings -Computer 'OLDPC' -StagingRoot 'C:\Managed\Migration' -Account $null
+    $placeholder.ShareCommands[0] | Should -Match '<account running the final pass>'
+  }
+
+  It 'writes a final-pass script that previews by default and mirrors with -Apply' {
+    $pass = ConvertTo-DataInventoryFinalPass -Mapping $script:FinalMappings -Computer 'OLDPC' -StagingRoot 'C:\Managed\Migration' -Account 'EXAMPLE\Operator'
+    $text = ConvertTo-DataInventoryFinalPassScript -FinalPass $pass -Computer 'OLDPC' -StagingRoot 'C:\Managed\Migration' -RunId 'run' -UserName 'EXAMPLE\User1'
+    $errors = $null
+    $null = [Management.Automation.Language.Parser]::ParseInput($text, [ref]$null, [ref]$errors)
+    @($errors).Count | Should -Be 0
+
+    # Run it with robocopy mocked; the module import is dropped so the mock is not replaced.
+    $folder = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $folder -Force
+    $scriptPath = Join-Path $folder 'final-pass.ps1'
+    [IO.File]::WriteAllText($scriptPath, ($text -replace '(?m)^Import-Module AdNoctem\.Substrate\.PowerShell[^\r\n]*', ''), (New-Object Text.UTF8Encoding($true)))
+    $global:WinkitFinalPassCalls = New-Object System.Collections.ArrayList
+    Mock Invoke-SafeProcess {
+      $null = $global:WinkitFinalPassCalls.Add(@($ArgumentList))
+      [PSCustomObject]@{ ExitCode = 1; TimedOut = $false; Cancelled = $false }
+    }
+
+    $null = & $scriptPath -SourceComputer 'NEWNAME' -StagingRoot 'E:\Stage' 6>$null
+    $previewExit = $LASTEXITCODE
+    $preview = @($global:WinkitFinalPassCalls.ToArray())
+    $global:WinkitFinalPassCalls.Clear()
+    $null = & $scriptPath -Apply 6>$null
+    $apply = @($global:WinkitFinalPassCalls.ToArray())
+    Remove-Variable -Name WinkitFinalPassCalls -Scope Global -ErrorAction SilentlyContinue
+
+    $previewExit | Should -Be 0
+    $preview.Count | Should -Be 4
+    $music = @($preview | Where-Object { $_[1] -eq 'E:\Stage\User1\Music' })[0]
+    $music[0] | Should -Be '\\NEWNAME\MIGRO$\Users\User1\Music'
+    $music | Should -Contain '/L'
+    $music | Should -Contain '\\NEWNAME\MIGRO$\Users\User1\Music\Desktop'
+    @($preview | Where-Object { $_[0] -eq '\\server\home\User1' }).Count | Should -Be 1
+    @($apply | Where-Object { $_ -contains '/L' }).Count | Should -Be 0
+    $apply[0][1] | Should -BeLike 'C:\Managed\Migration\*'
   }
 }
 

@@ -176,6 +176,38 @@ The script does not discover Known Folder redirection or read the old `NTUSER.DA
 profile, supply its actual relative path in `FolderMap`. It refuses reparse-point ancestors and cloud placeholders, so an active or
 unhydrated OneDrive tree is not an import destination. External drive and UNC destinations require a separate migration workflow.
 
+## Refresh staging from the live computer
+
+An ABB download goes stale while the user keeps working. The inventory's plan contains a `FinalPass` block, and the run folder a
+`final-pass.ps1`, that mirror each mapped folder from the old computer into the existing staging with
+`robocopy /MIR /COPY:DAT /DCOPY:DAT /XJ`. Shortcuts (`.lnk`, `.url`) are copied; only `desktop.ini` and `Thumbs.db` are skipped. A folder
+mapped separately, such as a Desktop inside `Music`, is excluded from the outer line with `/XD` and mirrored by its own line. The home drive
+is read from its file server path.
+
+On the old computer, as an administrator, create the hidden read-only share listed in `FinalPass.ShareCommands`. It is granted to the
+account that ran the inventory when that is a domain account; replace the placeholder otherwise. The account also needs NTFS read access to
+the mapped folders:
+
+```powershell
+net share MIGRO$=C:\ /GRANT:"OLDDOMAIN\Operator",READ
+```
+
+On the new computer, copy `final-pass.ps1` from the inventory run folder and preview it; without `-Apply` every line runs with `/L` and
+copies nothing. Logs are written beside the script:
+
+```powershell
+.\final-pass.ps1
+.\final-pass.ps1 -Apply
+.\final-pass.ps1 -SourceComputer OLDPC -StagingRoot 'D:\Migration' -Apply
+```
+
+robocopy only reads the old computer. `/MIR` changes only the staging destination: it copies new and changed files and deletes staging files
+that no longer exist on the old computer. Keep the user signed out and Outlook closed, then remove the share on the old computer:
+
+```powershell
+net share MIGRO$ /DELETE
+```
+
 ## Import a folder map
 
 `Show-UserDataInventory.ps1` writes `folder-map.json`. Each mapping has a `Source` relative to `-SourcePath`, a `Target` relative to the new
