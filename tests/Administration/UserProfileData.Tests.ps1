@@ -495,6 +495,236 @@ Describe 'Import-UserProfileData workflow' {
   }
 }
 
+Describe 'Windows system junctions in the destination profile' {
+  BeforeAll {
+    # Windows creates Documents\My Pictures (German: Eigene Bilder) and its siblings as Hidden+System junctions to
+    # the profile's own folders, with an Everyone deny entry that stops browsing into them.
+    function New-SystemJunction {
+      [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Creates only TestDrive fixtures.')]
+      param (
+        [string]
+        $Path,
+
+        [string]
+        $Target,
+
+        [switch]
+        $Plain
+      )
+
+      $null = New-Item -ItemType Directory -Path $Target -Force
+      $null = New-Item -ItemType Junction -Path $Path -Target $Target
+      if (-not $Plain) {
+        $null = & "$env:SystemRoot\System32\attrib.exe" +H +S $Path /L
+        $null = & "$env:SystemRoot\System32\icacls.exe" $Path /deny '*S-1-1-0:(RD)' /L /Q
+      }
+
+      $null = $global:WinkitJunctionCleanup.Add($Path)
+    }
+
+    function Get-JunctionSddl {
+      param (
+        [string]
+        $Path
+      )
+
+      $saved = Join-Path $TestDrive ([guid]::NewGuid().ToString('N') + '.acl')
+      $null = & "$env:SystemRoot\System32\icacls.exe" $Path /save $saved /L /Q
+      return @(Get-Content -LiteralPath $saved -Encoding Unicode | Where-Object { $_ -match '^[OGDS]:' })[0]
+    }
+  }
+
+  BeforeEach {
+    $global:WinkitJunctionCleanup = New-Object System.Collections.ArrayList
+    $global:WinkitIcaclsCalls = New-Object System.Collections.ArrayList
+    $global:WinkitProfileTestContext = @{
+      NativeProcess = $script:NativeProcess
+      TargetSid     = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    }
+    $script:Root = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+    $global:WinkitProfileTestContext.Source = Join-Path $script:Root 'staged user'
+    $global:WinkitProfileTestContext.Target = Join-Path $script:Root 'new user'
+    $script:Reports = Join-Path $script:Root 'reports'
+    $script:Harness = Join-Path $script:Root 'Invoke-TestImport.ps1'
+    $script:Documents = Join-Path $global:WinkitProfileTestContext.Target 'Documents'
+    $script:Junction = Join-Path $script:Documents 'My Pictures'
+    Write-ProfileFixture -Path (Join-Path $global:WinkitProfileTestContext.Source 'Documents\report [1].txt') -Text 'hello from backup'
+    Write-ProfileFixture -Path (Join-Path $global:WinkitProfileTestContext.Target 'NTUSER.DAT') -Text 'do not change'
+    $null = New-Item -ItemType Directory -Path $script:Documents -Force
+    New-SystemJunction -Path $script:Junction -Target (Join-Path $global:WinkitProfileTestContext.Target 'Pictures')
+    [IO.File]::WriteAllText($script:Harness, $script:HarnessText, (New-Object Text.UTF8Encoding($true)))
+
+    Mock Test-Elevation { $true }
+    Mock Get-ImportProfile {
+      [PSCustomObject]@{
+        Path = $global:WinkitProfileTestContext.Target
+        SID  = $global:WinkitProfileTestContext.TargetSid
+        User = 'TEST\User1'
+      }
+    }
+    Mock Get-ImportVolume {
+      [PSCustomObject]@{ AvailableFreeSpace = [long]10GB }
+    }
+    Mock Assert-ImportPermission {}
+    Mock Initialize-ImportReport {
+      $null = New-Item -ItemType Directory -Path $Path
+    }
+    # Real robocopy and icacls on TestDrive only; every icacls call is recorded.
+    Mock Invoke-SafeProcess {
+      if ($FilePath -like '*\icacls.exe') {
+        $null = $global:WinkitIcaclsCalls.Add(@($ArgumentList))
+      }
+      elseif ($FilePath -notlike '*\robocopy.exe') {
+        throw "Unexpected native tool: $FilePath"
+      }
+
+      & $global:WinkitProfileTestContext.NativeProcess -FilePath $FilePath -ArgumentList $ArgumentList -AsResult
+    }
+  }
+
+  AfterEach {
+    foreach ($link in @($global:WinkitJunctionCleanup)) {
+      if (Test-Path -LiteralPath $link) {
+        [IO.Directory]::Delete($link)
+      }
+    }
+
+    foreach ($name in @('WinkitProfileTestContext', 'WinkitJunctionCleanup', 'WinkitIcaclsCalls')) {
+      Remove-Variable -Name $name -Scope Global -ErrorAction SilentlyContinue
+    }
+  }
+
+  It 'lists them as SystemJunction with their target and accepts them in a dry run' {
+    $inventory = Get-ImportInventory -Root $script:Documents -Destination -ProfileRoot $global:WinkitProfileTestContext.Target
+    $run = Invoke-ProfileImport -Extra @{ DryRun = $true }
+
+    $junction = @($inventory.Excluded | Where-Object Reason -EQ 'SystemJunction')
+    $junction.Count | Should -Be 1
+    $junction[0].Path | Should -Be $script:Junction
+    $junction[0].Target | Should -Be (Join-Path $global:WinkitProfileTestContext.Target 'Pictures')
+    $run.ExitCode | Should -Be 0 -Because $run.Summary.Error
+    $run.Summary.Status | Should -Be 'Preview'
+    @($run.Summary.Plan)[0].SystemJunctions | Should -Be @($script:Junction)
+  }
+
+  It 'imports and resets permissions while leaving the junctions untouched' {
+    $before = Get-JunctionSddl -Path $script:Junction
+    $attributesBefore = (Get-Item -LiteralPath $script:Junction -Force).Attributes
+
+    $run = Invoke-ProfileImport
+
+    $run.ExitCode | Should -Be 0 -Because $run.Summary.Error
+    $run.Summary.Status | Should -Be 'Completed'
+    Get-Content -LiteralPath (Join-Path $script:Documents 'report [1].txt') | Should -Be 'hello from backup'
+    # LinkType is empty on Windows PowerShell 5.1 for a junction that denies listing, so read the reparse data.
+    (Get-ImportReparseInfo -Path $script:Junction).Kind | Should -Be 'Junction'
+    Get-ImportLinkTarget -Item (Get-Item -LiteralPath $script:Junction -Force) | Should -Be (Join-Path $global:WinkitProfileTestContext.Target 'Pictures')
+    (Get-Item -LiteralPath $script:Junction -Force).Attributes | Should -Be $attributesBefore
+    Get-JunctionSddl -Path $script:Junction | Should -BeExactly $before
+    $before | Should -Match '\(D;'
+
+    # The root is never reset recursively, and the junction is never passed to a resetting call.
+    $resets = @($global:WinkitIcaclsCalls | Where-Object { $_ -contains '/reset' -or $_ -contains '/setowner' })
+    $resets.Count | Should -BeGreaterThan 0
+    @($resets | Where-Object { $_[0] -eq $script:Documents -and $_ -contains '/T' }).Count | Should -Be 0
+    @($resets | Where-Object { $_[0] -eq $script:Documents }).Count | Should -Be 2
+    @($resets | Where-Object { $_[0] -eq $script:Junction }).Count | Should -Be 0
+    @($resets | Where-Object { $_[0] -eq (Join-Path $script:Documents 'report [1].txt') -and $_ -contains '/T' }).Count | Should -Be 2
+  }
+
+  It 'still refuses <Case>' -ForEach @(
+    @{ Case = 'a junction without Hidden and System'; Kind = 'Plain' }
+    @{ Case = 'a system junction one level deeper'; Kind = 'Deeper' }
+    @{ Case = 'a system junction pointing outside the profile'; Kind = 'Outside' }
+  ) {
+    switch ($Kind) {
+      'Plain' {
+        New-SystemJunction -Path (Join-Path $script:Documents 'Plain') -Target (Join-Path $global:WinkitProfileTestContext.Target 'Videos') -Plain
+        $expected = 'without the Hidden and System attributes'
+      }
+      'Deeper' {
+        $null = New-Item -ItemType Directory -Path (Join-Path $script:Documents 'Sub') -Force
+        New-SystemJunction -Path (Join-Path $script:Documents 'Sub\My Music') -Target (Join-Path $global:WinkitProfileTestContext.Target 'Music')
+        $expected = 'outside the allowed position'
+      }
+      'Outside' {
+        New-SystemJunction -Path (Join-Path $script:Documents 'My Videos') -Target (Join-Path $script:Root 'elsewhere')
+        $expected = 'not a folder inside the target profile'
+      }
+    }
+
+    $run = Invoke-ProfileImport -Extra @{ DryRun = $true }
+
+    $run.ExitCode | Should -Be 1
+    $run.Summary.Error | Should -Match 'Unsupported destination link'
+    $run.Summary.Error | Should -Match $expected
+  }
+
+  It 'still refuses a symbolic link in the destination' {
+    $link = Join-Path $script:Documents 'Linked'
+    try {
+      $null = New-Item -ItemType SymbolicLink -Path $link -Target (Join-Path $global:WinkitProfileTestContext.Target 'Pictures') -ErrorAction Stop
+      $null = $global:WinkitJunctionCleanup.Add($link)
+    }
+    catch {
+      Set-ItResult -Skipped -Because 'creating a symbolic link needs Developer Mode or elevation'
+      return
+    }
+
+    $run = Invoke-ProfileImport -Extra @{ DryRun = $true }
+
+    $run.ExitCode | Should -Be 1
+    $run.Summary.Error | Should -Match 'unsupported link \(SymbolicLink\)'
+  }
+
+  It 'stops before copying when a staged folder has the name of a system junction' {
+    Write-ProfileFixture -Path (Join-Path $global:WinkitProfileTestContext.Source 'Documents\My Pictures\photo.txt') -Text 'staged'
+
+    $run = Invoke-ProfileImport
+
+    $run.ExitCode | Should -Be 1
+    $run.Summary.Error | Should -Match 'same name as the Windows system junction'
+    Should -Invoke Invoke-SafeProcess -Times 0 -Exactly -ParameterFilter { $ArgumentList -contains '/COPY:DAT' }
+    Test-Path -LiteralPath (Join-Path $script:Documents 'report [1].txt') | Should -BeFalse
+  }
+}
+
+Describe 'Import-UserProfileData dry run in a fresh session' {
+  It 'prints no WhatIf lines while modules load and still reports Preview in <Engine>' -ForEach @(
+    @{ Engine = 'pwsh' }
+    @{ Engine = 'powershell.exe' }
+  ) {
+    # A fresh process has not loaded CimCmdlets yet; the profile lookup below autoloads it like the real one.
+    $root = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+    $source = Join-Path $root 'staged user'
+    $target = Join-Path $root 'new user'
+    Write-ProfileFixture -Path (Join-Path $source 'Documents\report.txt') -Text 'data'
+    Write-ProfileFixture -Path (Join-Path $target 'NTUSER.DAT') -Text 'hive'
+    $definitions = @($script:Ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $false) | ForEach-Object { $_.Extent.Text })
+    $harness = Join-Path $root 'Invoke-FreshImport.ps1'
+    [IO.File]::WriteAllText($harness, $script:HarnessText, (New-Object Text.UTF8Encoding($true)))
+    $wrapper = @(
+      'Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.0 -Force'
+      ($definitions -join "`r`n`r`n")
+      'function Test-Elevation { $true }'
+      'function Get-ImportVolume { [PSCustomObject]@{ AvailableFreeSpace = [long]10GB } }'
+      'function Assert-ImportPermission { }'
+      ('function Get-ImportProfile {{ $null = Get-CimInstance -ClassName Win32_OperatingSystem; [PSCustomObject]@{{ Path = ''{0}''; SID = ''{1}''; User = ''TEST\User1'' }} }}' -f $target, [Security.Principal.WindowsIdentity]::GetCurrent().User.Value)
+      ("`$null = Get-Module CimCmdlets | ForEach-Object {{ throw 'CimCmdlets is already loaded.' }}")
+      ("& '{0}' -SourcePath '{1}' -TargetUser 'TEST\User1' -ReportDirectory '{2}' -Folder Documents -DryRun *>&1 | ForEach-Object {{ [string]`$_ }}" -f $harness, $source, (Join-Path $root 'reports'))
+    ) -join "`r`n"
+    $wrapperPath = Join-Path $root 'Run-Fresh.ps1'
+    [IO.File]::WriteAllText($wrapperPath, $wrapper, (New-Object Text.UTF8Encoding($true)))
+
+    $output = (& $Engine -NoProfile -ExecutionPolicy Bypass -File $wrapperPath 2>&1 | ForEach-Object { [string]$_ }) -join "`n"
+
+    $output | Should -Not -Match 'WhatIf:|What if:'
+    $output | Should -Match 'Profile import: Preview'
+    $output | Should -Match 'dry run: no report written'
+    Test-Path -LiteralPath (Join-Path $root 'reports') | Should -BeFalse
+  }
+}
+
 Describe 'Profile discovery guards' {
   BeforeEach {
     $global:WinkitProfileTestContext = @{

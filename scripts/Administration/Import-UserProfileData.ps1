@@ -152,9 +152,10 @@ param (
 Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.0 -Force
 
 $ErrorActionPreference = 'Stop'
-if ($DryRun) {
-  $WhatIfPreference = $true
-}
+
+# The preview is carried into this script's own confirmation points. Setting $WhatIfPreference would also reach
+# module autoloading (CimCmdlets prints "WhatIf: ... Set Alias" lines and leaves its aliases undefined).
+$_preview = [bool]$DryRun -or [bool]$WhatIfPreference
 
 $_results = New-Object System.Collections.ArrayList
 $_plan = New-Object System.Collections.ArrayList
@@ -329,6 +330,176 @@ function Get-ImportVolume {
   return $_drive
 }
 
+function Get-ImportReparseInfo {
+  param (
+    [string]
+    $Path
+  )
+
+  # Windows PowerShell 5.1 reports an empty LinkType and Target for junctions whose ACL denies listing, which is
+  # how Windows creates Documents\My Pictures and its siblings. The tag is read from the directory entry and the
+  # target with FSCTL_GET_REPARSE_POINT on a handle that only reads attributes, which that deny entry allows.
+  if ($null -eq ('WinkitImport.ReparsePoint' -as [type])) {
+    Add-Type -ErrorAction Stop -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+using Microsoft.Win32.SafeHandles;
+
+namespace WinkitImport
+{
+    public static class ReparsePoint
+    {
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct FindData
+        {
+            public uint Attributes;
+            public System.Runtime.InteropServices.ComTypes.FILETIME Created;
+            public System.Runtime.InteropServices.ComTypes.FILETIME Accessed;
+            public System.Runtime.InteropServices.ComTypes.FILETIME Written;
+            public uint SizeHigh;
+            public uint SizeLow;
+            public uint Reserved0;
+            public uint Reserved1;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+            public string FileName;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]
+            public string AlternateName;
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr FindFirstFileW(string name, out FindData data);
+
+        [DllImport("kernel32.dll")]
+        private static extern bool FindClose(IntPtr handle);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool DeviceIoControl(SafeFileHandle handle, uint code, IntPtr input, uint inputSize, byte[] output, uint outputSize, out uint returned, IntPtr overlapped);
+
+        public static uint GetTag(string path)
+        {
+            FindData data;
+            IntPtr handle = FindFirstFileW(path, out data);
+            if (handle == new IntPtr(-1))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            FindClose(handle);
+            return (data.Attributes & 0x400) != 0 ? data.Reserved0 : 0;
+        }
+
+        public static string GetTarget(string path)
+        {
+            // FILE_READ_ATTRIBUTES, share all, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS.
+            using (SafeFileHandle handle = CreateFileW(path, 0x80, 7, IntPtr.Zero, 3, 0x00200000 | 0x02000000, IntPtr.Zero))
+            {
+                if (handle.IsInvalid)
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                byte[] buffer = new byte[16384];
+                uint returned;
+                if (!DeviceIoControl(handle, 0x000900A8, IntPtr.Zero, 0, buffer, (uint)buffer.Length, out returned, IntPtr.Zero))
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                uint tag = BitConverter.ToUInt32(buffer, 0);
+                int pathBuffer = tag == 0xA000000C ? 20 : 16;
+                if (tag != 0xA0000003 && tag != 0xA000000C)
+                    return null;
+                int substituteOffset = BitConverter.ToUInt16(buffer, 8);
+                int substituteLength = BitConverter.ToUInt16(buffer, 10);
+                int printOffset = BitConverter.ToUInt16(buffer, 12);
+                int printLength = BitConverter.ToUInt16(buffer, 14);
+                string print = Encoding.Unicode.GetString(buffer, pathBuffer + printOffset, printLength);
+                if (print.Length > 0)
+                    return print;
+                return Encoding.Unicode.GetString(buffer, pathBuffer + substituteOffset, substituteLength);
+            }
+        }
+    }
+}
+'@
+  }
+
+  $_tag = [WinkitImport.ReparsePoint]::GetTag($Path)
+  $_kind = 'Other'
+  if ($_tag -eq [uint32]'0xA0000003') {
+    $_kind = 'Junction'
+  }
+  elseif ($_tag -eq [uint32]'0xA000000C') {
+    $_kind = 'SymbolicLink'
+  }
+
+  $_target = $null
+  if ($_kind -ne 'Other') {
+    $_target = [WinkitImport.ReparsePoint]::GetTarget($Path)
+  }
+
+  [PSCustomObject]@{
+    Tag    = $_tag
+    Kind   = $_kind
+    Target = $_target
+  }
+}
+
+function Get-ImportLinkTarget {
+  param (
+    [object]
+    $Item
+  )
+
+  $_target = [string](Get-ImportReparseInfo -Path $Item.FullName).Target
+  if ([string]::IsNullOrWhiteSpace($_target)) {
+    return $null
+  }
+
+  # Junction targets may carry the NT or Win32 long-path prefix.
+  $_target = $_target -replace '^\\\?\?\\', '' -replace '^\\\\\?\\', ''
+  if (-not [IO.Path]::IsPathRooted($_target)) {
+    return $null
+  }
+
+  return [IO.Path]::GetFullPath($_target).TrimEnd('\')
+}
+
+function Get-ImportSystemJunctionReason {
+  param (
+    [object]
+    $Item,
+
+    [string]
+    $Root,
+
+    [string]
+    $ProfileRoot
+  )
+
+  # Windows creates hidden compatibility junctions such as Documents\My Pictures (localized, for example
+  # "Eigene Bilder"). They are recognized by their properties, never by name. Returns $null for one of them,
+  # otherwise the reason the link is not allowed.
+  $_hiddenSystem = [IO.FileAttributes]::Hidden -bor [IO.FileAttributes]::System
+  $_kind = (Get-ImportReparseInfo -Path $Item.FullName).Kind
+  if ($_kind -ne 'Junction') {
+    return "unsupported link ($_kind); only Windows system junctions are allowed in the destination"
+  }
+
+  if (($Item.Attributes -band $_hiddenSystem) -ne $_hiddenSystem) {
+    return 'junction without the Hidden and System attributes, so it is not a Windows system junction'
+  }
+
+  $_parent = Split-Path -Path $Item.FullName -Parent
+  if (-not $_parent.Equals($Root.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)) {
+    return 'Windows system junction outside the allowed position directly below the destination folder'
+  }
+
+  $_target = Get-ImportLinkTarget -Item $Item
+  if ([string]::IsNullOrWhiteSpace($ProfileRoot) -or $null -eq $_target -or
+    -not (Test-ImportPathWithin -Path $_target -Root $ProfileRoot) -or $_target.Equals($ProfileRoot, [StringComparison]::OrdinalIgnoreCase)) {
+    return "system junction whose target '$_target' is not a folder inside the target profile"
+  }
+
+  return $null
+}
+
 function Get-ImportInventory {
   param (
     [string]
@@ -338,7 +509,10 @@ function Get-ImportInventory {
     $Destination,
 
     [string[]]
-    $ExcludeDirectory = @()
+    $ExcludeDirectory = @(),
+
+    [string]
+    $ProfileRoot
   )
 
   $_files = New-Object System.Collections.ArrayList
@@ -365,8 +539,24 @@ function Get-ImportInventory {
       }
 
       if (($_attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-        if ($Destination -or $_item.LinkType -notin @('Junction', 'SymbolicLink')) {
-          throw "Unsupported reparse point or cloud placeholder: $($_item.FullName)"
+        # Destination: only Windows' own compatibility junctions are tolerated, and they are never traversed.
+        if ($Destination) {
+          $_reason = Get-ImportSystemJunctionReason -Item $_item -Root $Root -ProfileRoot $ProfileRoot
+          if ($null -ne $_reason) {
+            throw "Unsupported destination link: $($_item.FullName) is a $_reason."
+          }
+
+          $null = $_excluded.Add([PSCustomObject]@{
+              Path        = $_item.FullName
+              Reason      = 'SystemJunction'
+              IsDirectory = $true
+              Target      = Get-ImportLinkTarget -Item $_item
+            })
+          continue
+        }
+
+        if ((Get-ImportReparseInfo -Path $_item.FullName).Kind -notin @('Junction', 'SymbolicLink')) {
+          throw "Unsupported source item: $($_item.FullName) is a reparse point that is neither a junction nor a symbolic link, for example a cloud placeholder."
         }
 
         $null = $_excluded.Add([PSCustomObject]@{
@@ -463,7 +653,7 @@ function Get-ImportLongPath {
 
   $_result = Invoke-SafeProcess -FilePath "$env:SystemRoot\System32\robocopy.exe" -ArgumentList $_arguments -AsResult -ErrorAction Stop
   if ($_result.TimedOut -or $_result.Cancelled -or $null -eq $_result.ExitCode -or $_result.ExitCode -lt 0 -or $_result.ExitCode -ge 8) {
-    throw "Destination path preflight failed for $_SourceRoot (robocopy exit $($_result.ExitCode))."
+    throw "Destination path preflight failed for $SourceRoot (robocopy exit $($_result.ExitCode))."
   }
 
   $_sourceRoot = [IO.Path]::GetFullPath($SourceRoot).TrimEnd('\')
@@ -562,20 +752,110 @@ function Invoke-ImportPermission {
     $SID,
 
     [string]
+    $LogPrefix,
+
+    [string[]]
+    $SystemJunction = @()
+  )
+
+  # The caller checks the destination tree for links before recursive icacls; only Windows system junctions
+  # directly below the root are tolerated. A recursive call on the root would reach them and, with /L, replace
+  # their deny entry, so the root is then reset on its own and each other direct child recursively.
+  $_targets = New-Object System.Collections.ArrayList
+  if ($SystemJunction.Count -eq 0) {
+    $null = $_targets.Add([PSCustomObject]@{
+        Path      = $Path
+        Recursive = $true
+      })
+  }
+  else {
+    $null = $_targets.Add([PSCustomObject]@{
+        Path      = $Path
+        Recursive = $false
+      })
+    foreach ($_child in @(Get-ChildItem -LiteralPath $Path -Force)) {
+      $_isJunction = @($SystemJunction | Where-Object { $_.Equals($_child.FullName, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
+      if (-not $_isJunction) {
+        $null = $_targets.Add([PSCustomObject]@{
+            Path      = $_child.FullName
+            Recursive = $true
+          })
+      }
+    }
+  }
+
+  $_index = 0
+  foreach ($_target in $_targets) {
+    $_recursion = @()
+    if ($_target.Recursive) {
+      $_recursion = @('/T')
+    }
+
+    $_commands = @(
+      (@('/reset') + $_recursion + @('/C', '/L', '/Q')),
+      (@('/setowner', "*$SID") + $_recursion + @('/C', '/L', '/Q'))
+    )
+    foreach ($_command in $_commands) {
+      $_arguments = @($_target.Path) + $_command
+      $_process = Invoke-SafeProcess -FilePath "$env:SystemRoot\System32\icacls.exe" -ArgumentList $_arguments -AsResult
+      [IO.File]::WriteAllText("$LogPrefix-$_index.log", $_process.StdOut + $_process.StdErr)
+      if ($_process.TimedOut -or $_process.Cancelled -or $_process.ExitCode -ne 0) {
+        throw "icacls failed on '$($_target.Path)' (exit $($_process.ExitCode)); inspect $LogPrefix-$_index.log."
+      }
+
+      $_index++
+    }
+  }
+}
+
+function Get-ImportJunctionState {
+  param (
+    [string[]]
+    $Path = @(),
+
+    [string]
     $LogPrefix
   )
 
-  # The caller checks the entire destination tree for links before recursive icacls.
-  $_commands = @(
-    @('/reset', '/T', '/C', '/L', '/Q'),
-    @('/setowner', "*$SID", '/T', '/C', '/L', '/Q')
-  )
-  for ($_index = 0; $_index -lt $_commands.Count; $_index++) {
-    $_arguments = @($Path) + $_commands[$_index]
-    $_process = Invoke-SafeProcess -FilePath "$env:SystemRoot\System32\icacls.exe" -ArgumentList $_arguments -AsResult
-    [IO.File]::WriteAllText("$LogPrefix-$_index.log", $_process.StdOut + $_process.StdErr)
+  # The security descriptor is read from the link itself with icacls /L; .NET ACL calls follow the junction.
+  $_states = New-Object System.Collections.ArrayList
+  $_index = 0
+  foreach ($_junction in $Path) {
+    $_item = Get-Item -LiteralPath $_junction -Force
+    $_saved = "$LogPrefix-$_index.acl"
+    $_process = Invoke-SafeProcess -FilePath "$env:SystemRoot\System32\icacls.exe" -ArgumentList @($_junction, '/save', $_saved, '/L', '/Q') -AsResult
     if ($_process.TimedOut -or $_process.Cancelled -or $_process.ExitCode -ne 0) {
-      throw "icacls failed on '$Path' (exit $($_process.ExitCode)); inspect $LogPrefix-$_index.log."
+      throw "Could not read the security descriptor of the Windows system junction '$_junction' (icacls exit $($_process.ExitCode))."
+    }
+
+    $_sddl = @(Get-Content -LiteralPath $_saved -Encoding Unicode | Where-Object { $_ -match '^[OGDS]:' }) | Select-Object -First 1
+    $null = $_states.Add([PSCustomObject]@{
+        Path       = $_junction
+        Target     = Get-ImportLinkTarget -Item $_item
+        Attributes = [int]$_item.Attributes
+        Sddl       = [string]$_sddl
+      })
+    $_index++
+  }
+
+  return @($_states.ToArray())
+}
+
+function Assert-ImportJunctionUnchanged {
+  param (
+    [object[]]
+    $Before = @(),
+
+    [string]
+    $LogPrefix
+  )
+
+  $_after = @(Get-ImportJunctionState -Path @($Before | ForEach-Object { $_.Path }) -LogPrefix $LogPrefix)
+  for ($_index = 0; $_index -lt $Before.Count; $_index++) {
+    foreach ($_property in @('Target', 'Attributes', 'Sddl')) {
+      if ([string]$Before[$_index].$_property -cne [string]$_after[$_index].$_property) {
+        throw "The Windows system junction '$($Before[$_index].Path)' changed during the import ($_property was '$($Before[$_index].$_property)', now '$($_after[$_index].$_property)')."
+      }
     }
   }
 }
@@ -885,6 +1165,32 @@ try {
     $_to = $_mapping.Destination
     $_exclude = @($_mapping.Exclude)
 
+    # Check the destination's links first: robocopy cannot list through a system junction's deny entry.
+    $_systemJunctions = @()
+    if (Test-Path -LiteralPath $_to) {
+      if (-not (Test-Path -LiteralPath $_to -PathType Container)) {
+        throw "A file occupies the destination directory: $_to"
+      }
+
+      $_destinationCheck = Get-ImportInventory -Root $_to -Destination -ProfileRoot $_profile.Path
+      $_systemJunctions = @($_destinationCheck.Excluded | Where-Object { $_.Reason -eq 'SystemJunction' } | ForEach-Object { $_.Path })
+    }
+
+    # Windows system junctions are left alone; staged data with the same name would be written through one.
+    foreach ($_junction in $_systemJunctions) {
+      $_shadow = Join-Path $_from (Split-Path -Path $_junction -Leaf)
+      if (Test-Path -LiteralPath $_shadow) {
+        $_shadowItem = Get-Item -LiteralPath $_shadow -Force
+        if (($_shadowItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) {
+          throw "Staged item '$_shadow' has the same name as the Windows system junction '$_junction' in the target profile and would be copied through it. Rename the staged item or map it to another folder."
+        }
+      }
+    }
+
+    if ($_systemJunctions.Count -gt 0) {
+      Write-Log -Message "Leaving $($_systemJunctions.Count) Windows system junction(s) in $_to untouched: $((@($_systemJunctions | ForEach-Object { Split-Path -Path $_ -Leaf })) -join ', ')" -Color Gray
+    }
+
     Write-Log -Message "Checking destination path lengths: $_from -> $_to" -Color Gray
     $_longPaths = @(Get-ImportLongPath -SourceRoot $_from -DestinationRoot $_to -ExcludeDirectory $_exclude)
     if ($_longPaths.Count -gt 0) {
@@ -896,13 +1202,6 @@ try {
 
     Write-Log -Message "Inventory and hash: $_from -> $_to" -Color Cyan
     $_inventory = Get-ImportInventory -Root $_from -ExcludeDirectory $_exclude
-    if (Test-Path -LiteralPath $_to) {
-      if (-not (Test-Path -LiteralPath $_to -PathType Container)) {
-        throw "A file occupies the destination directory: $_to"
-      }
-
-      $null = Get-ImportInventory -Root $_to -Destination
-    }
 
     $_parent = Split-Path -Path $_to -Parent
     while (-not (Test-Path -LiteralPath $_parent)) {
@@ -943,13 +1242,14 @@ try {
     }
 
     $null = $_plan.Add([PSCustomObject]@{
-        Source      = $_from
-        Destination = $_to
-        Exclude     = $_exclude
-        Inventory   = $_inventory
-        Status      = 'Planned'
-        ExitCode    = $null
-        CopyLog     = $null
+        Source          = $_from
+        Destination     = $_to
+        Exclude         = $_exclude
+        Inventory       = $_inventory
+        SystemJunctions = $_systemJunctions
+        Status          = 'Planned'
+        ExitCode        = $null
+        CopyLog         = $null
       })
     Add-OperationResult -Results $_results -Target $_to -Source $_from -Action 'Plan' -Status 'Completed' -Property @{
       Files    = $_inventory.Files.Count
@@ -991,7 +1291,7 @@ try {
     Plan          = @($_plan.ToArray())
   }
 
-  if ($PSCmdlet.ShouldProcess($_profile.Path, "Import $_fileCount files and reset permissions/ownership in $($_plan.Count) selected data folders")) {
+  if (-not $_preview -and $PSCmdlet.ShouldProcess($_profile.Path, "Import $_fileCount files and reset permissions/ownership in $($_plan.Count) selected data folders")) {
     Assert-ImportProfileUnchanged -TargetProfile $_profile
     $_runDirectory = Join-Path $_reportRoot $_runId
     Assert-ImportPath -Path $_runDirectory
@@ -1007,10 +1307,13 @@ try {
       Assert-ImportPath -Path $_entry.Destination
       # Recheck destination links immediately before invoking a recursive native tool.
       if (Test-Path -LiteralPath $_entry.Destination) {
-        $null = Get-ImportInventory -Root $_entry.Destination -Destination
+        $null = Get-ImportInventory -Root $_entry.Destination -Destination -ProfileRoot $_profile.Path
       }
 
       $_index++
+
+      # Record the Windows system junctions so the run can prove they were not changed.
+      $_junctionsBefore = @(Get-ImportJunctionState -Path $_entry.SystemJunctions -LogPrefix (Join-Path $_runDirectory "junctions-before-$_index"))
       $_entry.CopyLog = Join-Path $_runDirectory "robocopy-$_index.log"
       $_arguments = @(
         $_entry.Source,
@@ -1035,7 +1338,8 @@ try {
         'UsrClass.*'
       )
       $_arguments += @($_entry.Inventory.Excluded | Where-Object { -not $_.IsDirectory } | ForEach-Object { $_.Path })
-      $_excludedDirectories = @($_entry.Inventory.Excluded | Where-Object IsDirectory | ForEach-Object { $_.Path })
+      # Destination system junctions are excluded by full path as well, so robocopy never writes into them.
+      $_excludedDirectories = @($_entry.Inventory.Excluded | Where-Object IsDirectory | ForEach-Object { $_.Path }) + @($_entry.SystemJunctions)
       if ($_excludedDirectories.Count -gt 0) {
         $_arguments += @('/XD') + $_excludedDirectories
       }
@@ -1055,11 +1359,19 @@ try {
         throw "Robocopy failed: $_meaning (exit $($_copy.ExitCode)); see $($_entry.CopyLog)."
       }
 
-      $_destinationInventory = Get-ImportInventory -Root $_entry.Destination -Destination
+      $_destinationInventory = Get-ImportInventory -Root $_entry.Destination -Destination -ProfileRoot $_profile.Path
+      $_junctionsAfter = @($_destinationInventory.Excluded | Where-Object { $_.Reason -eq 'SystemJunction' } | ForEach-Object { $_.Path })
+      foreach ($_junction in $_junctionsAfter) {
+        if (@($_entry.SystemJunctions | Where-Object { $_.Equals($_junction, [StringComparison]::OrdinalIgnoreCase) }).Count -eq 0) {
+          throw "A Windows system junction appeared in the destination during the copy: $_junction"
+        }
+      }
+
       Assert-ImportContent -Entry $_entry
       Assert-ImportProfileUnchanged -TargetProfile $_profile
       Write-Log -Message "Applying target profile permissions: $($_entry.Destination)" -Color Cyan
-      Invoke-ImportPermission -Path $_entry.Destination -SID $_profile.SID -LogPrefix (Join-Path $_runDirectory "permissions-$_index")
+      Invoke-ImportPermission -Path $_entry.Destination -SID $_profile.SID -LogPrefix (Join-Path $_runDirectory "permissions-$_index") -SystemJunction $_entry.SystemJunctions
+      Assert-ImportJunctionUnchanged -Before $_junctionsBefore -LogPrefix (Join-Path $_runDirectory "junctions-after-$_index")
       foreach ($_path in $_destinationInventory.Directories) {
         Assert-ImportPermission -Path $_path -SID $_profile.SID -RequireOwner -RequireInheritance
       }
@@ -1081,7 +1393,7 @@ try {
     $_manifest.Status = 'Verified'
     Write-ImportAudit -Manifest $_manifest -Results $_results -Directory $_runDirectory
 
-    if ($RemoveSource -and $PSCmdlet.ShouldProcess($_source, 'Delete only verified imported source files and empty selected directories')) {
+    if ($RemoveSource -and -not $_preview -and $PSCmdlet.ShouldProcess($_source, 'Delete only verified imported source files and empty selected directories')) {
       Assert-ImportProfileUnchanged -TargetProfile $_profile
       foreach ($_entry in $_plan) {
         Assert-ImportContent -Entry $_entry
@@ -1122,8 +1434,9 @@ try {
 
     $_status = 'Completed'
   }
-  elseif ($WhatIfPreference) {
+  elseif ($_preview) {
     $_status = 'Preview'
+    Write-Log -Message "Preview: would import $_fileCount files and reset permissions/ownership in $($_plan.Count) selected data folders of $($_profile.Path). Nothing was copied or changed." -Color Yellow
   }
 }
 catch {
@@ -1165,8 +1478,16 @@ if ($_runDirectory) {
   }
 }
 
-Write-Log -Message "Profile import: $_status | Report: $_manifestPath | Staging: $_source" -Color Cyan
-if ($PassThru -or $WhatIfPreference) {
+$_reportLabel = $_manifestPath
+if (-not $_reportLabel) {
+  $_reportLabel = 'none (no report is written before the import starts)'
+  if ($_preview) {
+    $_reportLabel = 'none (dry run: no report written)'
+  }
+}
+
+Write-Log -Message "Profile import: $_status | Report: $_reportLabel | Staging: $_source" -Color Cyan
+if ($PassThru -or $_preview) {
   $_results
 }
 if ($_failure) {
