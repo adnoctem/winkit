@@ -67,6 +67,23 @@ so an account re-pointed to a PST would still be listed against the default stor
 **Confirm each inferred destination in Account Settings** before removing an account or a data file. The delivery location is shown per
 account, below the account list.
 
+The profile itself records each account's delivery store as `Delivery Store EntryID`, which is the store's `StoreID`. Add
+`-IncludeProfileEvidence` to read it from the user's registry and match it to the data files:
+
+```powershell
+.\scripts\Office\Show-OutlookAccount.ps1 -IncludeProfileEvidence -ReportDirectory 'C:\Managed\Reports'
+```
+
+```text
+Profile evidence: 1 profile(s), 2 recorded delivery store(s)
+  buchhaltung@example.de                 records delivery into Postfach (C:\Users\...\outlook.pst)
+  a.example@example.com                  records delivery into Postfach (C:\Users\...\outlook.pst)
+```
+
+The report's `ProfileEvidence` holds those matches and the profile tree. Only an allowlist of value names and entry-ID-sized binaries are
+included; other values appear as a name and length, and credential-looking names are withheld. Review the report before sharing it. The
+evidence does not change the findings: an inferred destination is still raised, and the evidence is what to confirm it with.
+
 Where neither route answers — no per-account store and no readable default — the inventory fails closed instead of guessing. With any store
 in the profile Exchange-backed, each non-Exchange account raises `NoDeliveryStore` as **critical**: the store that could not be named may be
 the OST. The Exchange account itself stays a warning, because its mail belongs in the mailbox whichever store that is. The detail text names

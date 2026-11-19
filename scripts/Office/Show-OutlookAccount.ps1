@@ -33,10 +33,20 @@
 
   A JSON report is written only when ReportPath or ReportDirectory is supplied.
   Collect those reports across a fleet to plan removals from one place.
+
+  IncludeProfileEvidence adds the MAPI profile tree from the user's registry to
+  the inventory. Outlook 2007 cannot report an account's delivery store, but its
+  profile records it as "Delivery Store EntryID"; the evidence lists that value
+  for each account with the data file it matches. Only an allowlist of value
+  names and entry-ID-sized binaries are emitted; everything else appears as a
+  name and length, and credential-looking names are withheld entirely.
 .PARAMETER ReportDirectory
   Directory for a generated JSON report filename. Created when absent.
 .PARAMETER ReportPath
   Exact JSON report path. Refused when the file already exists.
+.PARAMETER IncludeProfileEvidence
+  Add the redacted MAPI profile tree and each account's recorded delivery store
+  entry ID, matched against the profile's data files, to the inventory and report.
 .PARAMETER IgnoreAdministrator
   Permit execution from an elevated session. Outlook must run as the same
   Windows user at the same elevation. This override does not switch users or
@@ -47,6 +57,9 @@
   PS> .\Show-OutlookAccount.ps1
 .EXAMPLE
   PS> .\Show-OutlookAccount.ps1 -ReportDirectory 'C:\Managed\Reports'
+.EXAMPLE
+  PS> .\Show-OutlookAccount.ps1 -IncludeProfileEvidence -ReportDirectory 'C:\Managed\Reports'
+  Add the profile's recorded delivery stores, which Outlook 2007 cannot report itself.
 .NOTES
   Author: MVProwess <info@mvprowess.com>
   License: MIT
@@ -65,6 +78,9 @@ param (
   [ValidateNotNullOrEmpty()]
   [string]
   $ReportPath,
+
+  [switch]
+  $IncludeProfileEvidence,
 
   [switch]
   $IgnoreAdministrator,
@@ -237,6 +253,304 @@ function Get-OutlookAccountStoreRecord {
 }
 
 # -----------------------------------------------------------------------------
+# Profile evidence. The account keys hold POP3/IMAP password blobs next to the
+# delivery settings, so values are emitted only by allowlist or entry-ID length.
+
+function Get-OutlookAccountProfileValueRule {
+  param (
+    [string]
+    $Name
+  )
+
+  $_allowedNames = @(
+    'Account Name',
+    'Display Name',
+    'Email',
+    'Delivery Store EntryID',
+    'Delivery Folder EntryID',
+    'Mini UID',
+    'clsid',
+    'Service Name',
+    'Service UID',
+    'PR_PROFILE_HOME_SERVER',
+    'Next Account ID',
+    'Account Order',
+    'Default Store EntryID',
+    'PST Path',
+    'PST Config'
+  )
+
+  # A name matching this is never emitted, not even as a length.
+  $_forbiddenPattern = 'pass|pwd|password|cred|secret|token|salt|key$|hash|auth|signature|cert|pfx|private'
+
+  [PSCustomObject]@{
+    Forbidden = -not [string]::IsNullOrEmpty($Name) -and $Name -match $_forbiddenPattern
+    Allowed   = $_allowedNames -contains $Name
+  }
+}
+
+function ConvertTo-OutlookAccountHex {
+  param (
+    [byte[]]
+    $Bytes
+  )
+
+  if ($null -eq $Bytes -or $Bytes.Length -eq 0) {
+    return ''
+  }
+
+  return [BitConverter]::ToString($Bytes).Replace('-', '').ToLowerInvariant()
+}
+
+function Read-OutlookAccountProfileKey {
+  param (
+    [Microsoft.Win32.RegistryKey]
+    $Key,
+
+    [string]
+    $Path,
+
+    [int]
+    $Depth
+  )
+
+  # Binary values in this length range are candidate entry IDs and are emitted as hex even when the name is unknown.
+  $_entryIdMinimum = 16
+  $_entryIdMaximum = 512
+
+  $_values = New-Object System.Collections.ArrayList
+  foreach ($_name in $Key.GetValueNames()) {
+    $_label = $_name
+    if ([string]::IsNullOrEmpty($_label)) {
+      $_label = '(default)'
+    }
+
+    $_kind = $Key.GetValueKind($_name).ToString()
+    $_rule = Get-OutlookAccountProfileValueRule -Name $_label
+    if ($_rule.Forbidden) {
+      $null = $_values.Add([PSCustomObject]@{
+          Name    = $_label
+          Kind    = $_kind
+          Length  = $null
+          Emitted = $false
+          Reason  = 'Name matches the credential pattern.'
+          Hex     = $null
+          Text    = $null
+        })
+      continue
+    }
+
+    $_raw = $Key.GetValue($_name, $null, 'DoNotExpandEnvironmentNames')
+    $_bytes = $null
+    $_length = $null
+    if ($_raw -is [byte[]]) {
+      $_bytes = [byte[]]$_raw
+      $_length = $_bytes.Length
+    }
+    elseif ($_raw -is [string]) {
+      $_length = $_raw.Length
+    }
+
+    $_candidate = -not $_rule.Allowed -and $null -ne $_bytes -and
+    $_bytes.Length -ge $_entryIdMinimum -and $_bytes.Length -le $_entryIdMaximum
+    if (-not $_rule.Allowed -and -not $_candidate) {
+      $null = $_values.Add([PSCustomObject]@{
+          Name    = $_label
+          Kind    = $_kind
+          Length  = $_length
+          Emitted = $false
+          Reason  = 'Not in the allowlist and not a candidate entry ID.'
+          Hex     = $null
+          Text    = $null
+        })
+      continue
+    }
+
+    # Text is decoded only for allowlisted names that are not identifiers; profile strings are Unicode REG_BINARY.
+    $_hex = $null
+    $_text = $null
+    if ($null -ne $_bytes) {
+      $_hex = ConvertTo-OutlookAccountHex -Bytes $_bytes
+      if ($_rule.Allowed -and $_label -notmatch 'EntryID|UID|clsid') {
+        $_text = [Text.Encoding]::Unicode.GetString($_bytes).Trim([char]0)
+      }
+    }
+    elseif ($_rule.Allowed -and $_raw -is [string]) {
+      $_text = [string]$_raw
+    }
+
+    $_reason = 'Allowlisted name.'
+    if (-not $_rule.Allowed) {
+      $_reason = 'Candidate entry ID by length.'
+    }
+
+    $null = $_values.Add([PSCustomObject]@{
+        Name    = $_label
+        Kind    = $_kind
+        Length  = $_length
+        Emitted = $true
+        Reason  = $_reason
+        Hex     = $_hex
+        Text    = $_text
+      })
+  }
+
+  $_children = New-Object System.Collections.ArrayList
+  if ($Depth -gt 0) {
+    foreach ($_childName in $Key.GetSubKeyNames()) {
+      $_child = $null
+      try {
+        $_child = $Key.OpenSubKey($_childName)
+      }
+      catch {
+        $null = $_children.Add([PSCustomObject]@{
+            Path  = "$Path\$_childName"
+            Error = $_.Exception.Message
+          })
+        continue
+      }
+
+      if ($null -eq $_child) {
+        continue
+      }
+
+      try {
+        $null = $_children.Add((Read-OutlookAccountProfileKey -Key $_child -Path "$Path\$_childName" -Depth ($Depth - 1)))
+      }
+      finally {
+        $_child.Close()
+      }
+    }
+  }
+
+  [PSCustomObject]@{
+    Path     = $Path
+    Values   = @($_values.ToArray())
+    Children = @($_children.ToArray())
+  }
+}
+
+function Get-OutlookAccountProfileEvidence {
+  param (
+    [object[]]
+    $Store = @(),
+
+    [string]
+    $RegistryRoot = 'Software'
+  )
+
+  $_officeVersions = @('12.0', '14.0', '15.0', '16.0')
+
+  # Outlook 2013 moved the profiles below the Office version key, so both locations are read.
+  $_searchRoots = @("$RegistryRoot\Microsoft\Windows NT\CurrentVersion\Windows Messaging Subsystem\Profiles")
+  foreach ($_version in $_officeVersions) {
+    $_searchRoots += "$RegistryRoot\Microsoft\Office\$_version\Outlook\Profiles"
+  }
+
+  $_defaultProfiles = New-Object System.Collections.ArrayList
+  foreach ($_version in $_officeVersions) {
+    $_outlookKey = "HKCU:\$RegistryRoot\Microsoft\Office\$_version\Outlook"
+    if (Test-Path -LiteralPath $_outlookKey) {
+      $_properties = Get-ItemProperty -LiteralPath $_outlookKey -ErrorAction SilentlyContinue
+      $null = $_defaultProfiles.Add([PSCustomObject]@{
+          OfficeVersion  = $_version
+          DefaultProfile = $_properties.DefaultProfile
+        })
+    }
+  }
+
+  $_profiles = New-Object System.Collections.ArrayList
+  foreach ($_searchRoot in $_searchRoots) {
+    if (-not (Test-Path -LiteralPath "HKCU:\$_searchRoot")) {
+      continue
+    }
+
+    foreach ($_profileKey in @(Get-ChildItem -LiteralPath "HKCU:\$_searchRoot" -ErrorAction SilentlyContinue)) {
+      $_relative = "$_searchRoot\$($_profileKey.PSChildName)"
+      $_record = [PSCustomObject]@{
+        ProfileName = $_profileKey.PSChildName
+        Root        = $_searchRoot
+        Error       = $null
+        Tree        = $null
+      }
+
+      $_opened = $null
+      try {
+        $_opened = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($_relative)
+        if ($null -eq $_opened) {
+          $_record.Error = "OpenSubKey returned null for '$_relative'."
+        }
+        else {
+          $_record.Tree = Read-OutlookAccountProfileKey -Key $_opened -Path $_profileKey.PSChildName -Depth 3
+        }
+      }
+      catch {
+        $_record.Error = $_.Exception.Message
+      }
+      finally {
+        if ($null -ne $_opened) {
+          $_opened.Close()
+        }
+      }
+
+      $null = $_profiles.Add($_record)
+    }
+  }
+
+  # Each account key that records a delivery store, matched to the data file with the same entry ID.
+  $_deliveryStores = New-Object System.Collections.ArrayList
+  $_pending = New-Object System.Collections.Queue
+  foreach ($_profile in $_profiles) {
+    if ($null -ne $_profile.Tree) {
+      $_pending.Enqueue([PSCustomObject]@{
+          Profile = $_profile.ProfileName
+          Node    = $_profile.Tree
+        })
+    }
+  }
+
+  while ($_pending.Count -gt 0) {
+    $_entry = $_pending.Dequeue()
+    $_delivery = @($_entry.Node.Values | Where-Object { $_.Name -eq 'Delivery Store EntryID' -and $_.Hex })
+    if ($_delivery.Count -gt 0) {
+      $_accountName = @($_entry.Node.Values | Where-Object { $_.Name -eq 'Account Name' } | ForEach-Object { $_.Text }) | Select-Object -First 1
+      $_entryId = $_delivery[0].Hex
+      $_matches = @($Store | Where-Object { ([string]$_.StoreID).Equals($_entryId, [StringComparison]::OrdinalIgnoreCase) })
+      $_matchedStore = $null
+      $_matchedPath = $null
+      if ($_matches.Count -eq 1) {
+        $_matchedStore = $_matches[0].DisplayName
+        $_matchedPath = $_matches[0].FilePath
+      }
+
+      $null = $_deliveryStores.Add([PSCustomObject]@{
+          ProfileName          = $_entry.Profile
+          AccountKey           = $_entry.Node.Path
+          AccountName          = $_accountName
+          DeliveryStoreEntryID = $_entryId
+          MatchedStore         = $_matchedStore
+          MatchedFilePath      = $_matchedPath
+        })
+    }
+
+    foreach ($_child in @($_entry.Node.Children)) {
+      if ($null -ne $_child.Values) {
+        $_pending.Enqueue([PSCustomObject]@{
+            Profile = $_entry.Profile
+            Node    = $_child
+          })
+      }
+    }
+  }
+
+  [PSCustomObject]@{
+    DefaultProfiles = @($_defaultProfiles.ToArray())
+    Profiles        = @($_profiles.ToArray())
+    DeliveryStores  = @($_deliveryStores.ToArray())
+  }
+}
+
+# -----------------------------------------------------------------------------
 
 $_context = $null
 $_accounts = @()
@@ -269,6 +583,12 @@ finally {
   }
 
   Invoke-ComGarbageCollection
+}
+
+# The profile records each account's delivery store even where Outlook cannot report it. Read only on request.
+$_profileEvidence = $null
+if ($IncludeProfileEvidence) {
+  $_profileEvidence = Get-OutlookAccountProfileEvidence -Store $_stores
 }
 
 # -----------------------------------------------------------------------------
@@ -447,6 +767,18 @@ foreach ($_store in $_stores) {
   }
 }
 
+if ($null -ne $_profileEvidence) {
+  Write-Log -Message "`nProfile evidence: $(@($_profileEvidence.Profiles).Count) profile(s), $(@($_profileEvidence.DeliveryStores).Count) recorded delivery store(s)" -Color Cyan
+  foreach ($_recorded in $_profileEvidence.DeliveryStores) {
+    $_storeLabel = '(no matching data file)'
+    if ($_recorded.MatchedStore) {
+      $_storeLabel = "$($_recorded.MatchedStore) ($($_recorded.MatchedFilePath))"
+    }
+
+    Write-Log -Message ('  {0,-38} records delivery into {1}' -f $_recorded.AccountName, $_storeLabel) -Color Gray
+  }
+}
+
 $_critical = @($_findings | Where-Object { $_.Severity -eq 'Critical' })
 $_warnings = @($_findings | Where-Object { $_.Severity -eq 'Warning' })
 
@@ -470,24 +802,25 @@ if (@($_critical).Count -gt 0) {
 }
 
 $_inventory = [PSCustomObject]@{
-  SchemaVersion  = 2
-  Script         = 'Show-OutlookAccount'
-  StartedAt      = $_startedAt.ToString('o')
-  FinishedAt     = (Get-Date).ToString('o')
-  ComputerName   = $env:COMPUTERNAME
-  UserName       = $_outlookUser.UserName
-  OutlookVersion = $_outlookVersion
-  FileLimit      = $_fileLimit
-  Accounts       = @($_accounts)
-  Stores         = @($_stores)
-  Findings       = @($_findings)
-  CriticalCount  = @($_critical).Count
-  ReportPath     = $_reportPath
+  SchemaVersion   = 2
+  Script          = 'Show-OutlookAccount'
+  StartedAt       = $_startedAt.ToString('o')
+  FinishedAt      = (Get-Date).ToString('o')
+  ComputerName    = $env:COMPUTERNAME
+  UserName        = $_outlookUser.UserName
+  OutlookVersion  = $_outlookVersion
+  FileLimit       = $_fileLimit
+  Accounts        = @($_accounts)
+  Stores          = @($_stores)
+  Findings        = @($_findings)
+  CriticalCount   = @($_critical).Count
+  ProfileEvidence = $_profileEvidence
+  ReportPath      = $_reportPath
 }
 
 if ($_reportPath) {
   try {
-    $_json = $_inventory | ConvertTo-Json -Depth 8
+    $_json = $_inventory | ConvertTo-Json -Depth 20
     $_encoding = New-Object Text.UTF8Encoding($true)
     [IO.File]::WriteAllText($_reportPath, $_json, $_encoding)
     Write-Log -Message "`nJSON report: $_reportPath" -Color Cyan
