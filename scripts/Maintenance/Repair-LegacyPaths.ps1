@@ -13,9 +13,12 @@
   user profiles when accessible.
 
   The script refuses to merge when both the legacy and current locations exist.
-  Office journals that may still need recovery are refused unless -Force is
-  supplied; retire them with Move-OfficeRecovery first. Media content and
-  hashes are not changed.
+  Office recovery journals of finished runs move with their folder. A journal of
+  an unfinished run, or one that cannot be read, blocks the Office folder: resume
+  the run with Install-Office.ps1 or Switch-OfficeVersion.ps1 -Mode Recover and
+  -LogRoot pointing at the legacy folder, retire it with -RetirePending and
+  -Reason, or move it as it is with -Force. Media content and hashes are not
+  changed.
 
   Run once per machine after upgrading. The script is safe to run again: a
   second run reports that there is nothing left to move.
@@ -49,10 +52,19 @@
   ProgramData\winkit-reports\LegacyPathRepairs. No report is written during
   -DryRun.
 
+.PARAMETER RetirePending
+  Retire every unfinished Office recovery journal in the legacy Office folder
+  before moving it, through Substrate's Move-OfficeRecovery. Retirement keeps
+  the evidence in the folder's Abandoned subfolder with an audit record; a
+  retired run cannot be resumed. Requires -Reason.
+
+.PARAMETER Reason
+  Reason recorded in each retirement audit. Required with -RetirePending.
+
 .PARAMETER Force
-  Move the legacy Office journal root even when it contains recovery journals.
-  Use only after retiring or accepting those journals; their recorded paths may
-  no longer resolve after the move.
+  Move the legacy Office folder even when it contains unfinished recovery
+  journals, without retiring them. Their recorded paths may no longer resolve
+  after the move. Prefer -RetirePending.
 
 .PARAMETER DryRun
   Show every planned move and refusal without changing paths or writing a report.
@@ -69,8 +81,12 @@
   Move legacy paths, write a JSON report, and return per-item results.
 
 .EXAMPLE
+  PS> .\Repair-LegacyPaths.ps1 -RetirePending -Reason 'Superseded by the winkit migration' -PassThru
+  Retire unfinished Office runs in the legacy folder, then move every legacy path.
+
+.EXAMPLE
   PS> .\Repair-LegacyPaths.ps1 -Force -PassThru
-  Move the legacy Office journal root even if recovery journals are present.
+  Move the legacy Office folder even if unfinished recovery journals are present.
 
 .LINK
   https://github.com/adnoctem/winkit
@@ -118,6 +134,12 @@ param (
   $ReportDirectory = (Join-Path $env:ProgramData 'winkit-reports\LegacyPathRepairs'),
 
   [switch]
+  $RetirePending,
+
+  [string]
+  $Reason,
+
+  [switch]
   $Force,
 
   [switch]
@@ -132,6 +154,10 @@ Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.0 -Force
 $ErrorActionPreference = 'Stop'
 if ($DryRun) {
   $WhatIfPreference = $true
+}
+
+if ($RetirePending -and [string]::IsNullOrWhiteSpace($Reason)) {
+  throw '-RetirePending requires -Reason, which is recorded in each retirement audit.'
 }
 
 $_startedAt = [DateTime]::UtcNow.ToString('o')
@@ -254,8 +280,68 @@ function Get-LegacyJournal {
     return @()
   }
 
-  return @(Get-ChildItem -LiteralPath $Root -File -Force -ErrorAction Stop |
-      Where-Object { $_.Name -match '^[0-9a-fA-F]{32}\.json$' })
+  # Every Office run leaves its journal behind. Only a run that did not reach a completed Verify checkpoint, or a
+  # journal that cannot be read, may still need recovery; retired runs live in Abandoned and are not listed here.
+  $_journals = New-Object System.Collections.ArrayList
+  foreach ($_file in @(Get-ChildItem -LiteralPath $Root -File -Force -ErrorAction Stop | Where-Object { $_.Name -match '^[0-9a-fA-F]{32}\.json$' })) {
+    $_journal = [PSCustomObject]@{
+      RunId          = [IO.Path]::GetFileNameWithoutExtension($_file.Name)
+      Path           = $_file.FullName
+      Action         = $null
+      Phase          = $null
+      PhaseCompleted = $false
+      Finished       = $false
+      Error          = $null
+    }
+
+    try {
+      $_record = Get-Content -LiteralPath $_file.FullName -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+      $_journal.Action = [string]$_record.Action
+      $_journal.Phase = [string]$_record.Phase
+      $_journal.PhaseCompleted = $_record.PhaseCompleted -eq $true
+      $_journal.Finished = $_journal.Phase -eq 'Verify' -and $_journal.PhaseCompleted
+    }
+    catch {
+      $_journal.Error = $_.Exception.Message
+    }
+
+    $null = $_journals.Add($_journal)
+  }
+
+  return @($_journals.ToArray())
+}
+
+function Format-LegacyJournal {
+  param (
+    [object]
+    $Journal,
+
+    [string]
+    $LogRoot
+  )
+
+  if ($Journal.Error) {
+    return "$($Journal.RunId) (unreadable: $($Journal.Error))"
+  }
+
+  # Install and Migrate runs can be resumed by their script; other actions can only be retired.
+  $_resume = ''
+  $_script = switch ($Journal.Action) {
+    'Install' {
+      'Install-Office.ps1'
+    }
+    'Migrate' {
+      'Switch-OfficeVersion.ps1'
+    }
+    default {
+      $null
+    }
+  }
+  if ($_script) {
+    $_resume = "; resume with .\scripts\Office\$_script -Mode Recover -RunId $($Journal.RunId) -LogRoot '$LogRoot'"
+  }
+
+  return "$($Journal.RunId) ($($Journal.Action), stopped in phase $($Journal.Phase)$_resume)"
 }
 
 function Add-LegacyRepairResult {
@@ -314,21 +400,57 @@ foreach ($_mapping in $_mappings) {
   }
 
   $_pendingJournals = @()
+  $_retiredNote = ''
   if ($_mapping.JournalRoot) {
-    $_pendingJournals = @(Get-LegacyJournal -Root $_mapping.Legacy)
-    if ($_pendingJournals.Count -gt 0 -and -not $Force) {
+    $_pendingJournals = @(Get-LegacyJournal -Root $_mapping.Legacy | Where-Object { -not $_.Finished })
+
+    # Retire unfinished runs through Substrate, which validates and preserves each journal before it moves.
+    if ($_pendingJournals.Count -gt 0 -and $RetirePending) {
+      $_retired = New-Object System.Collections.ArrayList
+      $_retireErrors = New-Object System.Collections.ArrayList
+      foreach ($_journal in $_pendingJournals) {
+        if ($DryRun) {
+          $null = $_retired.Add($_journal.RunId)
+          continue
+        }
+
+        try {
+          $null = Move-OfficeRecovery -RunId $_journal.RunId -Reason $Reason -LogRoot $_mapping.Legacy -Confirm:$false -ErrorAction Stop
+          $null = $_retired.Add($_journal.RunId)
+        }
+        catch {
+          $null = $_retireErrors.Add("$($_journal.RunId): $($_.Exception.Message)")
+        }
+      }
+
+      if ($_retireErrors.Count -gt 0) {
+        $_refused++
+        Add-LegacyRepairResult -Target $_mapping.Legacy -Kind $_mapping.Kind -Status 'Skipped' -Detail "Refused: unfinished Office run(s) could not be retired: $($_retireErrors -join '; '). Nothing was moved."
+        continue
+      }
+
+      if ($DryRun) {
+        $_retiredNote = " Would retire unfinished Office run(s) first: $($_retired -join ', ')."
+      }
+      else {
+        $_retiredNote = " Retired unfinished Office run(s) first: $($_retired -join ', ')."
+        $_pendingJournals = @(Get-LegacyJournal -Root $_mapping.Legacy | Where-Object { -not $_.Finished })
+      }
+    }
+
+    if ($_pendingJournals.Count -gt 0 -and -not $Force -and -not ($RetirePending -and $DryRun)) {
       $_refused++
-      $_pendingNames = @($_pendingJournals | ForEach-Object { $_.Name }) -join ', '
-      Add-LegacyRepairResult -Target $_mapping.Legacy -Kind $_mapping.Kind -Status 'Skipped' -Detail "Refused: pending recovery journal(s): $_pendingNames. Retire them with Move-OfficeRecovery first, or use -Force."
+      $_pendingNames = @($_pendingJournals | ForEach-Object { Format-LegacyJournal -Journal $_ -LogRoot $_mapping.Legacy }) -join '; '
+      Add-LegacyRepairResult -Target $_mapping.Legacy -Kind $_mapping.Kind -Status 'Skipped' -Detail "Refused: unfinished Office run(s) may still need recovery: $_pendingNames. Run again with -RetirePending -Reason '<why>' to retire them, or with -Force to move them as they are."
       continue
     }
   }
 
   $_planned++
-  $_pendingNote = ''
-  if ($_pendingJournals.Count -gt 0) {
-    $_pendingNames = @($_pendingJournals | ForEach-Object { $_.Name }) -join ', '
-    $_pendingNote = " Pending journals moved because -Force was supplied: $_pendingNames."
+  $_pendingNote = $_retiredNote
+  if ($_pendingJournals.Count -gt 0 -and -not ($RetirePending -and $DryRun)) {
+    $_pendingNames = @($_pendingJournals | ForEach-Object { $_.RunId }) -join ', '
+    $_pendingNote = "$_retiredNote Unfinished journals moved because -Force was supplied: $_pendingNames."
   }
 
   if ($DryRun) {
@@ -455,15 +577,17 @@ if (-not $DryRun) {
 }
 
 Add-OperationResult -Results $_results -Target 'Legacy PSFoundation paths' -Source 'LegacyPaths' -Action 'RepairLegacyPaths' -Status $_status -Detail "Legacy path repair finished with $_moved move(s), $_refused refusal(s), and $_failed failure(s)." -Property @{
-  RunId        = $_runId
-  ManifestPath = $_manifestPath
-  Planned      = $_planned
-  Moved        = $_moved
-  Refused      = $_refused
-  Failed       = $_failed
-  Skipped      = $_skipped
-  Force        = [bool]$Force
-  DryRun       = [bool]$DryRun
+  RunId         = $_runId
+  ManifestPath  = $_manifestPath
+  Planned       = $_planned
+  Moved         = $_moved
+  Refused       = $_refused
+  Failed        = $_failed
+  Skipped       = $_skipped
+  Force         = [bool]$Force
+  RetirePending = [bool]$RetirePending
+  Reason        = $Reason
+  DryRun        = [bool]$DryRun
 }
 
 if (-not $DryRun) {
@@ -490,6 +614,8 @@ if (-not $DryRun) {
           }
         })
       Force         = [bool]$Force
+      RetirePending = [bool]$RetirePending
+      Reason        = $Reason
       Status        = $_status
       Results       = @($_results.ToArray())
       Planned       = $_planned
