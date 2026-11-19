@@ -190,8 +190,12 @@ param (
 Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.0 -Force
 
 $ErrorActionPreference = 'Stop'
-if ($DryRun) {
-  $WhatIfPreference = $true
+
+# The script writes only behind its own -DryRun checks, so -WhatIf is folded into -DryRun instead of enabling
+# $WhatIfPreference, which would also reach module autoloading (CimCmdlets prints "WhatIf: ... Set Alias" lines).
+if ($WhatIfPreference) {
+  $DryRun = [switch]$true
+  $WhatIfPreference = $false
 }
 
 if ([string]::IsNullOrWhiteSpace($User)) {
