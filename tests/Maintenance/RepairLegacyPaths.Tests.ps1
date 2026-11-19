@@ -166,6 +166,109 @@ Describe 'Repair-LegacyPaths' {
     Test-Path -LiteralPath (Join-Path $script:OfficeCurrent '0123456789abcdef0123456789abcdef.json') | Should -BeTrue
   }
 
+  Context 'Office recovery journals' {
+    BeforeEach {
+      $null = New-Item -ItemType Directory -Path $script:OfficeLegacy -Force
+      $script:FinishedRun = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+      $script:PendingRun = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+      $script:WriteJournal = {
+        param ($RunId, $Action, $Phase, $Completed)
+        $record = [ordered]@{
+          SchemaVersion  = 2
+          RunId          = $RunId
+          Action         = $Action
+          Phase          = $Phase
+          PhaseCompleted = $Completed
+        }
+        [IO.File]::WriteAllText((Join-Path $script:OfficeLegacy "$RunId.json"), ($record | ConvertTo-Json))
+      }
+    }
+
+    It 'moves journals of finished runs without -Force' {
+      & $script:WriteJournal $script:FinishedRun 'Migrate' 'Verify' $true
+
+      $run = Invoke-Repair
+
+      $run.ExitCode | Should -Be 0
+      $run.Summary.Status | Should -Be 'Completed'
+      Test-Path -LiteralPath (Join-Path $script:OfficeCurrent "$($script:FinishedRun).json") | Should -BeTrue
+    }
+
+    It 'refuses an unfinished run with the run, its phase, and how to resume or retire it' {
+      & $script:WriteJournal $script:FinishedRun 'Migrate' 'Verify' $true
+      & $script:WriteJournal $script:PendingRun 'Install' 'CloseApplications' $false
+
+      $run = Invoke-Repair
+      $refusal = @($run.Results | Where-Object { $_.Status -eq 'Skipped' -and $_.Detail -like 'Refused*' })[0].Detail
+
+      $run.ExitCode | Should -Be 1
+      $refusal | Should -Match $script:PendingRun
+      $refusal | Should -Match 'Install, stopped in phase CloseApplications'
+      $refusal | Should -Match ([regex]::Escape("Install-Office.ps1 -Mode Recover -RunId $($script:PendingRun) -LogRoot '$($script:OfficeLegacy)'"))
+      $refusal | Should -Match '-RetirePending -Reason'
+      $refusal | Should -Not -Match $script:FinishedRun
+      Test-Path -LiteralPath $script:OfficeCurrent | Should -BeFalse
+    }
+
+    It 'treats an unreadable journal as unfinished' {
+      [IO.File]::WriteAllText((Join-Path $script:OfficeLegacy "$($script:PendingRun).json"), 'not json')
+
+      $run = Invoke-Repair
+
+      $run.ExitCode | Should -Be 1
+      (@($run.Results | Where-Object { $_.Detail -like 'Refused*' })[0].Detail) | Should -Match 'unreadable'
+    }
+
+    It 'requires a reason to retire unfinished runs' {
+      { Invoke-Repair -Extra @{ RetirePending = $true } } | Should -Throw '*requires -Reason*'
+    }
+
+    It 'retires unfinished runs through Substrate in the legacy folder, then moves it' {
+      & $script:WriteJournal $script:PendingRun 'Install' 'CloseApplications' $false
+      Mock Move-OfficeRecovery {
+        $abandoned = Join-Path $LogRoot 'Abandoned'
+        $null = New-Item -ItemType Directory -Path $abandoned -Force
+        Move-Item -LiteralPath (Join-Path $LogRoot "$RunId.json") -Destination $abandoned
+        [PSCustomObject]@{ RunId = $RunId }
+      }
+
+      $run = Invoke-Repair -Extra @{ RetirePending = $true; Reason = 'Superseded by the migration' }
+
+      $run.ExitCode | Should -Be 0
+      $run.Summary.Status | Should -Be 'Completed'
+      Should -Invoke Move-OfficeRecovery -Times 1 -Exactly -ParameterFilter {
+        $RunId -eq $script:PendingRun -and $Reason -eq 'Superseded by the migration' -and $LogRoot -eq $script:OfficeLegacy
+      }
+      Test-Path -LiteralPath (Join-Path $script:OfficeCurrent "Abandoned\$($script:PendingRun).json") | Should -BeTrue
+      (@($run.Results | Where-Object { $_.Status -eq 'Completed' -and $_.Detail -like '*Retired*' })).Count | Should -Be 1
+    }
+
+    It 'moves nothing when a retirement fails' {
+      & $script:WriteJournal $script:PendingRun 'Install' 'CloseApplications' $false
+      Mock Move-OfficeRecovery { throw 'RecoveryIdentityMismatch' }
+
+      $run = Invoke-Repair -Extra @{ RetirePending = $true; Reason = 'Superseded' }
+
+      $run.ExitCode | Should -Be 1
+      (@($run.Results | Where-Object { $_.Detail -like 'Refused*' })[0].Detail) | Should -Match 'could not be retired: .*RecoveryIdentityMismatch'
+      Test-Path -LiteralPath (Join-Path $script:OfficeLegacy "$($script:PendingRun).json") | Should -BeTrue
+      Test-Path -LiteralPath $script:OfficeCurrent | Should -BeFalse
+    }
+
+    It 'previews a retirement without calling Substrate' {
+      & $script:WriteJournal $script:PendingRun 'Install' 'CloseApplications' $false
+      Mock Move-OfficeRecovery { throw 'must not run' }
+
+      $run = Invoke-Repair -Extra @{ RetirePending = $true; Reason = 'Superseded'; DryRun = $true }
+
+      $run.ExitCode | Should -Be 0
+      $run.Summary.Status | Should -Be 'Preview'
+      (@($run.Results | Where-Object { $_.Detail -like 'DryRun*' })[0].Detail) | Should -Match "Would retire unfinished Office run\(s\) first: $($script:PendingRun)"
+      Should -Invoke Move-OfficeRecovery -Times 0 -Exactly
+      Test-Path -LiteralPath (Join-Path $script:OfficeLegacy "$($script:PendingRun).json") | Should -BeTrue
+    }
+  }
+
   It 'renames a legacy media manifest without changing its content' {
     $folder = Join-Path $script:Media 'Office2019'
     $null = New-Item -ItemType Directory -Path $folder -Force

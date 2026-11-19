@@ -9,7 +9,18 @@ rollback, or a journal-free reinstall. Use elevated 64-bit PowerShell from your 
 
 Use the original `RunId` and `LogRoot`, not a new target configuration. The default journal/log root is `C:\ProgramData\winkit-Office`.
 Machines that still have the legacy Office paths or media manifest must run `scripts\Maintenance\Repair-LegacyPaths.ps1` once before using
-this version. If you retained a result JSON:
+this version.
+
+The repair moves journals of finished runs with the folder. It refuses while `C:\ProgramData\PSFoundation-Office` holds an unfinished run
+and names each one with the command to resume it from the legacy folder. To give up those runs instead, retire them during the repair; the
+journals and an audit record are kept in the folder's `Abandoned` subfolder, and a retired run cannot be resumed:
+
+```powershell
+.\scripts\Maintenance\Repair-LegacyPaths.ps1 -RetirePending -Reason 'Superseded by the winkit migration' -DryRun
+.\scripts\Maintenance\Repair-LegacyPaths.ps1 -RetirePending -Reason 'Superseded by the winkit migration' -PassThru
+```
+
+`-Force` moves unfinished journals without retiring them. If you retained a result JSON:
 
 ```powershell
 # Replace this with the actual retained result file.
