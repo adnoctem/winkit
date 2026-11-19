@@ -238,6 +238,13 @@ destination tree, then verifies an effective-on-the-object direct SID grant cont
 calculate group-based effective access; deny entries are rejected conservatively. The profile root and any mapped parent must already
 provide an inheritable Modify grant for the target SID.
 
+Windows creates hidden compatibility junctions in every profile's Documents folder, such as `My Pictures`, `My Music`, and `My Videos`
+(German: `Eigene Bilder`, `Eigene Musik`, `Eigene Videos`). The import recognizes them by their properties, not their names: a junction with
+the Hidden and System attributes, directly below the destination folder, pointing into the same profile. They are left untouched: not
+traversed, not copied into, and not included in the permission reset. Their target, attributes, and security descriptor are compared before
+and after, and any change fails the run. A staged folder with the same name stops the import before copying. Any other destination link
+still stops the run.
+
 **Custom permissions within selected destination trees are replaced**, including permissions on destination-only files. The profile root,
 AppData, and unselected destination folders are not reset. Choose mappings narrowly when an existing folder contains specially secured data.
 Changing ownership alone would not establish the required access; the inherited ACLs provide it. Microsoft documents these distinctions in
