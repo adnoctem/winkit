@@ -1,3 +1,10 @@
+## [3.4.1](https://github.com/adnoctem/winkit/compare/v3.4.0...v3.4.1) (2026-11-19)
+
+### Bug Fixes
+
+* **scripts:** import into profiles with Windows system junctions ([f2c0ef9](https://github.com/adnoctem/winkit/commit/f2c0ef9abb8e78dc6edb5949ba57858b32cbf8cc))
+* **scripts:** keep inventory dry runs free of WhatIf output ([63631eb](https://github.com/adnoctem/winkit/commit/63631eb36299cb10c1538e3b8dc0428caceac049))
+
 ## [3.4.0](https://github.com/adnoctem/winkit/compare/v3.3.0...v3.4.0) (2026-11-18)
 
 ### Features
