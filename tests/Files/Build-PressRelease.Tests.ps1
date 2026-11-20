@@ -4,7 +4,7 @@
 # The document API ships only for Core. Keep discovery compatible with existing 5.1 suites.
 Describe 'Build-PressRelease' -Skip:($PSVersionTable.PSVersion -lt [version]'7.4') {
   BeforeAll {
-    Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.1 -Force
+    Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.5.0 -Force
     $script:BuildScript = Join-Path $PSScriptRoot '../../scripts/Files/Build-PressRelease.ps1'
     $script:Utf8 = [Text.UTF8Encoding]::new($false)
 

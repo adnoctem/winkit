@@ -5,7 +5,7 @@
 param ()
 
 BeforeAll {
-  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.1 -Force
+  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.5.0 -Force
   $script:ScriptPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath((Join-Path $PSScriptRoot '../../../scripts/Server/ADDS/Export-AD.ps1'))
   $script:LibraryPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath((Join-Path $PSScriptRoot '../../../scripts/Server/ADDS/lib/ADDS.ps1'))
   $script:Content = Get-Content -LiteralPath $script:ScriptPath -Raw
@@ -89,7 +89,7 @@ Describe 'Export-AD conventions' {
   It 'uses the repository requirements and exposes the new surface' {
     $script:Content | Should -Match '#Requires -Version 5.1'
     $script:Content | Should -Not -Match 'RunAsAdministrator'
-    $script:Content | Should -Match "RequiredVersion = '0.4.1'"
+    $script:Content | Should -Match "RequiredVersion = '0.5.0'"
     $script:Content | Should -Match 'SupportsShouldProcess = \$true'
     (Get-Help $script:ScriptPath).Synopsis | Should -Match 'Exports Active Directory'
 

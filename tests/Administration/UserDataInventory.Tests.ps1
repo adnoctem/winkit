@@ -5,7 +5,7 @@
 param ()
 
 BeforeAll {
-  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.1 -Force
+  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.5.0 -Force
   $script:ScriptPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath((Join-Path $PSScriptRoot '../../scripts/Administration/Show-UserDataInventory.ps1'))
   $script:Content = Get-Content -LiteralPath $script:ScriptPath -Raw
   $script:Ast = [Management.Automation.Language.Parser]::ParseFile($script:ScriptPath, [ref]$null, [ref]$null)
@@ -18,7 +18,7 @@ BeforeAll {
 Describe 'Show-UserDataInventory conventions' {
   It 'pins the module and exposes the inventory surface' {
     $script:Content | Should -Match '#Requires -Version 5.1'
-    $script:Content | Should -Match "RequiredVersion = '0.4.1'"
+    $script:Content | Should -Match "RequiredVersion = '0.5.0'"
     $script:Content | Should -Match 'SupportsShouldProcess = \$true'
     $script:Content | Should -Match 'Server Core: supported'
     $script:Content | Should -Match 'SYSTEM-account execution: not supported'
