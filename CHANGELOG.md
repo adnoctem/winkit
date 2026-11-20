@@ -1,3 +1,10 @@
+## [3.5.2](https://github.com/adnoctem/winkit/compare/v3.5.1...v3.5.2) (2026-11-20)
+
+### Bug Fixes
+
+* **scripts:** load in-box modules before dry runs switch WhatIf on ([b81ba4f](https://github.com/adnoctem/winkit/commit/b81ba4fc47900e6f41be9bbcc5df8b7ebeb01df9))
+* **scripts:** write JSON reports with two-space indentation ([a82d967](https://github.com/adnoctem/winkit/commit/a82d967fb989188b15a5dc9f822128d7b0959e66))
+
 ## [3.5.1](https://github.com/adnoctem/winkit/compare/v3.5.0...v3.5.1) (2026-11-20)
 
 ### Bug Fixes
