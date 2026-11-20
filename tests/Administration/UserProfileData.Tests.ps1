@@ -7,7 +7,7 @@ param ()
 # Real robocopy runs only against TestDrive. Identity/profile discovery and ACL
 # mutations are mocked in workflow tests. No Windows profile is created or changed.
 BeforeAll {
-  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.0 -Force
+  Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.1 -Force
   $script:ImportPath = Join-Path $PSScriptRoot '../../scripts/Administration/Import-UserProfileData.ps1'
   $script:NativeProcess = Get-Command Invoke-SafeProcess -CommandType Cmdlet -Module AdNoctem.Substrate.PowerShell
   $script:Content = Get-Content -LiteralPath $script:ImportPath -Raw
@@ -74,7 +74,7 @@ BeforeAll {
 Describe 'Import-UserProfileData conventions' {
   It 'pins the module, requires elevation, and exposes normal preview/help conventions' {
     $script:Content | Should -Match '#Requires -RunAsAdministrator'
-    $script:Content | Should -Match "RequiredVersion = '0.4.0'"
+    $script:Content | Should -Match "RequiredVersion = '0.4.1'"
     $script:Content | Should -Match 'Server Core: supported'
     $script:Content | Should -Match 'SYSTEM-account execution: supported'
     $script:Content | Should -Match 'SupportsShouldProcess = \$true'
@@ -704,7 +704,7 @@ Describe 'Import-UserProfileData dry run in a fresh session' {
     $harness = Join-Path $root 'Invoke-FreshImport.ps1'
     [IO.File]::WriteAllText($harness, $script:HarnessText, (New-Object Text.UTF8Encoding($true)))
     $wrapper = @(
-      'Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.0 -Force'
+      'Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.1 -Force'
       ($definitions -join "`r`n`r`n")
       'function Test-Elevation { $true }'
       'function Get-ImportVolume { [PSCustomObject]@{ AvailableFreeSpace = [long]10GB } }'

@@ -1,5 +1,5 @@
 ﻿#Requires -Version 7.0
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.4.0' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.4.1' }
 
 <#
 .SYNOPSIS
@@ -148,7 +148,7 @@ param (
   $PassThru
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.0 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.1 -Force
 
 $ErrorActionPreference = 'Stop'
 if ($DryRun) {
