@@ -2,11 +2,13 @@
 
 ### Features
 
-* **scripts:** add profile delivery evidence to the Outlook account inventory ([e3f85fc](https://github.com/adnoctem/winkit/commit/e3f85fc75e33cdec6506c13b6ac8e7774908b73a))
+- **scripts:** add profile delivery evidence to the Outlook account inventory
+  ([e3f85fc](https://github.com/adnoctem/winkit/commit/e3f85fc75e33cdec6506c13b6ac8e7774908b73a))
 
 ### Bug Fixes
 
-* **scripts:** let the legacy path repair retire unfinished Office runs ([efb8fb4](https://github.com/adnoctem/winkit/commit/efb8fb487a922ec0d7757be67b1305e02258e4c5))
+- **scripts:** let the legacy path repair retire unfinished Office runs
+  ([efb8fb4](https://github.com/adnoctem/winkit/commit/efb8fb487a922ec0d7757be67b1305e02258e4c5))
 
 ## [3.4.1](https://github.com/adnoctem/winkit/compare/v3.4.0...v3.4.1) (2026-11-19)
 
