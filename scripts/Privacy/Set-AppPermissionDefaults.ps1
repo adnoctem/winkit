@@ -218,10 +218,10 @@ if ($ExportState) {
   $_currentState = Export-RegistrySettingState -Settings $permissionSettings
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $_currentState | ConvertTo-Json -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
+    $_currentState | ConvertTo-FormattedJson -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Current app permission settings exported to: $_exportPath" -Color Green
   }
-  else { $_currentState | ConvertTo-Json -Depth 3 }
+  else { $_currentState | ConvertTo-FormattedJson -Depth 3 }
   exit 0
 }
 
@@ -229,11 +229,11 @@ if ($ExportTemplate) {
   if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportTemplate.' -Color Red; exit 1 }
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $permissionSettings | ConvertTo-Json -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
+    $permissionSettings | ConvertTo-FormattedJson -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Default app permission settings exported to: $_exportPath" -Color Green
   }
   else {
-    $permissionSettings | ConvertTo-Json -Depth 3
+    $permissionSettings | ConvertTo-FormattedJson -Depth 3
   }
   exit 0
 }

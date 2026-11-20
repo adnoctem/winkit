@@ -624,7 +624,7 @@ if (-not $DryRun) {
       Failed        = $_failed
       Skipped       = $_skipped
     }
-    $_json = ConvertTo-Json -InputObject $_manifest -Depth 12 -ErrorAction Stop
+    $_json = ConvertTo-FormattedJson -InputObject $_manifest -Depth 12 -ErrorAction Stop
     [IO.File]::WriteAllText($_manifestPath, $_json, (New-Object Text.UTF8Encoding($true)))
     $null = Write-OperationResultLog -Results $_results -Path (Join-Path $_runDirectory 'operations.jsonl') -ScriptName 'Repair-LegacyPaths' -RunId $_runId
   }

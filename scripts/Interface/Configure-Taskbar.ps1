@@ -275,10 +275,10 @@ if ($ExportState) {
   $_currentState = Export-RegistrySettingState -Settings $taskbarSettings
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $_currentState | ConvertTo-Json -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
+    $_currentState | ConvertTo-FormattedJson -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Current taskbar settings exported to: $_exportPath" -Color Green
   }
-  else { $_currentState | ConvertTo-Json -Depth 3 }
+  else { $_currentState | ConvertTo-FormattedJson -Depth 3 }
   exit 0
 }
 
@@ -287,11 +287,11 @@ if ($ExportTemplate) {
 
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $taskbarSettings | ConvertTo-Json -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
+    $taskbarSettings | ConvertTo-FormattedJson -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Default taskbar settings exported to: $_exportPath" -Color Green
   }
   else {
-    $taskbarSettings | ConvertTo-Json -Depth 3
+    $taskbarSettings | ConvertTo-FormattedJson -Depth 3
   }
   exit 0
 }

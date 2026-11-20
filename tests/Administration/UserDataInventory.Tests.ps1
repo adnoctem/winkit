@@ -33,7 +33,7 @@ Describe 'Show-UserDataInventory JSON output' {
       Literal = 'C:\u0027\data'
     }
 
-    $json = ConvertTo-DataInventoryJson -InputObject $value -Depth 4
+    $json = ConvertTo-FormattedJson -InputObject $value -Depth 4
 
     $json | Should -Not -Match '(?<!\\)\\u00(27|3c|3e|26)'
     $json | Should -Match "-SourcePath 'C:"
@@ -137,7 +137,7 @@ Describe 'Show-UserDataInventory helpers' {
     [IO.File]::WriteAllText((Join-Path $root 'one.txt'), 'x')
 
     $summary = Get-DataInventoryTreeSummary -Path $root
-    $json = ConvertTo-DataInventoryJson -InputObject $summary -Depth 4
+    $json = ConvertTo-FormattedJson -InputObject $summary -Depth 4
 
     $summary.Newest | Should -BeOfType [string]
     [DateTime]::Parse($summary.Newest, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind) |
@@ -423,7 +423,7 @@ Describe 'Show-UserDataInventory mapping' {
     $plan = Get-DataInventoryPlan -Mapping $script:Mapping -LongPath @() -Outlook $null -StagingRoot 'C:\Managed\Migration' -FolderMapPath $null
 
     $document = ConvertTo-DataInventoryFolderMap -Plan $plan -RunId 'run' -Computer 'OLDPC' -UserName 'EXAMPLE\User1'
-    $parsed = ConvertTo-DataInventoryJson -InputObject $document -Depth 6 | ConvertFrom-Json
+    $parsed = ConvertTo-FormattedJson -InputObject $document -Depth 6 | ConvertFrom-Json
 
     $parsed.SchemaVersion | Should -Be 1
     @($parsed.Mappings).Count | Should -Be @($script:Mapping.Mappings).Count

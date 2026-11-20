@@ -820,7 +820,7 @@ $_inventory = [PSCustomObject]@{
 
 if ($_reportPath) {
   try {
-    $_json = $_inventory | ConvertTo-Json -Depth 20
+    $_json = $_inventory | ConvertTo-FormattedJson -Depth 20
     $_encoding = New-Object Text.UTF8Encoding($true)
     [IO.File]::WriteAllText($_reportPath, $_json, $_encoding)
     Write-Log -Message "`nJSON report: $_reportPath" -Color Cyan

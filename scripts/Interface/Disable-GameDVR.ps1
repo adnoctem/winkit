@@ -245,10 +245,10 @@ if ($ExportState) {
   $_currentState = Export-RegistrySettingState -Settings $gameDvrSettings
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $_currentState | ConvertTo-Json -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
+    $_currentState | ConvertTo-FormattedJson -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Current Game DVR settings exported to: $_exportPath" -Color Green
   }
-  else { $_currentState | ConvertTo-Json -Depth 3 }
+  else { $_currentState | ConvertTo-FormattedJson -Depth 3 }
   exit 0
 }
 
@@ -257,11 +257,11 @@ if ($ExportTemplate) {
 
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $gameDvrSettings | ConvertTo-Json -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
+    $gameDvrSettings | ConvertTo-FormattedJson -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Default Game DVR settings exported to: $_exportPath" -Color Green
   }
   else {
-    $gameDvrSettings | ConvertTo-Json -Depth 3
+    $gameDvrSettings | ConvertTo-FormattedJson -Depth 3
   }
   exit 0
 }

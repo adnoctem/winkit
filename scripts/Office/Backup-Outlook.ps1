@@ -330,7 +330,7 @@ finally {
         Results       = @($_results.ToArray())
       }
 
-      $_json = ConvertTo-Json -InputObject $_manifest -Depth 8 -ErrorAction Stop
+      $_json = ConvertTo-FormattedJson -InputObject $_manifest -Depth 8 -ErrorAction Stop
       $_bytes = (New-Object Text.UTF8Encoding($true)).GetBytes($_json)
       $_reportStream.Write($_bytes, 0, $_bytes.Length)
       $_reportStream.Flush($true)

@@ -1335,7 +1335,7 @@ try {
     Results        = $_reportResults
   }
 
-  $_json = ConvertTo-Json -InputObject $_report -Depth 8 -ErrorAction Stop
+  $_json = ConvertTo-FormattedJson -InputObject $_report -Depth 8 -ErrorAction Stop
   $_encoding = New-Object Text.UTF8Encoding($true)
   $_writer = New-Object IO.StreamWriter($_reportStream, $_encoding)
   try {

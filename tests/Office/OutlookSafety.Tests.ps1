@@ -2285,7 +2285,7 @@ Describe 'Outlook store selection and preview' {
   }
 
   It 'reports JSON serialization failure instead of claiming a report was saved' {
-    Mock ConvertTo-Json { throw 'Report write failed' }
+    Mock ConvertTo-FormattedJson { throw 'Report write failed' }
     $result = & (Join-Path $script:OfficePath 'New-OutlookArchive.ps1') -FolderName '' -ArchivePath (Join-Path $TestDrive 'failed-report.pst') -ReportDirectory $TestDrive -DryRun -WarningAction SilentlyContinue
     $result.Status | Should -Be Failed
     $result.ReportPath | Should -BeNullOrEmpty

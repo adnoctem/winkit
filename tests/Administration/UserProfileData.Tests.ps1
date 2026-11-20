@@ -89,7 +89,7 @@ Describe 'Import-UserProfileData JSON output' {
       Literal = 'C:\u0027\data'
     }
 
-    $json = ConvertTo-ImportJson -InputObject $value -Depth 4
+    $json = ConvertTo-FormattedJson -InputObject $value -Depth 4
 
     $json | Should -Not -Match '(?<!\\)\\u00(27|3c|3e|26)'
     $json | Should -Match "-SourcePath 'C:"

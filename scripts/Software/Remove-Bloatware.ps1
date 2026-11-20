@@ -717,11 +717,11 @@ if ($ExportTemplate) {
   if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportTemplate.' -Color Red; exit 1 }
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $_packageGroups | ConvertTo-Json -Depth 4 | Out-File -FilePath $_exportPath -Encoding utf8
+    $_packageGroups | ConvertTo-FormattedJson -Depth 4 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Default bloatware package groups exported to: $_exportPath" -Color Green
   }
   else {
-    $_packageGroups | ConvertTo-Json -Depth 4
+    $_packageGroups | ConvertTo-FormattedJson -Depth 4
   }
   exit 0
 }

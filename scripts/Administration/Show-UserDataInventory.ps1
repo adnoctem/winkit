@@ -207,31 +207,6 @@ if ([string]::IsNullOrWhiteSpace($User)) {
   $User = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 }
 
-function ConvertTo-DataInventoryJson {
-  param (
-    [object]
-    $InputObject,
-
-    [int]
-    $Depth = 20
-  )
-
-  $_json = ConvertTo-Json -InputObject $InputObject -Depth $Depth -ErrorAction Stop
-
-  # Windows PowerShell 5.1 escapes ' < > & as \u00XX. They are valid JSON literals, so restore them for
-  # readability. An escaped backslash before the sequence (\\u0027) is literal text and stays untouched.
-  $_pattern = '(?<!\\)((?:\\\\)*)\\u00(27|3[cCeE]|26)'
-  $_evaluator = {
-    param (
-      $Match
-    )
-
-    return $Match.Groups[1].Value + [string][char][Convert]::ToInt32($Match.Groups[2].Value, 16)
-  }
-
-  return [regex]::Replace($_json, $_pattern, $_evaluator)
-}
-
 function Test-DataInventoryAdministrator {
   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
   $principal = New-Object Security.Principal.WindowsPrincipal($identity)
@@ -2310,11 +2285,11 @@ try {
       $_inventory.FinalPassPath = $_finalPassPath
     }
 
-    $_json = ConvertTo-DataInventoryJson -InputObject $_inventory -Depth 20
+    $_json = ConvertTo-FormattedJson -InputObject $_inventory -Depth 20
     [IO.File]::WriteAllText($_manifestPath, $_json, $_encoding)
 
     $_folderMap = ConvertTo-DataInventoryFolderMap -Plan $_plan -RunId $_runId -Computer $env:COMPUTERNAME -UserName $_inventoryUser.Name
-    $_folderMapJson = ConvertTo-DataInventoryJson -InputObject $_folderMap -Depth 6
+    $_folderMapJson = ConvertTo-FormattedJson -InputObject $_folderMap -Depth 6
     [IO.File]::WriteAllText($_folderMapPath, $_folderMapJson, $_encoding)
 
     if ($null -ne $_plan.FinalPass) {
