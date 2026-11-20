@@ -1,3 +1,9 @@
+## [3.5.1](https://github.com/adnoctem/winkit/compare/v3.5.0...v3.5.1) (2026-11-20)
+
+### Bug Fixes
+
+* **scripts:** write the import's dry-run report when asked for ([780041c](https://github.com/adnoctem/winkit/commit/780041c0dfa16285cdf1fcf1a4a6f0f3f8c161fc))
+
 ## [3.5.0](https://github.com/adnoctem/winkit/compare/v3.4.1...v3.5.0) (2026-11-20)
 
 ### Features
