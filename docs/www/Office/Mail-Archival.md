@@ -56,19 +56,22 @@ file near its configured ceiling, which Outlook 2007 defaults to 20480 MB; Outlo
 Outlook 2010 is the first version whose object model exposes a per-account delivery store. **On Outlook 2007 that property does not exist**,
 and reading it fails with `DISP_E_UNKNOWNNAME` on every account in the profile.
 
-The inventory falls back to the profile's **default delivery store**, taken from the Inbox that Outlook reports as the default. New mail
-lands there unless the account was re-pointed, so a POP account sharing a 2007 profile with an Exchange mailbox now raises
-`DeliversIntoExchange` and names the OST — the finding that matters most, on the clients that could never report it.
+The MAPI profile still records each account's delivery store as `Delivery Store EntryID`, which is the store's `StoreID`. The inventory
+reads that record from the user's registry and uses it when it matches exactly one of the profile's data files. Such an account reports
+`DeliveryStoreSource` `ProfileRecord`, is not inferred, and raises no `InferredDeliveryStore`; an account re-pointed to a PST is listed
+against that PST. A POP account sharing a 2007 profile with an Exchange mailbox and delivering into it raises `DeliversIntoExchange` and
+names the OST — the finding that matters most, on the clients that could never report it.
 
-Every account resolved that way also raises `InferredDeliveryStore`. A client that cannot report delivery cannot report an override either,
-so an account re-pointed to a PST would still be listed against the default store. The account records carry `DeliveryStoreSource`
-(`Account`, `ProfileDefault`, or `Unresolved`) and `IsDeliveryStoreInferred` so a report never presents the two as the same fact.
+Where the record is missing, names a store the profile does not hold, or cannot be told apart because two accounts share a name, the
+inventory falls back to the profile's **default delivery store**, taken from the Inbox that Outlook reports as the default. New mail lands
+there unless the account was re-pointed. Every account resolved that way raises `InferredDeliveryStore`. The account records carry
+`DeliveryStoreSource` (`Account`, `ProfileRecord`, `ProfileDefault`, or `Unresolved`) and `IsDeliveryStoreInferred`, so a report never
+presents a read and an inferred destination as the same fact.
 
 **Confirm each inferred destination in Account Settings** before removing an account or a data file. The delivery location is shown per
 account, below the account list.
 
-The profile itself records each account's delivery store as `Delivery Store EntryID`, which is the store's `StoreID`. Add
-`-IncludeProfileEvidence` to read it from the user's registry and match it to the data files:
+To see the records themselves, add `-IncludeProfileEvidence`; it lists each account's recorded delivery store matched to the data files:
 
 ```powershell
 .\scripts\Office\Show-OutlookAccount.ps1 -IncludeProfileEvidence -ReportDirectory 'C:\Managed\Reports'
@@ -81,8 +84,8 @@ Profile evidence: 1 profile(s), 2 recorded delivery store(s)
 ```
 
 The report's `ProfileEvidence` holds those matches and the profile tree. Only an allowlist of value names and entry-ID-sized binaries are
-included; other values appear as a name and length, and credential-looking names are withheld. Review the report before sharing it. The
-evidence does not change the findings: an inferred destination is still raised, and the evidence is what to confirm it with.
+included; other values appear as a name and length, and credential-looking names are withheld. Review the report before sharing it. Use it
+to confirm a destination that is still inferred.
 
 Where neither route answers — no per-account store and no readable default — the inventory fails closed instead of guessing. With any store
 in the profile Exchange-backed, each non-Exchange account raises `NoDeliveryStore` as **critical**: the store that could not be named may be
