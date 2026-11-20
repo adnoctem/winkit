@@ -1009,7 +1009,7 @@ $_state = [PSCustomObject]@{
 
 if ($_reportPath) {
   try {
-    $_json = $_state | ConvertTo-Json -Depth 8
+    $_json = $_state | ConvertTo-FormattedJson -Depth 8
     $_encoding = New-Object Text.UTF8Encoding($true)
     [IO.File]::WriteAllText($_reportPath, $_json, $_encoding)
     Write-Log -Message "`nJSON report: $_reportPath" -Color Cyan

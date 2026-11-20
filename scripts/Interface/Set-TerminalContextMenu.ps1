@@ -552,11 +552,11 @@ if ($ExportTemplate) {
 
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $_profileSettings | ConvertTo-Json -Depth 4 | Out-File -FilePath $_exportPath -Encoding utf8
+    $_profileSettings | ConvertTo-FormattedJson -Depth 4 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Default Terminal context menu config exported to: $_exportPath" -Color Green
   }
   else {
-    $_profileSettings | ConvertTo-Json -Depth 4
+    $_profileSettings | ConvertTo-FormattedJson -Depth 4
   }
 
   exit 0

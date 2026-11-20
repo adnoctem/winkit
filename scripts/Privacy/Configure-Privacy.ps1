@@ -476,10 +476,10 @@ if ($ExportState) {
   $_currentState = Export-RegistrySettingState -Settings $privacySettings
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $_currentState | ConvertTo-Json -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
+    $_currentState | ConvertTo-FormattedJson -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Current privacy settings exported to: $_exportPath" -Color Green
   }
-  else { $_currentState | ConvertTo-Json -Depth 3 }
+  else { $_currentState | ConvertTo-FormattedJson -Depth 3 }
   exit 0
 }
 
@@ -487,11 +487,11 @@ if ($ExportTemplate) {
   if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportTemplate.' -Color Red; exit 1 }
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $privacySettings | ConvertTo-Json -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
+    $privacySettings | ConvertTo-FormattedJson -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Default privacy settings exported to: $_exportPath" -Color Green
   }
   else {
-    $privacySettings | ConvertTo-Json -Depth 3
+    $privacySettings | ConvertTo-FormattedJson -Depth 3
   }
   exit 0
 }

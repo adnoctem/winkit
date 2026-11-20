@@ -277,7 +277,7 @@ try {
       diagnostics    = $_result.Diagnostics
       status         = 'Completed'
     }
-    [IO.File]::WriteAllText($_manifestStage, (ConvertTo-Json -InputObject $_manifest -Depth 10), [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($_manifestStage, (ConvertTo-FormattedJson -InputObject $_manifest -Depth 10), [Text.UTF8Encoding]::new($false))
 
     # All generation has succeeded. Back up originals before the first rename.
     Assert-BuildDestination -Path $_destinations

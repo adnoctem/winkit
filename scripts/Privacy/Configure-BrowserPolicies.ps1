@@ -215,10 +215,10 @@ if ($ExportState) {
   $_currentState = Export-RegistrySettingState -Settings $browserSettings
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $_currentState | ConvertTo-Json -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
+    $_currentState | ConvertTo-FormattedJson -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Current browser policy settings exported to: $_exportPath" -Color Green
   }
-  else { $_currentState | ConvertTo-Json -Depth 3 }
+  else { $_currentState | ConvertTo-FormattedJson -Depth 3 }
   exit 0
 }
 
@@ -226,10 +226,10 @@ if ($ExportTemplate) {
   if ($DryRun) { Write-Log -Message '-DryRun cannot be combined with -ExportTemplate.' -Color Red; exit 1 }
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $browserSettings | ConvertTo-Json -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
+    $browserSettings | ConvertTo-FormattedJson -Depth 3 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Default browser policy settings exported to: $_exportPath" -Color Green
   }
-  else { $browserSettings | ConvertTo-Json -Depth 3 }
+  else { $browserSettings | ConvertTo-FormattedJson -Depth 3 }
   exit 0
 }
 

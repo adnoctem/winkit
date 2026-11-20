@@ -529,7 +529,7 @@ try {
     }
     $_manifest.status = 'Completed'
     $_manifest.generatedAtUtc = [DateTime]::UtcNow.ToString('o')
-    [IO.File]::WriteAllText($_manifestStage, (ConvertTo-Json $_manifest -Depth 8), [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($_manifestStage, (ConvertTo-FormattedJson $_manifest -Depth 8), [Text.UTF8Encoding]::new($false))
 
     # Publish verified bytes; restore the old PDF if manifest publication fails.
     $_phase = 'publication'
@@ -586,7 +586,7 @@ catch {
     $_manifest.error = $_failure
     $_manifest.generatedAtUtc = [DateTime]::UtcNow.ToString('o')
     try {
-      [IO.File]::WriteAllText($_manifestStage, (ConvertTo-Json $_manifest -Depth 8), [Text.UTF8Encoding]::new($false))
+      [IO.File]::WriteAllText($_manifestStage, (ConvertTo-FormattedJson $_manifest -Depth 8), [Text.UTF8Encoding]::new($false))
       [IO.File]::Move($_manifestStage, $_manifestPath, [bool]$Overwrite)
       $_manifestWritten = $true
     }

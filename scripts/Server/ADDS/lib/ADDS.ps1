@@ -1056,7 +1056,7 @@ function Export-ADDirectoryRecord {
 
     try {
       if ($Format -eq 'Json') {
-        $json = ConvertTo-Json -InputObject $rows.ToArray() -Depth 6
+        $json = ConvertTo-FormattedJson -InputObject $rows.ToArray() -Depth 6
         $json = $json -replace "`r?`n", "`r`n"
         $utf8 = New-Object System.Text.UTF8Encoding($false)
         [IO.File]::WriteAllText($file, ($json + "`r`n"), $utf8)

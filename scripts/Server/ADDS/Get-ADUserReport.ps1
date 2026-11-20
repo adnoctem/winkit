@@ -256,7 +256,7 @@ try {
   $report | Write-Output
 
   if ($OutputPath) {
-    $report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $OutputPath -Encoding UTF8
+    $report | ConvertTo-FormattedJson -Depth 6 | Set-Content -LiteralPath $OutputPath -Encoding UTF8
     Write-Log -Message "Report written to $OutputPath" -Color Gray
   }
 }

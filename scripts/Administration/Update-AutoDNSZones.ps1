@@ -580,11 +580,11 @@ TIP: This is an example template. To generate a real config from your live
 
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $exampleConfig | ConvertTo-Json -Depth 10 | Out-File -FilePath $_exportPath -Encoding utf8
+    $exampleConfig | ConvertTo-FormattedJson -Depth 10 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Example configuration exported to: $_exportPath" -Color Green
   }
   else {
-    $exampleConfig | ConvertTo-Json -Depth 10
+    $exampleConfig | ConvertTo-FormattedJson -Depth 10
   }
   exit 0
 }
@@ -713,11 +713,11 @@ if ($ExportState) {
 
   if ($PSBoundParameters.ContainsKey('ExportPath') -and -not [string]::IsNullOrWhiteSpace($ExportPath)) {
     $_exportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExportPath)
-    $exported | ConvertTo-Json -Depth 10 | Out-File -FilePath $_exportPath -Encoding utf8
+    $exported | ConvertTo-FormattedJson -Depth 10 | Out-File -FilePath $_exportPath -Encoding utf8
     Write-Log -Message "Current state exported to: $_exportPath" -Color Green
   }
   else {
-    $exported | ConvertTo-Json -Depth 10
+    $exported | ConvertTo-FormattedJson -Depth 10
   }
 
   Write-Log -Message "Exported $($exported.Count) entry(ies)." -Color Green

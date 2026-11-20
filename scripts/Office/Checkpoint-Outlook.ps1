@@ -604,7 +604,7 @@ finally {
         Warnings      = @($_warnings.ToArray())
         Results       = @($_results.ToArray())
       }
-      $_json = ConvertTo-Json -InputObject $_manifest -Depth 16 -ErrorAction Stop
+      $_json = ConvertTo-FormattedJson -InputObject $_manifest -Depth 16 -ErrorAction Stop
       $_bytes = (New-Object Text.UTF8Encoding($false)).GetBytes($_json)
       $_manifestStream.Write($_bytes, 0, $_bytes.Length)
       $_manifestStream.Flush($true)
