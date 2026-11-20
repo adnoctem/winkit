@@ -155,10 +155,14 @@ param (
 Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.1 -Force
 
 $ErrorActionPreference = 'Stop'
+if ($DryRun) {
+  # Load the in-box modules this script calls before WhatIf is on. Loading one under WhatIf prints "What if"
+  # lines, leaves its aliases undefined, and can break PowerShell 7's proxies for Windows PowerShell modules.
+  Import-Module -Name CimCmdlets -ErrorAction SilentlyContinue
+  $WhatIfPreference = $true
+}
 
-# The preview is carried into this script's own confirmation points. Setting $WhatIfPreference would also reach
-# module autoloading (CimCmdlets prints "WhatIf: ... Set Alias" lines and leaves its aliases undefined).
-$_preview = [bool]$DryRun -or [bool]$WhatIfPreference
+$_preview = [bool]$WhatIfPreference
 
 $_results = New-Object System.Collections.ArrayList
 $_plan = New-Object System.Collections.ArrayList
@@ -1051,7 +1055,8 @@ function Initialize-ImportReport {
     $Path
   )
 
-  $null = New-Item -ItemType Directory -Path $Path
+  # The report is wanted output even in a dry run, where WhatIf is on.
+  $null = New-Item -ItemType Directory -Path $Path -WhatIf:$false
   $_acl = New-Object Security.AccessControl.DirectorySecurity
   $_acl.SetAccessRuleProtection($true, $false)
   $_identities = @(
@@ -1071,7 +1076,7 @@ function Initialize-ImportReport {
     $_acl.AddAccessRule($_rule)
   }
 
-  Set-Acl -LiteralPath $Path -AclObject $_acl
+  Set-Acl -LiteralPath $Path -AclObject $_acl -WhatIf:$false
 }
 
 try {
@@ -1294,7 +1299,7 @@ try {
     Plan          = @($_plan.ToArray())
   }
 
-  if (-not $_preview -and $PSCmdlet.ShouldProcess($_profile.Path, "Import $_fileCount files and reset permissions/ownership in $($_plan.Count) selected data folders")) {
+  if ($PSCmdlet.ShouldProcess($_profile.Path, "Import $_fileCount files and reset permissions/ownership in $($_plan.Count) selected data folders")) {
     Assert-ImportProfileUnchanged -TargetProfile $_profile
     $_runDirectory = Join-Path $_reportRoot $_runId
     Assert-ImportPath -Path $_runDirectory
@@ -1396,7 +1401,7 @@ try {
     $_manifest.Status = 'Verified'
     Write-ImportAudit -Manifest $_manifest -Results $_results -Directory $_runDirectory
 
-    if ($RemoveSource -and -not $_preview -and $PSCmdlet.ShouldProcess($_source, 'Delete only verified imported source files and empty selected directories')) {
+    if ($RemoveSource -and $PSCmdlet.ShouldProcess($_source, 'Delete only verified imported source files and empty selected directories')) {
       Assert-ImportProfileUnchanged -TargetProfile $_profile
       foreach ($_entry in $_plan) {
         Assert-ImportContent -Entry $_entry
@@ -1439,7 +1444,6 @@ try {
   }
   elseif ($_preview) {
     $_status = 'Preview'
-    Write-Log -Message "Preview: would import $_fileCount files and reset permissions/ownership in $($_plan.Count) selected data folders of $($_profile.Path). Nothing was copied or changed." -Color Yellow
   }
 }
 catch {

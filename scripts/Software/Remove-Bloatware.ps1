@@ -170,6 +170,9 @@ Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.1 -Force
 # -----------------------------------------------------------------------------
 
 if ($DryRun) {
+  # Load the in-box modules this script calls before WhatIf is on. Loading one under WhatIf prints "What if"
+  # lines, leaves its aliases undefined, and can break PowerShell 7's proxies for Windows PowerShell modules.
+  Import-Module -Name Dism -ErrorAction SilentlyContinue
   $WhatIfPreference = $true
   Write-Log -Message "DRY RUN - no bloatware changes will be applied`n" -Color Yellow
 }

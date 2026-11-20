@@ -191,11 +191,16 @@ Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.1 -Force
 
 $ErrorActionPreference = 'Stop'
 
-# The script writes only behind its own -DryRun checks, so -WhatIf is folded into -DryRun instead of enabling
-# $WhatIfPreference, which would also reach module autoloading (CimCmdlets prints "WhatIf: ... Set Alias" lines).
+# The script writes only behind its own -DryRun checks, so -WhatIf previews the same way.
 if ($WhatIfPreference) {
   $DryRun = [switch]$true
-  $WhatIfPreference = $false
+}
+
+if ($DryRun) {
+  # Load the in-box modules this script calls before WhatIf is on. Loading one under WhatIf prints "What if"
+  # lines, leaves its aliases undefined, and can break PowerShell 7's proxies for Windows PowerShell modules.
+  Import-Module -Name CimCmdlets, Storage -ErrorAction SilentlyContinue
+  $WhatIfPreference = $true
 }
 
 if ([string]::IsNullOrWhiteSpace($User)) {
