@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.4.0' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.4.1' }
 
 <#
 .SYNOPSIS
@@ -92,7 +92,7 @@ param (
   $PassThru
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.0 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.1 -Force
 
 $_user = Get-UserInfo
 if ($_user.SID -in @('S-1-5-18', 'S-1-5-19', 'S-1-5-20')) {
