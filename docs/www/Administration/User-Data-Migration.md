@@ -121,8 +121,15 @@ For a local account, use `NEWPC\User1`. A user SID is also accepted, but it must
 cross-checks CIM and `ProfileList` and refuses loaded, special, temporary, or corrupted profiles. It rechecks the target during import.
 These checks do not prevent a user from logging in, so arrange a maintenance window.
 
-`-DryRun` and `-WhatIf` enumerate and hash source data and check conflicts without writing reports, copying files, changing permissions, or
-deleting staging. After reviewing the plan:
+`-DryRun` and `-WhatIf` enumerate and hash source data and check conflicts without copying files, changing permissions, or deleting staging.
+They write nothing unless `-ReportDirectory` is given explicitly; then a run folder records the plan, the source hashes, and the status
+`Preview`, or `Failed` with the reason when the preview stopped:
+
+```powershell
+.\scripts\Administration\Import-UserProfileData.ps1 @import -DryRun -ReportDirectory 'C:\Managed\Reports'
+```
+
+After reviewing the plan:
 
 ```powershell
 $results = .\scripts\Administration\Import-UserProfileData.ps1 @import -PassThru
@@ -269,8 +276,8 @@ The run directory is restricted to the operator, Administrators, and SYSTEM. It 
 - `robocopy-*.log` and `permissions-*.log`: native copy and permission output.
 
 Robocopy codes 0–7 still require the independent verification checks; codes 8 and above fail the run. The script uses Substrate's
-`Invoke-SafeProcess`, `Convert-RobocopyExitCode`, and `Write-OperationResultLog` helpers. Exit code 1 indicates a failure. No reports are
-written if preflight fails or the run is a preview; read the returned failure result in that case.
+`Invoke-SafeProcess`, `Convert-RobocopyExitCode`, and `Write-OperationResultLog` helpers. Exit code 1 indicates a failure. When preflight
+fails, no report is written unless the run is a preview with an explicit `-ReportDirectory`; read the returned failure result otherwise.
 
 The import is not transactional. On failure, inspect the report and logs, correct the problem, and rerun against retained staging. Already
 copied data or partially changed ACLs may remain. Do not delete staging because robocopy alone reported success. After a forced process
