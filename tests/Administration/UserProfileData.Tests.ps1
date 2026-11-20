@@ -171,14 +171,43 @@ Describe 'Import-UserProfileData workflow' {
   }
 
   It 'previews without copying, ACL changes, or logs' {
-    $run = Invoke-ProfileImport -Extra @{ DryRun = $true; RemoveSource = $true }
+    # Without an explicit -ReportDirectory a dry run writes nothing, not even to the default report root.
+    $run = Invoke-ProfileImport -Extra @{ DryRun = $true; RemoveSource = $true; ReportDirectory = $null }
     $run.ExitCode | Should -Be 0 -Because $run.Summary.Error
     $run.Summary.Status | Should -Be 'Preview'
+    $run.Summary.ManifestPath | Should -BeNullOrEmpty
     Test-Path -LiteralPath $script:Reports | Should -BeFalse
     Test-Path -LiteralPath (Join-Path $global:WinkitProfileTestContext.Target 'Documents') | Should -BeFalse
     Test-Path -LiteralPath (Join-Path $global:WinkitProfileTestContext.Source 'Documents\report [1].txt') | Should -BeTrue
     Should -Invoke Invoke-SafeProcess -Times 0 -Exactly -ParameterFilter { $ArgumentList -contains '/COPY:DAT' }
     Should -Invoke Invoke-ImportPermission -Times 0 -Exactly
+    Should -Invoke Initialize-ImportReport -Times 0 -Exactly
+  }
+
+  It 'writes a preview report for a dry run with an explicit report directory' {
+    $run = Invoke-ProfileImport -Extra @{ DryRun = $true }
+
+    $run.ExitCode | Should -Be 0 -Because $run.Summary.Error
+    $run.Summary.Status | Should -Be 'Preview'
+    Test-Path -LiteralPath $run.Summary.ManifestPath | Should -BeTrue
+    Test-Path -LiteralPath (Join-Path (Split-Path -Path $run.Summary.ManifestPath -Parent) 'operations.jsonl') | Should -BeTrue
+    $manifest = Get-Content -LiteralPath $run.Summary.ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $manifest.Status | Should -Be 'Preview'
+    $manifest.FinishedAtUtc | Should -Not -BeNullOrEmpty
+    $manifest.Plan[0].Inventory.Files[0].SHA256 | Should -Match '^[0-9A-F]{64}$'
+    Test-Path -LiteralPath (Join-Path $global:WinkitProfileTestContext.Target 'Documents') | Should -BeFalse
+    Should -Invoke Invoke-SafeProcess -Times 0 -Exactly -ParameterFilter { $ArgumentList -contains '/COPY:DAT' }
+  }
+
+  It 'records a failed dry run in the report with the reason' {
+    Write-ProfileFixture -Path (Join-Path $global:WinkitProfileTestContext.Target 'Documents\report [1].txt') -Text 'newer work'
+
+    $run = Invoke-ProfileImport -Extra @{ DryRun = $true }
+
+    $run.ExitCode | Should -Be 1
+    $manifest = Get-Content -LiteralPath $run.Summary.ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $manifest.Status | Should -Be 'Failed'
+    $manifest.Error | Should -Match 'content conflict'
   }
 
   It 'refuses different destination content before making any changes' {
@@ -720,8 +749,10 @@ Describe 'Import-UserProfileData dry run in a fresh session' {
 
     $output | Should -Not -Match 'WhatIf:|What if:'
     $output | Should -Match 'Profile import: Preview'
-    $output | Should -Match 'dry run: no report written'
-    Test-Path -LiteralPath (Join-Path $root 'reports') | Should -BeFalse
+    # The wrapper passes -ReportDirectory explicitly, so the preview report is written.
+    $manifest = @(Get-ChildItem -LiteralPath (Join-Path $root 'reports') -Recurse -Filter 'manifest.json')
+    $manifest.Count | Should -Be 1
+    (Get-Content -LiteralPath $manifest[0].FullName -Raw -Encoding UTF8 | ConvertFrom-Json).Status | Should -Be 'Preview'
   }
 }
 

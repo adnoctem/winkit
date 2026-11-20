@@ -65,11 +65,14 @@
 .PARAMETER ReportDirectory
   Parent for unique run directories holding manifest.json, operations.jsonl and native
   logs. Defaults to ProgramData\winkit\ProfileImports. Must be outside source and target.
-  Each run directory is restricted to the operator, Administrators, and SYSTEM.
+  Each run directory is restricted to the operator, Administrators, and SYSTEM. With
+  -DryRun, a preview report is written only when ReportDirectory is given explicitly.
 .PARAMETER ReserveBytes
   Free bytes to retain after the conservative full-source-size estimate. Default: 256 MB.
 .PARAMETER DryRun
-  Validate, hash files, and report the plan without copying, changing ACLs, or writing logs.
+  Validate, hash files, and report the plan without copying or changing ACLs. Writes
+  nothing unless -ReportDirectory is given; then manifest.json and operations.jsonl record
+  the planned folders, source hashes, and status Preview, or Failed with the reason.
 .PARAMETER PassThru
   Return structured results, including the report path and per-folder status.
 .EXAMPLE
@@ -1459,6 +1462,45 @@ $_summary = @{
   }
 }
 Add-OperationResult -Results $_results @_summary
+
+# A dry run writes a preview report only when -ReportDirectory was given, also when planning stopped on a failure.
+if ($_preview -and $PSBoundParameters.ContainsKey('ReportDirectory') -and -not $_runDirectory) {
+  try {
+    $_previewRoot = Resolve-ImportPath -Path $ReportDirectory
+    foreach ($_reserved in @($_source, $_profile.Path)) {
+      if ($_reserved -and ((Test-ImportPathWithin -Path $_previewRoot -Root $_reserved) -or (Test-ImportPathWithin -Path $_reserved -Root $_previewRoot))) {
+        throw 'The report directory must not overlap the staging or the target profile.'
+      }
+    }
+
+    if ($null -eq $_manifest) {
+      $_manifest = [ordered]@{
+        SchemaVersion = 1
+        RunId         = $_runId
+        StartedAtUtc  = $_startedAt
+        FinishedAtUtc = $null
+        Actor         = $_actor
+        Machine       = $env:COMPUTERNAME
+        SourcePath    = $_source
+        Target        = $_profile
+        Status        = $null
+        Error         = $null
+        Plan          = @($_plan.ToArray())
+      }
+    }
+
+    $_previewDirectory = Join-Path $_previewRoot $_runId
+    Assert-ImportPath -Path $_previewDirectory
+    Initialize-ImportReport -Path $_previewDirectory
+    $_runDirectory = $_previewDirectory
+    $_manifestPath = Join-Path $_runDirectory 'manifest.json'
+    $_summaryResult = $_results | Where-Object Action -EQ 'ImportProfileData' | Select-Object -Last 1
+    $_summaryResult.ManifestPath = $_manifestPath
+  }
+  catch {
+    Write-Warning "Could not write the dry-run report: $($_.Exception.Message)"
+  }
+}
 
 if ($_runDirectory) {
   try {
