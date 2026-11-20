@@ -3,7 +3,7 @@
 #>
 
 @{
-  'AdNoctem.Substrate.PowerShell' = '0.4.1'
+  'AdNoctem.Substrate.PowerShell' = '0.5.0'
   Pester                          = '5.5.0'
   PSScriptAnalyzer                = '1.25.0'
   PSWindowsUpdate                 = '2.2.1.5'

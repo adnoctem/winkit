@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.4.1' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.5.0' }
 
 <#
 .SYNOPSIS
@@ -65,7 +65,7 @@ param (
   $OutputPath
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.1 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.5.0 -Force
 
 Write-Log -Message "Querying certificates in $StorePath expiring within $DaysLeft day(s)..." -Color Cyan
 

@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.4.1' }
+#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.5.0' }
 
 <#
 .SYNOPSIS
@@ -64,7 +64,7 @@ param (
   $PassThru
 )
 
-Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.4.1 -Force
+Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.5.0 -Force
 
 if ($DryRun) {
   # Load the in-box modules this script calls before WhatIf is on. Loading one under WhatIf prints "What if"
