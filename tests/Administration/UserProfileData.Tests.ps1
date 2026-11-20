@@ -128,7 +128,7 @@ Describe 'Import-UserProfileData workflow' {
     Mock Assert-ImportPermission {}
     Mock Invoke-ImportPermission {}
     Mock Initialize-ImportReport {
-      $null = New-Item -ItemType Directory -Path $Path
+      $null = New-Item -ItemType Directory -Path $Path -WhatIf:$false
     }
     Mock Invoke-SafeProcess {
       if ($FilePath -notlike '*\robocopy.exe') {
@@ -596,7 +596,7 @@ Describe 'Windows system junctions in the destination profile' {
     }
     Mock Assert-ImportPermission {}
     Mock Initialize-ImportReport {
-      $null = New-Item -ItemType Directory -Path $Path
+      $null = New-Item -ItemType Directory -Path $Path -WhatIf:$false
     }
     # Real robocopy and icacls on TestDrive only; every icacls call is recorded.
     Mock Invoke-SafeProcess {
@@ -719,7 +719,7 @@ Describe 'Windows system junctions in the destination profile' {
 }
 
 Describe 'Import-UserProfileData dry run in a fresh session' {
-  It 'prints no WhatIf lines while modules load and still reports Preview in <Engine>' -ForEach @(
+  It 'prints no WhatIf lines from module loading and still reports Preview in <Engine>' -ForEach @(
     @{ Engine = 'pwsh' }
     @{ Engine = 'powershell.exe' }
   ) {
@@ -747,7 +747,9 @@ Describe 'Import-UserProfileData dry run in a fresh session' {
 
     $output = (& $Engine -NoProfile -ExecutionPolicy Bypass -File $wrapperPath 2>&1 | ForEach-Object { [string]$_ }) -join "`n"
 
-    $output | Should -Not -Match 'WhatIf:|What if:'
+    # The import's own What if line is the intended preview; alias setup of a module loading under WhatIf is not.
+    $output | Should -Not -Match 'Set Alias|New Alias|Alias festlegen|Neuer Alias'
+    $output | Should -Match 'What ?if.*Import \d+ files'
     $output | Should -Match 'Profile import: Preview'
     # The wrapper passes -ReportDirectory explicitly, so the preview report is written.
     $manifest = @(Get-ChildItem -LiteralPath (Join-Path $root 'reports') -Recurse -Filter 'manifest.json')

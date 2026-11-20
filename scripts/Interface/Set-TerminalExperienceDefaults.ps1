@@ -103,6 +103,9 @@ if (($AllExistingUsers -or $DefaultUser) -and -not (Test-Elevation)) {
 }
 
 if ($DryRun) {
+  # Load the in-box modules this script calls before WhatIf is on. Loading one under WhatIf prints "What if"
+  # lines, leaves its aliases undefined, and can break PowerShell 7's proxies for Windows PowerShell modules.
+  Import-Module -Name Appx -ErrorAction SilentlyContinue
   $WhatIfPreference = $true
   Write-Log -Message "DRY RUN - no terminal defaults will be changed`n" -Color Yellow
 }
