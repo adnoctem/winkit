@@ -99,6 +99,32 @@ Describe 'Import-UserProfileData JSON output' {
   }
 }
 
+Describe 'Import-UserProfileData permission summaries' {
+  It 'reports partial failure with exit zero for <Summary>' -ForEach @(
+    @{ Summary = 'Successfully processed 1 files; Failed processing 3 files' }
+    @{ Summary = '1 Dateien erfolgreich verarbeitet, bei 3 Dateien ist ein Verarbeitungsfehler aufgetreten' }
+  ) {
+    Mock Invoke-SafeProcess {
+      [PSCustomObject]@{ StdOut = $Summary; StdErr = ''; ExitCode = 0; TimedOut = $false; Cancelled = $false }
+    }
+    $warnings = @(Invoke-ImportPermission -Path $TestDrive -SID 'S-1-5-18' -LogPrefix (Join-Path $TestDrive 'acl'))
+    $warnings.Count | Should -Be 2
+    $warnings[0].Kind | Should -Be 'Permission'
+    $warnings[0].Message | Should -Match 'acl-0.log'
+  }
+
+  It 'reports localized stderr and leaves clean summaries quiet' {
+    Mock Invoke-SafeProcess {
+      [PSCustomObject]@{ StdOut = 'Successfully processed 1 files; Failed processing 0 files'; StdErr = ''; ExitCode = 0; TimedOut = $false; Cancelled = $false }
+    }
+    @(Invoke-ImportPermission -Path $TestDrive -SID 'S-1-5-18' -LogPrefix (Join-Path $TestDrive 'clean')).Count | Should -Be 0
+    Mock Invoke-SafeProcess {
+      [PSCustomObject]@{ StdOut = ''; StdErr = 'Zugriff verweigert'; ExitCode = 0; TimedOut = $false; Cancelled = $false }
+    }
+    @(Invoke-ImportPermission -Path $TestDrive -SID 'S-1-5-18' -LogPrefix (Join-Path $TestDrive 'error')).Count | Should -Be 2
+  }
+}
+
 Describe 'Import-UserProfileData workflow' {
   BeforeEach {
     $global:WinkitProfileTestContext = @{
@@ -157,6 +183,40 @@ Describe 'Import-UserProfileData workflow' {
     $manifest.Status | Should -Be 'Completed'
     $manifest.Plan[0].Inventory.Files[0].SHA256 | Should -Match '^[0-9A-F]{64}$'
     $manifest.Target.SID | Should -Be $global:WinkitProfileTestContext.TargetSid
+    $operations = @(Get-Content -LiteralPath (Join-Path (Split-Path $run.Summary.ManifestPath -Parent) 'operations.jsonl') | ForEach-Object { $_ | ConvertFrom-Json })
+    $auditText = $operations | ConvertTo-Json -Depth 20
+    $auditText | Should -Not -Match '"(Plan|SHA256|RelativePath)"\s*:'
+    $auditText | Should -Match '"Files"|"ManifestPath"'
+    $run.Summary.Plan.Count | Should -Be 1
+  }
+
+  It 'warns about credential exports and excluded mail with paths and sizes in a preview' {
+    foreach ($name in @('Chrome-Passwörter.csv', 'FireFox-passwoerter.csv', 'Kennwoerter.txt', 'logins.json', 'PASSWORDS.xlsx', 'innocent.csv', 'archive.pst', 'cache.ost')) {
+      Write-ProfileFixture -Path (Join-Path $global:WinkitProfileTestContext.Source "Documents\$name") -Text '12345'
+    }
+    $run = Invoke-ProfileImport -Extra @{ DryRun = $true }
+    $manifest = Get-Content -LiteralPath $run.Summary.ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+    $run.Summary.Status | Should -Be 'Preview'
+    $manifest.Warnings.Count | Should -Be 7
+    @($manifest.Warnings | Where-Object Kind -EQ 'CredentialExport').Count | Should -Be 5
+    @($manifest.Warnings | Where-Object Kind -EQ 'ExcludedMail').Count | Should -Be 2
+    @($manifest.Warnings | Where-Object Bytes -NE 5).Count | Should -Be 0
+    $run.Summary.WarningCount | Should -Be 7
+    $run.Summary.Warnings.Path | Should -Not -Contain (Join-Path $global:WinkitProfileTestContext.Source 'Documents\innocent.csv')
+    Should -Invoke Invoke-ImportPermission -Times 0 -Exactly
+  }
+
+  It 'records permission warnings in the manifest without bypassing verification' {
+    Mock Invoke-ImportPermission {
+      [PSCustomObject]@{ Kind = 'Permission'; Path = $Path; Bytes = $null; Message = 'Individual ACL failure' }
+    }
+    $run = Invoke-ProfileImport
+    $manifest = Get-Content -LiteralPath $run.Summary.ManifestPath -Raw | ConvertFrom-Json
+
+    $run.Summary.WarningCount | Should -Be 1
+    $manifest.Warnings[0].Kind | Should -Be 'Permission'
+    Should -Invoke Assert-ImportPermission -ParameterFilter { $RequireOwner } -Times 1
   }
 
   It 'passes data-only copy, bounded retries, and no mirror/move switches' {
@@ -247,6 +307,7 @@ Describe 'Import-UserProfileData workflow' {
 
   It 'stops before copying when a destination path exceeds the supported length' {
     $long = Join-Path $global:WinkitProfileTestContext.Source 'Documents'
+    $longRoot = Join-Path $long ('segment-00-' + ('x' * 24))
     for ($index = 0; $index -lt 12; $index++) {
       $long = Join-Path $long ('segment-{0:D2}-{1}' -f $index, ('x' * 24))
     }
@@ -262,7 +323,11 @@ Describe 'Import-UserProfileData workflow' {
       Should -Invoke Invoke-SafeProcess -Times 0 -Exactly -ParameterFilter { $ArgumentList -contains '/COPY:DAT' }
     }
     finally {
-      [IO.Directory]::Delete($longFull, $true)
+      # Remove the entire generated chain; 5.1 cannot clean its remaining long ancestors.
+      if (-not $longRoot.StartsWith(([IO.Path]::GetFullPath($TestDrive).TrimEnd('\') + '\'), [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Long-path fixture cleanup escaped TestDrive.'
+      }
+      [IO.Directory]::Delete(('\\?\' + $longRoot), $true)
     }
   }
 
@@ -658,7 +723,8 @@ Describe 'Windows system junctions in the destination profile' {
     @($resets | Where-Object { $_[0] -eq $script:Documents -and $_ -contains '/T' }).Count | Should -Be 0
     @($resets | Where-Object { $_[0] -eq $script:Documents }).Count | Should -Be 2
     @($resets | Where-Object { $_[0] -eq $script:Junction }).Count | Should -Be 0
-    @($resets | Where-Object { $_[0] -eq (Join-Path $script:Documents 'report [1].txt') -and $_ -contains '/T' }).Count | Should -Be 2
+    @($resets | Where-Object { $_[0] -eq (Join-Path $script:Documents 'report [1].txt') -and $_ -contains '/T' }).Count | Should -Be 0
+    @($resets | Where-Object { $_[0] -eq (Join-Path $script:Documents 'report [1].txt') }).Count | Should -Be 2
   }
 
   It 'still refuses <Case>' -ForEach @(
