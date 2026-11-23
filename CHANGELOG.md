@@ -1,3 +1,10 @@
+## [3.5.3](https://github.com/adnoctem/winkit/compare/v3.5.2...v3.5.3) (2026-11-23)
+
+### Bug Fixes
+
+* **scripts:** correct migration inventory and final-pass safety ([c64e316](https://github.com/adnoctem/winkit/commit/c64e316d4f0051b007f0829a0c1e09a7757990d0))
+* **scripts:** correct profile import permissions and audit warnings ([246c678](https://github.com/adnoctem/winkit/commit/246c678963be9b5e0c3689f4f6bdecfc4cbb5c28))
+
 ## [3.5.2](https://github.com/adnoctem/winkit/compare/v3.5.1...v3.5.2) (2026-11-20)
 
 ### Bug Fixes
