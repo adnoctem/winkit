@@ -31,7 +31,9 @@ The plan in the manifest contains:
 - `Mappings`: the folder map for `Import-UserProfileData.ps1 -FolderMapPath`, also written to `folder-map.json`.
 - `ManualCopy`: PSTs, Outlook signatures, and public desktop files that are not program shortcuts, which belong on the new computer's public
   desktop.
-- `Notes`: unusual locations the map accounts for, such as a Desktop stored inside `Music`.
+- `Notes`: unusual locations the map accounts for, such as a Desktop stored inside `Music`, and names that may be refused by NAS/SMB
+  targets, with their Unicode code points. These name notes identify supplementary characters, private-use characters, and unpaired
+  surrogates; they do not predict the rules of a particular NAS.
 - `Decisions`: network drives other than the home drive, the logon script, unmapped data outside the profile, long paths, and Outlook report
   warnings.
 - `SuggestedImportCall`: a preview command for the import.
@@ -62,11 +64,12 @@ a folder with `-Include` to migrate it into `Documents\<folder name>`; this also
 
 The user's **home drive** is read from their signed-in session and, for domain accounts, from Active Directory (`homeDrive`,
 `homeDirectory`), so it is found even when an administrator runs the inventory. It is mapped to `Private` in the new profile and staged as
-`HomeDrive`; choose another target with `-HomeDriveTarget`. ABB does not back up the file server, so copy the share into the staging folder
-yourself before the import, for example:
+`HomeDrive`; choose another target with `-HomeDriveTarget` and another staging folder with `-HomeDriveStagingName 'XDrive\Private'`. The
+staging name is relative to `StagingRoot` and is used in the folder map and final pass. ABB does not back up the file server, so copy the
+home data into staging yourself before the import. Use a dedicated read-only share prepared by the file-server administrator, for example:
 
 ```powershell
-robocopy '\\server\home\User1' 'C:\Managed\Migration\HomeDrive' /E /COPY:DAT /DCOPY:DAT /XJ /R:1 /W:1
+robocopy '\\server\MIGRO-HOME$' 'C:\Managed\Migration\HomeDrive' /E /COPY:DAT /DCOPY:DAT /XJ /R:1 /W:1
 ```
 
 Each drive in `NetworkDrives` records its `Source`: `HomeDrive`, `Persistent`, `Connected`, or `LogonScript`. Drives connected in the
@@ -129,7 +132,12 @@ They write nothing unless `-ReportDirectory` is given explicitly; then a run fol
 .\scripts\Administration\Import-UserProfileData.ps1 @import -DryRun -ReportDirectory 'C:\Managed\Reports'
 ```
 
-After reviewing the plan:
+Before the preview's plan, a `Warnings` section lists likely credential exports and excluded PST/OST files with full paths and byte sizes.
+Credential warnings match names containing `passw`, `kennw`, `password`, or `logins` with `.csv`, `.txt`, `.json`, or `.xlsx` extensions.
+They inspect names only; a warning does not stop copying or exclude the file. Move unwanted exports out of staging and decide how to handle
+excluded mail before importing. Warnings also appear in the manifest and the returned summary.
+
+After reviewing the plan and warnings:
 
 ```powershell
 $results = .\scripts\Administration\Import-UserProfileData.ps1 @import -PassThru
@@ -188,16 +196,35 @@ unhydrated OneDrive tree is not an import destination. External drive and UNC de
 An ABB download goes stale while the user keeps working. The inventory's plan contains a `FinalPass` block, and the run folder a
 `final-pass.ps1`, that mirror each mapped folder from the old computer into the existing staging with
 `robocopy /MIR /COPY:DAT /DCOPY:DAT /XJ`. Shortcuts (`.lnk`, `.url`) are copied; only `desktop.ini` and `Thumbs.db` are skipped. A folder
-mapped separately, such as a Desktop inside `Music`, is excluded from the outer line with `/XD` and mirrored by its own line. The home drive
-is read from its file server path.
+mapped separately, such as a Desktop inside `Music`, is excluded from the outer line with both source and destination `/XD` paths and
+mirrored by its own line. Destination exclusions follow a `-StagingRoot` override in the generated script.
 
-On the old computer, as an administrator, create the hidden read-only share listed in `FinalPass.ShareCommands`. It is granted to the
-account that ran the inventory when that is a domain account; replace the placeholder otherwise. The account also needs NTFS read access to
-the mapped folders:
+Set `-ShareAccount` to the administrator who will run the final pass from the new computer. It is never inferred from the user running the
+inventory. If omitted, `FinalPass.Decisions` asks you to choose an account and share commands contain `<admin account>` for replacement. On
+the old computer, as an administrator, create the hidden read-only shares listed in `FinalPass.ShareCommands`. The account also needs NTFS
+read access to the mapped folders. These commands can be pasted into PowerShell:
 
 ```powershell
-net share MIGRO$=C:\ /GRANT:"OLDDOMAIN\Operator",READ
+& net.exe share 'MIGRO$=C:\' '/GRANT:OLDDOMAIN\Operator,READ'
 ```
+
+For a home drive, have the file-server administrator create a dedicated read-only share of that user's directory. On a Windows file server,
+with the actual local home-directory path substituted:
+
+```powershell
+& net.exe share 'MIGRO-HOME$=D:\Homes\User1' '/GRANT:OLDDOMAIN\Operator,READ'
+```
+
+Confirm that the share grants the operator only read access, then regenerate the inventory with its UNC path:
+
+```powershell
+.\scripts\Administration\Show-UserDataInventory.ps1 @inventory -ShareAccount 'OLDDOMAIN\Operator' `
+  -HomeDriveReadOnlyPath '\\server\MIGRO-HOME$' -HomeDriveStagingName 'XDrive\Private'
+```
+
+The inventory cannot verify remote share permissions. A home drive without `-HomeDriveReadOnlyPath`, other UNC mappings requiring their own
+copy plan, or unresolved `LongPaths` block the generated final pass before robocopy runs. Resolve long names on the source and regenerate
+the inventory; `/MIR` could otherwise delete a ZIP replacement created only in staging. `FinalPass.Blockers` records the reasons.
 
 On the new computer, copy `final-pass.ps1` from the inventory run folder and preview it; without `-Apply` every line runs with `/L` and
 copies nothing. Logs are written beside the script:
@@ -212,8 +239,10 @@ robocopy only reads the old computer. `/MIR` changes only the staging destinatio
 that no longer exist on the old computer. Keep the user signed out and Outlook closed, then remove the share on the old computer:
 
 ```powershell
-net share MIGRO$ /DELETE
+& net.exe share 'MIGRO$' /DELETE
 ```
+
+Remove the temporary home-drive share on the file server as well. The generated script imports the inventory's exact Substrate version.
 
 ## Import a folder map
 
@@ -252,6 +281,10 @@ traversed, not copied into, and not included in the permission reset. Their targ
 and after, and any change fails the run. A staged folder with the same name stops the import before copying. Any other destination link
 still stops the run.
 
+When system junctions are present, permissions are reset separately on the root and each ordinary child. Files are processed without `/T`;
+directories retain recursion. Partial failures reported by `icacls` are recorded as warnings even if its exit code is zero. Independent
+owner and permission verification still runs and fails the import if the required permissions were not established.
+
 **Custom permissions within selected destination trees are replaced**, including permissions on destination-only files. The profile root,
 AppData, and unselected destination folders are not reset. Choose mappings narrowly when an existing folder contains specially secured data.
 Changing ownership alone would not establish the required access; the inherited ACLs provide it. Microsoft documents these distinctions in
@@ -271,8 +304,9 @@ operation; a later error produces failure and retains staging unless cleanup has
 Each run creates a unique directory under `%ProgramData%\winkit\ProfileImports`, or a supplied `-ReportDirectory` outside source and target.
 The run directory is restricted to the operator, Administrators, and SYSTEM. It contains:
 
-- `manifest.json`: source, identity, plan, file hashes, exclusions, native exit codes, and overall state.
-- `operations.jsonl`: structured operation results.
+- `manifest.json`: source, identity, plan, file hashes, exclusions, warnings, native exit codes, and overall state.
+- `operations.jsonl`: structured operation results; the import summary contains counts, status, and the manifest path instead of duplicating
+  the full plan. The full plan remains available through `-PassThru`.
 - `robocopy-*.log` and `permissions-*.log`: native copy and permission output.
 
 Robocopy codes 0–7 still require the independent verification checks; codes 8 and above fail the run. The script uses Substrate's
