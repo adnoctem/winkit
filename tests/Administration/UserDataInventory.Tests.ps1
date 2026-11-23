@@ -545,13 +545,22 @@ Describe 'Show-UserDataInventory drives' {
     }
 
     $default = Get-DataInventoryMapping @mappingParameters
-    $custom = Get-DataInventoryMapping @mappingParameters -HomeDriveTarget 'Documents\Home'
+    $custom = Get-DataInventoryMapping @mappingParameters -HomeDriveTarget 'Documents\Home' -HomeDriveStagingName 'XDrive\Private'
 
     $default.Mappings[0].Source | Should -Be 'HomeDrive'
     $default.Mappings[0].Target | Should -Be 'Private'
     $default.Mappings[0].Kind | Should -Be 'HomeDrive'
     $default.Roots[0].StagingName | Should -Be 'HomeDrive'
     $custom.Mappings[0].Target | Should -Be 'Documents\Home'
+    $custom.Mappings[0].Source | Should -Be 'XDrive\Private'
+    $custom.Roots[0].StagingName | Should -Be 'XDrive\Private'
+    $pass = ConvertTo-DataInventoryFinalPass -Mapping $custom.Mappings -Computer OLDPC -StagingRoot 'C:\Stage' -HomeDriveReadOnlyPath '\\server\MIGRO-HOME$'
+    $pass.Passes[0].Destination | Should -Be 'C:\Stage\XDrive\Private'
+    $plan = Get-DataInventoryPlan -Mapping $custom -LongPath @() -StagingRoot 'C:\Stage' -Account 'EXAMPLE\Admin' -HomeDriveReadOnlyPath '\\server\MIGRO-HOME$'
+    $plan.FinalPass.Blockers.Count | Should -Be 0
+    $plan.FinalPass.Passes[0].Source | Should -Be '\\server\MIGRO-HOME$'
+    $plan.FinalPass.ShareCommands -join ' ' | Should -Not -Match '<admin account>'
+    { Get-DataInventoryMapping @mappingParameters -HomeDriveStagingName '..\Escape' } | Should -Throw
     ($default.Notes -join "`n") | Should -Match "Home drive X: .*'HomeDrive' staging folder"
     $default.Notes | Should -Contain 'Connected drives were not read.'
     ($default.Decisions -join "`n") | Should -Match 'Network drive G: .* from Persistent'
@@ -575,36 +584,90 @@ Describe 'Show-UserDataInventory final pass' {
     (ConvertTo-DataInventoryFinalPassPath -Path '\\server\home\User1' -Computer 'OLDPC').Share | Should -BeNullOrEmpty
   }
 
-  It 'builds one mirror line per mapping with share commands, nested exclusions, and shortcuts kept' {
-    $pass = ConvertTo-DataInventoryFinalPass -Mapping $script:FinalMappings -Computer 'OLDPC' -StagingRoot 'C:\Managed\Migration' -Account 'EXAMPLE\Operator'
+  It 'passes the share grant as one literal PowerShell argument' {
+    $pass = ConvertTo-DataInventoryFinalPass -Mapping @($script:FinalMappings[0]) -Computer OLDPC -StagingRoot 'C:\Stage' -Account "EXAMPLE\O'Brien"
+    function net.exe {
+      $args
+    }
+    $arguments = @(& ([scriptblock]::Create($pass.ShareCommands[0])))
+    $arguments | Should -Be @('share', 'MIGRO$=C:\', "/GRANT:EXAMPLE\O'Brien,READ")
+  }
 
-    $pass.ShareCommands | Should -Be @('net share MIGRO$=C:\ /GRANT:"EXAMPLE\Operator",READ', 'net share MIGRO-D$=D:\ /GRANT:"EXAMPLE\Operator",READ')
-    $pass.RemoveCommands | Should -Be @('net share MIGRO$ /DELETE', 'net share MIGRO-D$ /DELETE')
+  It 'blocks generated commands and scripts before robocopy when long paths are unresolved' {
+    $pass = ConvertTo-DataInventoryFinalPass -Mapping @($script:FinalMappings[0]) -Computer OLDPC -StagingRoot 'C:\Stage' -LongPath @([PSCustomObject]@{ Source = 'long'; Destination = 'long' })
+    $pass.Passes[0].Command | Should -Match '^throw .*LongPaths'
+    $pass.Passes[0].PreviewCommand | Should -Match '^throw '
+    $text = ConvertTo-DataInventoryFinalPassScript -FinalPass $pass -Computer OLDPC -StagingRoot 'C:\Stage' -RunId test -UserName user
+    $text = $text -replace '(?m)^Import-Module AdNoctem\.Substrate\.PowerShell[^\r\n]*', ''
+    Mock Invoke-SafeProcess { throw 'Must not reach robocopy' }
+    { & ([scriptblock]::Create($text)) -Apply } | Should -Throw '*LongPaths*'
+    Should -Invoke Invoke-SafeProcess -Times 0 -Exactly
+  }
+
+  It 'protects a separately staged child from a real robocopy mirror preview' {
+    $root = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+    $source = Join-Path $root 'live\Music'
+    $stage = Join-Path $root 'stage'
+    $destination = Join-Path $stage 'Music'
+    $child = Join-Path $destination 'Desktop'
+    foreach ($directory in @($source, $child)) {
+      $null = New-Item -ItemType Directory -Path $directory -Force
+    }
+    [IO.File]::WriteAllText((Join-Path $child 'protected.txt'), 'keep')
+    [IO.File]::WriteAllText((Join-Path $destination 'extra.txt'), 'preview should list this')
+    Mock ConvertTo-DataInventoryFinalPassPath {
+      [PSCustomObject]@{ Path = $Path; Share = $null; Drive = $null }
+    }
+    $mapping = @(
+      [PSCustomObject]@{ Source = 'Music'; Origin = $source; Kind = 'KnownFolder' }
+      [PSCustomObject]@{ Source = 'Music\Desktop'; Origin = (Join-Path $source 'Desktop'); Kind = 'KnownFolder' }
+    )
+    $pass = ConvertTo-DataInventoryFinalPass -Mapping $mapping -Computer OLDPC -StagingRoot $stage
+    $pass.Passes[0].Exclude | Should -Contain $child
+    $log = Join-Path $root 'preview.log'
+    $arguments = @($source, $destination, '/MIR', '/L', '/XJ', '/R:0', '/W:0', '/FP', "/UNILOG:$log", '/XD') + $pass.Passes[0].Exclude
+    $result = Invoke-SafeProcess -FilePath "$env:SystemRoot\System32\robocopy.exe" -ArgumentList $arguments -AsResult
+    $result.ExitCode | Should -BeLessThan 8
+    $listing = Get-Content -LiteralPath $log -Raw -Encoding Unicode
+    $listing | Should -Match 'extra.txt'
+    $listing | Should -Not -Match 'protected.txt'
+    Get-Content -LiteralPath (Join-Path $child 'protected.txt') | Should -Be 'keep'
+  }
+
+  It 'builds one mirror line per mapping with share commands, nested exclusions, and shortcuts kept' {
+    $pass = ConvertTo-DataInventoryFinalPass -Mapping $script:FinalMappings -Computer 'OLDPC' -StagingRoot 'C:\Managed\Migration' -Account 'EXAMPLE\Operator' -HomeDriveReadOnlyPath '\\server\MIGRO-HOME$'
+
+    $pass.ShareCommands | Should -Be @("& net.exe share 'MIGRO`$=C:\' '/GRANT:EXAMPLE\Operator,READ'", "& net.exe share 'MIGRO-D`$=D:\' '/GRANT:EXAMPLE\Operator,READ'")
+    $pass.RemoveCommands | Should -Be @("& net.exe share 'MIGRO`$' /DELETE", "& net.exe share 'MIGRO-D`$' /DELETE")
     $pass.Passes.Count | Should -Be 4
 
     $music = @($pass.Passes | Where-Object Destination -EQ 'C:\Managed\Migration\User1\Music')[0]
     $music.Source | Should -Be '\\OLDPC\MIGRO$\Users\User1\Music'
-    $music.Exclude | Should -Be @('\\OLDPC\MIGRO$\Users\User1\Music\Desktop')
+    $music.Exclude | Should -Be @('\\OLDPC\MIGRO$\Users\User1\Music\Desktop', 'C:\Managed\Migration\User1\Music\Desktop')
     $music.Command | Should -Match '/MIR /COPY:DAT /DCOPY:DAT /XJ'
-    $music.Command | Should -Match '/XD \\\\OLDPC\\MIGRO\$\\Users\\User1\\Music\\Desktop$'
+    $music.Command | Should -Match '/XD \\\\OLDPC\\MIGRO\$\\Users\\User1\\Music\\Desktop '
     $music.PreviewCommand | Should -Match ' /L$'
     $music.Command | Should -Not -Match '\.lnk|\.url'
 
     $business = @($pass.Passes | Where-Object Destination -EQ 'C:\Managed\Migration\Business')[0]
     $business.Command | Should -Match '"\\\\OLDPC\\MIGRO-D\$\\Business Data"'
-    @($pass.Passes | Where-Object Destination -EQ 'C:\Managed\Migration\HomeDrive')[0].Source | Should -Be '\\server\home\User1'
+    @($pass.Passes | Where-Object Destination -EQ 'C:\Managed\Migration\HomeDrive')[0].Source | Should -Be '\\server\MIGRO-HOME$'
     ($pass.Notes -join "`n") | Should -Match 'only reads the old computer'
 
     $placeholder = ConvertTo-DataInventoryFinalPass -Mapping $script:FinalMappings -Computer 'OLDPC' -StagingRoot 'C:\Managed\Migration' -Account $null
-    $placeholder.ShareCommands[0] | Should -Match '<account running the final pass>'
+    $placeholder.ShareCommands[0] | Should -Match '<admin account>'
+    $placeholder.Decisions -join ' ' | Should -Match '-ShareAccount'
+    $placeholder.Blockers -join ' ' | Should -Match '-HomeDriveReadOnlyPath'
+    $placeholder.Passes[0].Command | Should -Match '^throw '
   }
 
   It 'writes a final-pass script that previews by default and mirrors with -Apply' {
-    $pass = ConvertTo-DataInventoryFinalPass -Mapping $script:FinalMappings -Computer 'OLDPC' -StagingRoot 'C:\Managed\Migration' -Account 'EXAMPLE\Operator'
+    $pass = ConvertTo-DataInventoryFinalPass -Mapping $script:FinalMappings -Computer 'OLDPC' -StagingRoot 'C:\Managed\Migration' -Account 'EXAMPLE\Operator' -HomeDriveReadOnlyPath '\\server\MIGRO-HOME$'
     $text = ConvertTo-DataInventoryFinalPassScript -FinalPass $pass -Computer 'OLDPC' -StagingRoot 'C:\Managed\Migration' -RunId 'run' -UserName 'EXAMPLE\User1'
     $errors = $null
     $null = [Management.Automation.Language.Parser]::ParseInput($text, [ref]$null, [ref]$errors)
     @($errors).Count | Should -Be 0
+    $text | Should -Match 'Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.5.0'
 
     # Run it with robocopy mocked; the module import is dropped so the mock is not replaced.
     $folder = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
@@ -631,7 +694,9 @@ Describe 'Show-UserDataInventory final pass' {
     $music[0] | Should -Be '\\NEWNAME\MIGRO$\Users\User1\Music'
     $music | Should -Contain '/L'
     $music | Should -Contain '\\NEWNAME\MIGRO$\Users\User1\Music\Desktop'
-    @($preview | Where-Object { $_[0] -eq '\\server\home\User1' }).Count | Should -Be 1
+    $music | Should -Contain 'E:\Stage\User1\Music\Desktop'
+    $music | Should -Not -Contain 'C:\Managed\Migration\User1\Music\Desktop'
+    @($preview | Where-Object { $_[0] -eq '\\server\MIGRO-HOME$' }).Count | Should -Be 1
     @($apply | Where-Object { $_ -contains '/L' }).Count | Should -Be 0
     $apply[0][1] | Should -BeLike 'C:\Managed\Migration\*'
   }
@@ -695,6 +760,18 @@ Describe 'Show-UserDataInventory program owners' {
 }
 
 Describe 'Show-UserDataInventory scans' {
+  It 'reports suspect Unicode names with code points and leaves ordinary names alone' {
+    Get-DataInventoryNameNote -Name 'Résumé.txt' -Path 'C:\Résumé.txt' | Should -BeNullOrEmpty
+    $name = [char]::ConvertFromUtf32(0x1F4E7) + [char]0xE123 + [char]0xD800 + '.msg'
+    $note = Get-DataInventoryNameNote -Name $name -Path ('C:\' + $name)
+    $note | Should -Match 'may be refused by NAS/SMB targets'
+    $note | Should -Match 'U\+1F4E7, U\+E123, U\+D800'
+    $root = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $root
+    [IO.File]::WriteAllText((Join-Path $root ([char]::ConvertFromUtf32(0x1F4E7) + '.msg')), 'mail')
+    (Get-DataInventoryTreeSummary -Path $root).Notes -join ' ' | Should -Match 'U\+1F4E7'
+  }
+
   It 'scans fixed lettered volumes, skips system and managed folders, and honors -Include' {
     $fixedRoot = Join-Path $TestDrive 'FixedRoot'
     $removableRoot = Join-Path $TestDrive 'RemovableRoot'
@@ -756,6 +833,7 @@ Describe 'Show-UserDataInventory scans' {
     $target = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
     $null = New-Item -ItemType Directory -Path $source -Force
     $long = Join-Path $source 'Documents'
+    $longRoot = Join-Path $long ('segment-00-' + ('x' * 24))
     for ($index = 0; $index -lt 12; $index++) {
       $long = Join-Path $long ('segment-{0:D2}-{1}' -f $index, ('x' * 24))
     }
@@ -769,8 +847,10 @@ Describe 'Show-UserDataInventory scans' {
       $paths[0].Length | Should -BeGreaterThan $paths[0].Limit
     }
     finally {
-      [IO.Directory]::Delete($longFull, $true)
-      Remove-Item -LiteralPath $source -Recurse -Force -ErrorAction SilentlyContinue
+      if (-not $longRoot.StartsWith(([IO.Path]::GetFullPath($TestDrive).TrimEnd('\') + '\'), [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Long-path fixture cleanup escaped TestDrive.'
+      }
+      [IO.Directory]::Delete(('\\?\' + $longRoot), $true)
     }
   }
 

@@ -17,7 +17,7 @@
   from the user's registry. Drives connected in the current session are read only
   when the user runs the inventory without elevation, because other sessions
   cannot see them. A home drive is mapped to -HomeDriveTarget and staged as
-  HomeDrive; other drives are listed as decisions.
+  -HomeDriveStagingName (HomeDrive by default); other drives are listed as decisions.
 
   The script is read-only. It runs in the user's session without elevation for
   the current user. Another local profile requires administrator rights; its
@@ -37,7 +37,9 @@
 
   The plan also holds a final pass: robocopy /MIR lines, one per mapping, that
   refresh the staging from the live old computer through hidden read-only shares,
-  with the share commands to create and remove them.
+  with the share commands to create and remove them. -ShareAccount names the
+  administrator who reads them; home data needs -HomeDriveReadOnlyPath. Unresolved
+  long paths block the final pass. Notes identify names that NAS targets may refuse.
 
   Unless -DryRun is supplied, a unique run directory receives manifest.json with
   the full inventory, folder-map.json for Import-UserProfileData -FolderMapPath,
@@ -85,6 +87,19 @@
 .PARAMETER HomeDriveTarget
   Target folder, relative to the new profile, for the user's home drive. Defaults
   to Private.
+
+.PARAMETER HomeDriveStagingName
+  Home-drive folder relative to StagingRoot, for example XDrive\Private.
+  Defaults to HomeDrive; used in both folder-map.json and final-pass.ps1.
+
+.PARAMETER ShareAccount
+  Administrator account that will read the migration shares from the new computer.
+  Never inferred from the inventoried user. If omitted, share commands use a placeholder.
+
+.PARAMETER HomeDriveReadOnlyPath
+  UNC path to a dedicated read-only share of the user's home directory, created on
+  the file server for ShareAccount. Required for a final pass that includes a home
+  drive. Confirm its share permissions on the server before supplying this path.
 
 .PARAMETER MeasureNetwork
   Measure size and file counts on the home drive and other network drives through
@@ -173,6 +188,18 @@ param (
   [ValidateNotNullOrEmpty()]
   [string]
   $HomeDriveTarget = 'Private',
+
+  [ValidateNotNullOrEmpty()]
+  [string]
+  $HomeDriveStagingName = 'HomeDrive',
+
+  [ValidatePattern('^[^"\r\n%<>|&^]+$')]
+  [string]
+  $ShareAccount,
+
+  [ValidatePattern('^\\\\[^\\<>]+\\[^\\<>]+(?:\\[^<>]*)?$')]
+  [string]
+  $HomeDriveReadOnlyPath,
 
   [switch]
   $MeasureNetwork,
@@ -326,6 +353,33 @@ function Expand-DataInventoryPath {
   return [Environment]::ExpandEnvironmentVariables($_expanded)
 }
 
+function Get-DataInventoryNameNote {
+  param (
+    [string]
+    $Name,
+
+    [string]
+    $Path
+  )
+
+  $_points = @()
+  for ($_index = 0; $_index -lt $Name.Length; $_index++) {
+    $_value = [int][char]$Name[$_index]
+    if ([char]::IsHighSurrogate($Name[$_index]) -and $_index + 1 -lt $Name.Length -and
+      [char]::IsLowSurrogate($Name[$_index + 1])) {
+      $_points += 'U+{0:X}' -f [char]::ConvertToUtf32($Name, $_index)
+      $_index++
+    }
+    elseif ([char]::IsSurrogate($Name[$_index]) -or ($_value -ge 0xE000 -and $_value -le 0xF8FF)) {
+      $_points += 'U+{0:X4}' -f $_value
+    }
+  }
+
+  if ($_points.Count -gt 0) {
+    return "Name may be refused by NAS/SMB targets: $Path ($((@($_points | Select-Object -Unique)) -join ', '))."
+  }
+}
+
 function Get-DataInventoryTreeSummary {
   param (
     [string]
@@ -350,6 +404,7 @@ function Get-DataInventoryTreeSummary {
     Offline       = 0
     Encrypted     = 0
     Error         = $null
+    Notes         = @()
   }
 
   if (-not (Test-Path -LiteralPath $Path -ErrorAction SilentlyContinue)) {
@@ -359,6 +414,7 @@ function Get-DataInventoryTreeSummary {
   $result.Exists = $true
   $_newest = $null
   $_reparseItems = New-Object System.Collections.ArrayList
+  $_nameNotes = New-Object System.Collections.ArrayList
   $_pending = New-Object 'System.Collections.Generic.Queue[string]'
   $_pending.Enqueue($Path)
 
@@ -387,6 +443,11 @@ function Get-DataInventoryTreeSummary {
         if ($_isExcluded) {
           continue
         }
+      }
+
+      $_nameNote = Get-DataInventoryNameNote -Name $_item.Name -Path $_item.FullName
+      if ($_nameNote) {
+        $null = $_nameNotes.Add($_nameNote)
       }
 
       if ($_item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
@@ -431,6 +492,7 @@ function Get-DataInventoryTreeSummary {
   }
 
   $result.ReparseItems = @($_reparseItems.ToArray())
+  $result.Notes = @($_nameNotes.ToArray())
   return $result
 }
 
@@ -507,6 +569,7 @@ function Get-DataInventoryKnownFolder {
         NestedFolders    = @($_nested | ForEach-Object { $_.Name })
         ReparsePoints    = $_summary.ReparsePoints
         ReparseItems     = $_summary.ReparseItems
+        Notes            = $_summary.Notes
         Offline          = $_summary.Offline
         Encrypted        = $_summary.Encrypted
         IsUnc            = $_isUnc
@@ -615,6 +678,7 @@ function Get-DataInventoryPublicFolder {
         Bytes        = $_summary.Bytes
         Newest       = $_summary.Newest
         ReparseItems = $_summary.ReparseItems
+        Notes        = $_summary.Notes
         Shortcuts    = @($_shortcuts)
         Permissions  = $_permissions
         Error        = $_summary.Error
@@ -807,6 +871,7 @@ function Get-DataInventoryNetworkDrive {
         Newest     = $_newest
         Measured   = $null -ne $_summary
         Error      = $_error
+        Notes      = @($_summary.Notes | Where-Object { $_ })
       })
   }
 
@@ -929,6 +994,7 @@ function Get-DataInventoryOutsideProfile {
         Bytes          = $_summary.Bytes
         Newest         = $_summary.Newest
         ReparseItems   = $_summary.ReparseItems
+        Notes          = $_summary.Notes
         Programs       = @($_matches | ForEach-Object { $_.Name } | Select-Object -Unique)
         ProgramMatches = @($_matches.ToArray())
         Included       = $_isIncluded
@@ -1425,6 +1491,9 @@ function Get-DataInventoryMapping {
     [string]
     $HomeDriveTarget = 'Private',
 
+    [string]
+    $HomeDriveStagingName = 'HomeDrive',
+
     [string[]]
     $Folder = @(),
 
@@ -1472,7 +1541,11 @@ function Get-DataInventoryMapping {
       continue
     }
 
-    $_rootName = Add-DataInventoryRoot -Roots $_roots -Path $_drive.Target -Reason "Home drive $_label" -StagingName 'HomeDrive'
+    if ($HomeDriveStagingName -match '(^[\\/]|[:*?"<>|]|[\\/]\.?\.?([\\/]|$)|^\.?\.?$)' -or
+      @($HomeDriveStagingName -split '[\\/]' | Where-Object { [string]::IsNullOrWhiteSpace($_) -or $_ -match '[. ]$' }).Count -gt 0) {
+      throw 'HomeDriveStagingName must be a relative directory path without dot segments or invalid characters.'
+    }
+    $_rootName = Add-DataInventoryRoot -Roots $_roots -Path $_drive.Target -Reason "Home drive $_label" -StagingName $HomeDriveStagingName
     $null = $_mappings.Add([PSCustomObject]@{
         Source = $_rootName
         Target = $HomeDriveTarget
@@ -1719,7 +1792,10 @@ function Get-DataInventoryPlan {
     $Computer = $env:COMPUTERNAME,
 
     [string]
-    $Account
+    $Account,
+
+    [string]
+    $HomeDriveReadOnlyPath
   )
 
   $_downloads = New-Object System.Collections.ArrayList
@@ -1802,7 +1878,18 @@ function Get-DataInventoryPlan {
   # A download goes stale while the user keeps working; the final pass refreshes staging from the live computer.
   $_finalPass = $null
   if ($Mapping.Mappings.Count -gt 0) {
-    $_finalPass = ConvertTo-DataInventoryFinalPass -Mapping $Mapping.Mappings -Computer $Computer -StagingRoot $StagingRoot -Account $Account
+    $_finalPassParameters = @{
+      Mapping               = $Mapping.Mappings
+      Computer              = $Computer
+      StagingRoot           = $StagingRoot
+      Account               = $Account
+      LongPath              = $LongPath
+      HomeDriveReadOnlyPath = $HomeDriveReadOnlyPath
+    }
+    $_finalPass = ConvertTo-DataInventoryFinalPass @_finalPassParameters
+    foreach ($_decision in $_finalPass.Decisions) {
+      $null = $_decisions.Add($_decision)
+    }
   }
 
   return [PSCustomObject]@{
@@ -1865,7 +1952,13 @@ function ConvertTo-DataInventoryFinalPass {
     $StagingRoot,
 
     [string]
-    $Account
+    $Account,
+
+    [object[]]
+    $LongPath = @(),
+
+    [string]
+    $HomeDriveReadOnlyPath
   )
 
   # Mirrors the live old computer into existing staging. Shortcuts stay included: they record how programs are launched.
@@ -1882,25 +1975,56 @@ function ConvertTo-DataInventoryFinalPass {
     'Thumbs.db'
   )
 
+  $_decisions = New-Object System.Collections.ArrayList
+  $_blockers = New-Object System.Collections.ArrayList
   $_grant = $Account
   if ([string]::IsNullOrWhiteSpace($_grant)) {
-    $_grant = '<account running the final pass>'
+    $_grant = '<admin account>'
+    $null = $_decisions.Add('Choose -ShareAccount for the administrator who will run the final pass. Replace <admin account> before creating shares.')
+  }
+
+  if ($LongPath.Count -gt 0) {
+    $null = $_blockers.Add('Resolve the LongPaths entries on the source and regenerate the inventory before a final pass. /MIR could delete staged ZIP replacements.')
   }
 
   $_passes = New-Object System.Collections.ArrayList
   $_shares = @{}
   foreach ($_item in $Mapping) {
     $_source = ConvertTo-DataInventoryFinalPassPath -Path $_item.Origin -Computer $Computer
+    if ($_item.Origin.StartsWith('\\')) {
+      if ($_item.Kind -eq 'HomeDrive' -and -not [string]::IsNullOrWhiteSpace($HomeDriveReadOnlyPath)) {
+        $_source.Path = $HomeDriveReadOnlyPath.TrimEnd('\')
+      }
+      else {
+        $_source.Path = '\\<file server>\<read-only home share>'
+        $null = $_blockers.Add("Create a dedicated read-only share for $($_item.Origin) on its file server and supply -HomeDriveReadOnlyPath for the home drive. Other UNC mappings need a separately reviewed copy plan.")
+      }
+    }
     if ($_source.Share) {
       $_shares[$_source.Share] = $_source.Drive
     }
 
-    $_nested = @(
-      $Mapping |
-        Where-Object { $_ -ne $_item -and (Test-DataInventoryPathWithin -Path $_.Origin -Root $_item.Origin) } |
-        ForEach-Object { (ConvertTo-DataInventoryFinalPassPath -Path $_.Origin -Computer $Computer).Path }
-    )
     $_destination = Join-Path $StagingRoot $_item.Source
+    $_nestedSource = @()
+    $_nestedDestination = @()
+    foreach ($_inner in $Mapping) {
+      if ($_inner -eq $_item) {
+        continue
+      }
+
+      if (Test-DataInventoryPathWithin -Path $_inner.Origin -Root $_item.Origin) {
+        $_relative = $_inner.Origin.Substring($_item.Origin.TrimEnd('\').Length).TrimStart('\')
+        $_nestedSource += Join-Path $_source.Path $_relative
+        # Exclude the corresponding destination even when the child maps elsewhere.
+        $_nestedDestination += Join-Path $_destination $_relative
+      }
+
+      $_innerDestination = Join-Path $StagingRoot $_inner.Source
+      if (Test-DataInventoryPathWithin -Path $_innerDestination -Root $_destination) {
+        $_nestedDestination += $_innerDestination
+      }
+    }
+    $_nested = @(@($_nestedSource) + @($_nestedDestination) | Select-Object -Unique)
     $_arguments = @($_source.Path, $_destination) + $_options
     if ($_nested.Count -gt 0) {
       $_arguments += @('/XD') + $_nested
@@ -1908,26 +2032,43 @@ function ConvertTo-DataInventoryFinalPass {
 
     $_quoted = @($_arguments | ForEach-Object { if ($_ -match '\s') { '"{0}"' -f $_ } else { $_ } }) -join ' '
     $null = $_passes.Add([PSCustomObject]@{
-        Source         = $_source.Path
-        Destination    = $_destination
-        Exclude        = $_nested
-        PreviewCommand = "robocopy $_quoted /L"
-        Command        = "robocopy $_quoted"
+        Source             = $_source.Path
+        Destination        = $_destination
+        Exclude            = $_nested
+        ExcludeSource      = @($_nestedSource | Select-Object -Unique)
+        ExcludeDestination = @($_nestedDestination | Select-Object -Unique)
+        PreviewCommand     = "robocopy $_quoted /L"
+        Command            = "robocopy $_quoted"
       })
   }
 
   $_create = New-Object System.Collections.ArrayList
   $_remove = New-Object System.Collections.ArrayList
   foreach ($_share in @($_shares.Keys | Sort-Object { $_shares[$_] })) {
-    $null = $_create.Add(('net share {0}={1}:\ /GRANT:"{2}",READ' -f $_share, $_shares[$_share], $_grant))
-    $null = $_remove.Add(('net share {0} /DELETE' -f $_share))
+    $_sharePathLiteral = Format-DataInventoryLiteral -Value ('{0}={1}:\' -f $_share, $_shares[$_share])
+    $_grantLiteral = Format-DataInventoryLiteral -Value ('/GRANT:{0},READ' -f $_grant)
+    $_shareLiteral = Format-DataInventoryLiteral -Value $_share
+    $null = $_create.Add(('& net.exe share {0} {1}' -f $_sharePathLiteral, $_grantLiteral))
+    $null = $_remove.Add(('& net.exe share {0} /DELETE' -f $_shareLiteral))
+  }
+
+  foreach ($_blocker in $_blockers) {
+    $null = $_decisions.Add($_blocker)
+  }
+  if ($_blockers.Count -gt 0) {
+    $_stop = 'throw ' + (Format-DataInventoryLiteral -Value ($_blockers -join ' '))
+    foreach ($_pass in $_passes) {
+      $_pass.Command = $_stop
+      $_pass.PreviewCommand = $_stop
+    }
   }
 
   $_notes = @(
     "On the old computer, as an administrator: create the read-only share(s) with ShareCommands. The account also needs NTFS read access to the mapped folders.",
     'On the new computer: run each PreviewCommand (robocopy /L lists changes without copying), review it, then run each Command, or use final-pass.ps1 beside folder-map.json.',
     'robocopy only reads the old computer. /MIR changes only the staging destination: it copies new and changed files and deletes staging files that no longer exist on the old computer. Folders mapped separately are excluded with /XD and left to their own line.',
-    'Afterwards, remove the share(s) on the old computer with RemoveCommands. Keep the user signed out and Outlook closed during the final pass.'
+    'Afterwards, remove the share(s) on the old computer with RemoveCommands. Keep the user signed out and Outlook closed during the final pass.',
+    'For a home drive, create a separate read-only share on the file server for the same administrator, pass its UNC path with -HomeDriveReadOnlyPath, and remove it afterwards. The inventory cannot verify remote share permissions.'
   )
 
   return [PSCustomObject]@{
@@ -1935,6 +2076,8 @@ function ConvertTo-DataInventoryFinalPass {
     RemoveCommands = @($_remove.ToArray())
     Passes         = @($_passes.ToArray())
     Notes          = $_notes
+    Decisions      = @($_decisions.ToArray())
+    Blockers       = @($_blockers.ToArray())
   }
 }
 
@@ -1959,12 +2102,14 @@ function ConvertTo-DataInventoryFinalPassScript {
   # Passes are stored relative to the old computer and the staging root, so both can be overridden at run time.
   $_entries = New-Object System.Collections.ArrayList
   foreach ($_pass in $FinalPass.Passes) {
-    $_exclude = @($_pass.Exclude | ForEach-Object { Format-DataInventoryLiteral -Value $_ }) -join ', '
+    $_exclude = @($_pass.ExcludeSource | ForEach-Object { Format-DataInventoryLiteral -Value $_ }) -join ', '
+    $_excludeDestination = @($_pass.ExcludeDestination | ForEach-Object { Format-DataInventoryLiteral -Value $_.Substring($StagingRoot.Length).TrimStart('\') }) -join ', '
     $null = $_entries.Add(@(
         '  @{',
         ('    Source      = {0}' -f (Format-DataInventoryLiteral -Value $_pass.Source)),
         ('    Destination = {0}' -f (Format-DataInventoryLiteral -Value $_pass.Destination.Substring($StagingRoot.Length).TrimStart('\'))),
         ('    Exclude     = @({0})' -f $_exclude),
+        ('    ExcludeDestination = @({0})' -f $_excludeDestination),
         '  }'
       ) -join "`r`n")
   }
@@ -1973,6 +2118,7 @@ function ConvertTo-DataInventoryFinalPassScript {
   $_removeLines = @($FinalPass.RemoveCommands | ForEach-Object { "  $_" }) -join "`r`n"
   $_lines = @(
     '#Requires -Version 5.1',
+    "#Requires -Modules @{ ModuleName = 'AdNoctem.Substrate.PowerShell'; RequiredVersion = '0.5.0' }",
     '',
     '<#',
     '.SYNOPSIS',
@@ -2019,9 +2165,14 @@ function ConvertTo-DataInventoryFinalPassScript {
     '  $Apply',
     ')',
     '',
-    'Import-Module AdNoctem.Substrate.PowerShell -Force',
+    'Import-Module AdNoctem.Substrate.PowerShell -RequiredVersion 0.5.0 -Force',
     '',
     "`$ErrorActionPreference = 'Stop'",
+    ('$_blockers = @({0})' -f (@($FinalPass.Blockers | ForEach-Object { Format-DataInventoryLiteral -Value $_ }) -join ', ')),
+    'if ($_blockers.Count -gt 0) {',
+    "  throw (`$_blockers -join ' ')",
+    '}',
+    '',
     ('$_computer = {0}' -f (Format-DataInventoryLiteral -Value $Computer)),
     "`$_options = @('/MIR', '/COPY:DAT', '/DCOPY:DAT', '/XJ', '/R:1', '/W:1', '/NP', '/XF', 'desktop.ini', 'Thumbs.db')",
     '$_passes = @(',
@@ -2035,6 +2186,7 @@ function ConvertTo-DataInventoryFinalPassScript {
     "  `$_source = `$_pass.Source.Replace(""\\`$_computer\"", ""\\`$SourceComputer\"")",
     '  $_destination = Join-Path $StagingRoot $_pass.Destination',
     "  `$_exclude = @(`$_pass.Exclude | ForEach-Object { `$_.Replace(""\\`$_computer\"", ""\\`$SourceComputer\"") })",
+    '  $_exclude += @($_pass.ExcludeDestination | ForEach-Object { Join-Path $StagingRoot $_ })',
     "  `$_log = Join-Path `$PSScriptRoot ('final-pass-{0}.log' -f `$_index)",
     '  $_arguments = @($_source, $_destination) + $_options + @("/UNILOG:$_log")',
     '  if ($_exclude.Count -gt 0) {',
@@ -2157,12 +2309,14 @@ try {
     -NetworkDrive $_network `
     -DriveNote $_driveInventory.Notes `
     -HomeDriveTarget $HomeDriveTarget `
+    -HomeDriveStagingName $HomeDriveStagingName `
     -Folder $Folder `
     -IncludePublic $IncludePublic
 
   # Destination lengths are checked against the new profile; without -TargetRoot the old profile path stands in.
   $_target = Resolve-DataInventoryTarget -TargetRoot $TargetRoot -InventoryUser $_inventoryUser
   $_mapping.Notes = @($_mapping.Notes) + @($_target.Notes)
+  $_mapping.Notes += @(@($_known) + @($_public) + @($_outside) + @($_network) | ForEach-Object { $_.Notes } | Where-Object { $_ } | Select-Object -Unique)
   if ($_target.Assumed) {
     Write-Warning $_target.Notes[0]
     $_mapping.Decisions = @($_mapping.Decisions) + "Pass -TargetRoot with the new profile folder, for example -TargetRoot 'C:\Users\<new user>', for exact destination path lengths."
@@ -2223,22 +2377,16 @@ try {
     $_finalPassPath = Join-Path $_runDirectory 'final-pass.ps1'
   }
 
-  # The share is granted to the operator's domain account; a local account does not exist on the new computer.
-  $_operator = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-  $_shareAccount = $null
-  if (-not $_operator.StartsWith("$env:COMPUTERNAME\", [StringComparison]::OrdinalIgnoreCase)) {
-    $_shareAccount = $_operator
-  }
-
   $_planParameters = @{
-    Mapping       = $_mapping
-    LongPath      = @($_long.ToArray())
-    Outlook       = $_outlook
-    StagingRoot   = $_stagingRoot
-    FolderMapPath = $_folderMapPath
-    TargetUser    = $_target.User
-    Computer      = $env:COMPUTERNAME
-    Account       = $_shareAccount
+    Mapping               = $_mapping
+    LongPath              = @($_long.ToArray())
+    Outlook               = $_outlook
+    StagingRoot           = $_stagingRoot
+    FolderMapPath         = $_folderMapPath
+    TargetUser            = $_target.User
+    Computer              = $env:COMPUTERNAME
+    Account               = $ShareAccount
+    HomeDriveReadOnlyPath = $HomeDriveReadOnlyPath
   }
   $_plan = Get-DataInventoryPlan @_planParameters
 
