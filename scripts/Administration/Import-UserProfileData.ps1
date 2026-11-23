@@ -166,6 +166,7 @@ $_preview = [bool]$WhatIfPreference
 
 $_results = New-Object System.Collections.ArrayList
 $_plan = New-Object System.Collections.ArrayList
+$_warnings = New-Object System.Collections.ArrayList
 $_runId = '{0}-{1}' -f (Get-Date -Format 'yyyyMMdd-HHmmss'), [guid]::NewGuid().ToString('N')
 $_runDirectory = $null
 $_manifestPath = $null
@@ -609,6 +610,7 @@ function Get-ImportInventory {
             Path        = $_item.FullName
             Reason      = 'MailOrRegistry'
             IsDirectory = $false
+            Length      = [long]$_item.Length
           })
         continue
       }
@@ -625,6 +627,40 @@ function Get-ImportInventory {
     Files       = @($_files.ToArray())
     Directories = @($_directories.ToArray())
     Excluded    = @($_excluded.ToArray())
+  }
+}
+
+function Get-ImportWarning {
+  param (
+    [string]
+    $Root,
+
+    [object]
+    $Inventory
+  )
+
+  foreach ($_file in $Inventory.Files) {
+    $_name = [IO.Path]::GetFileName($_file.RelativePath)
+    if ([IO.Path]::GetExtension($_name) -in @('.csv', '.txt', '.json', '.xlsx') -and
+      $_name -match 'passw|kennw|password|logins') {
+      [PSCustomObject]@{
+        Kind    = 'CredentialExport'
+        Path    = Join-Path $Root $_file.RelativePath
+        Bytes   = $_file.Length
+        Message = 'Possible plaintext credential export. Review before importing.'
+      }
+    }
+  }
+
+  foreach ($_file in $Inventory.Excluded) {
+    if (-not $_file.IsDirectory -and [IO.Path]::GetExtension($_file.Path) -in @('.pst', '.ost')) {
+      [PSCustomObject]@{
+        Kind    = 'ExcludedMail'
+        Path    = $_file.Path
+        Bytes   = $_file.Length
+        Message = 'Mail data is excluded from this import. Decide how to migrate or retain it.'
+      }
+    }
   }
 }
 
@@ -785,7 +821,7 @@ function Invoke-ImportPermission {
       if (-not $_isJunction) {
         $null = $_targets.Add([PSCustomObject]@{
             Path      = $_child.FullName
-            Recursive = $true
+            Recursive = [bool]$_child.PSIsContainer
           })
       }
     }
@@ -808,6 +844,22 @@ function Invoke-ImportPermission {
       [IO.File]::WriteAllText("$LogPrefix-$_index.log", $_process.StdOut + $_process.StdErr)
       if ($_process.TimedOut -or $_process.Cancelled -or $_process.ExitCode -ne 0) {
         throw "icacls failed on '$($_target.Path)' (exit $($_process.ExitCode)); inspect $LogPrefix-$_index.log."
+      }
+
+      # /C can return success despite individual failures. English and German summaries
+      # are recognized explicitly; stderr also catches errors on other Windows languages.
+      $_failedCount = 0
+      foreach ($_match in [regex]::Matches($_process.StdOut, '(?im)(?:Failed processing\s+(\d+)\s+files|bei\s+(\d+)\s+Dateien\s+ist ein Verarbeitungsfehler aufgetreten)')) {
+        $_failedCount += [int]($_match.Groups[1].Value + $_match.Groups[2].Value)
+      }
+
+      if ($_failedCount -gt 0 -or -not [string]::IsNullOrWhiteSpace($_process.StdErr)) {
+        [PSCustomObject]@{
+          Kind    = 'Permission'
+          Path    = $_target.Path
+          Bytes   = $null
+          Message = "icacls reported individual failures; inspect $LogPrefix-$_index.log."
+        }
       }
 
       $_index++
@@ -1020,7 +1072,9 @@ function Write-ImportAudit {
   Assert-ImportPath -Path $Directory
   $_json = ConvertTo-FormattedJson -InputObject $Manifest -Depth 12
   [IO.File]::WriteAllText((Join-Path $Directory 'manifest.json'), $_json, (New-Object Text.UTF8Encoding($true)))
-  $null = Write-OperationResultLog -Results $Results -Path (Join-Path $Directory 'operations.jsonl') `
+  # Keep the detailed plan in the manifest and PassThru output, not in every audit summary.
+  $_logResults = @($Results | Select-Object * -ExcludeProperty Plan, Warnings)
+  $null = Write-OperationResultLog -Results $_logResults -Path (Join-Path $Directory 'operations.jsonl') `
     -ScriptName 'Import-UserProfileData' -RunId $Manifest.RunId
 }
 
@@ -1185,6 +1239,9 @@ try {
 
     Write-Log -Message "Inventory and hash: $_from -> $_to" -Color Cyan
     $_inventory = Get-ImportInventory -Root $_from -ExcludeDirectory $_exclude
+    foreach ($_warning in @(Get-ImportWarning -Root $_from -Inventory $_inventory)) {
+      $null = $_warnings.Add($_warning)
+    }
 
     $_parent = Split-Path -Path $_to -Parent
     while (-not (Test-Path -LiteralPath $_parent)) {
@@ -1272,6 +1329,14 @@ try {
     Status        = 'Planned'
     Error         = $null
     Plan          = @($_plan.ToArray())
+    Warnings      = @($_warnings.ToArray())
+  }
+
+  if ($_warnings.Count -gt 0) {
+    Write-Log -Message 'Warnings (review before importing):' -Color Yellow
+    foreach ($_warning in $_warnings) {
+      Write-Log -Message "$($_warning.Message) $($_warning.Path) ($($_warning.Bytes) bytes)" -Color Yellow
+    }
   }
 
   if ($PSCmdlet.ShouldProcess($_profile.Path, "Import $_fileCount files and reset permissions/ownership in $($_plan.Count) selected data folders")) {
@@ -1353,7 +1418,18 @@ try {
       Assert-ImportContent -Entry $_entry
       Assert-ImportProfileUnchanged -TargetProfile $_profile
       Write-Log -Message "Applying target profile permissions: $($_entry.Destination)" -Color Cyan
-      Invoke-ImportPermission -Path $_entry.Destination -SID $_profile.SID -LogPrefix (Join-Path $_runDirectory "permissions-$_index") -SystemJunction $_entry.SystemJunctions
+      $_permissionParameters = @{
+        Path           = $_entry.Destination
+        SID            = $_profile.SID
+        LogPrefix      = Join-Path $_runDirectory "permissions-$_index"
+        SystemJunction = $_entry.SystemJunctions
+      }
+      $_permissionWarnings = @(Invoke-ImportPermission @_permissionParameters)
+      foreach ($_warning in $_permissionWarnings) {
+        $null = $_warnings.Add($_warning)
+        Write-Log -Message "$($_warning.Message) $($_warning.Path)" -Color Yellow
+      }
+      $_manifest.Warnings = @($_warnings.ToArray())
       Assert-ImportJunctionUnchanged -Before $_junctionsBefore -LogPrefix (Join-Path $_runDirectory "junctions-after-$_index")
       foreach ($_path in $_destinationInventory.Directories) {
         Assert-ImportPermission -Path $_path -SID $_profile.SID -RequireOwner -RequireInheritance
@@ -1438,6 +1514,11 @@ $_summary = @{
     ManifestPath = $_manifestPath
     StagingPath  = $_source
     Plan         = @($_plan.ToArray())
+    Files        = @($_plan | ForEach-Object { $_.Inventory.Files }).Count
+    Bytes        = [long](($_plan | ForEach-Object { $_.Inventory.Files } | Measure-Object -Property Length -Sum).Sum)
+    Folders      = $_plan.Count
+    WarningCount = $_warnings.Count
+    Warnings     = @($_warnings.ToArray())
   }
 }
 Add-OperationResult -Results $_results @_summary
@@ -1465,6 +1546,7 @@ if ($_preview -and $PSBoundParameters.ContainsKey('ReportDirectory') -and -not $
         Status        = $null
         Error         = $null
         Plan          = @($_plan.ToArray())
+        Warnings      = @($_warnings.ToArray())
       }
     }
 

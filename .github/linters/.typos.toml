@@ -3,8 +3,8 @@ extend-exclude = []
 
 [default]
 extend-ignore-identifiers-re = [".*MAK*", ".*mak*"]
-# schtasks.exe output-format switch used by the diagnostic collector.
-extend-ignore-re = ['/fo\b']
+# schtasks.exe switch and the exact German icacls failure-summary phrase.
+extend-ignore-re = ['/fo\b', 'ist ein Verarbeitungsfehler aufgetreten']
 
 [default.extend-identifiers]
 MAK = "MAK"
